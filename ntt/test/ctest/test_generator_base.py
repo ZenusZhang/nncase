@@ -5,7 +5,6 @@ Base classes and utilities for generating NTT test cases.
 
 import os
 from collections import namedtuple
-from typing import List, Optional
 
 # is_contiguous: bool
 # non_contiguous_dim: int or None
@@ -23,7 +22,11 @@ ALL_DATATYPES = [
     DataType('int16_t', 'Int16', '-32767', '32767'),
     DataType('int32_t', 'Int32', '-100000', '100000'),
     DataType('int64_t', 'Int64', '-1000000', '1000000'),
+<<<<<<< HEAD
     DataType('half', 'Float16', 'half(-65504.0f)', 'half(65504.0f)'),
+=======
+    DataType('half', 'Float16', '-65504.0', '65504.0'),
+>>>>>>> 4bb20af6a ( unpack_generator initialized)
     DataType('float', 'Float32', '-3.4e38', '3.4e38'),
     DataType('double', 'Float64', '-1.7e308', '1.7e308'),
     DataType('bfloat16', 'Bfloat16', '-3.3e38_bf16', '3.3e38_bf16'),
@@ -50,18 +53,33 @@ class BaseTestGenerator:
         # Determine element type based on vector_rank
         if vector_rank == 0:
             element_cpp_type = datatype.cpp_type
+<<<<<<< HEAD
         elif vector_rank > 0:
             if P is None:
                 raise ValueError("P must be provided for vector_rank > 0")
             
             # The rank of the vector is determined by vector_rank.
             ps = ', '.join([f"P"] * vector_rank)
+=======
+        elif vector_rank == 1:
+            if P is None:
+                raise ValueError("P must be provided for vector_rank 1")
+            element_cpp_type = f"ntt::vector<{datatype.cpp_type}, {P}>"
+        elif vector_rank > 1:
+            if P is None or axes_count is None:
+                raise ValueError("P and axes_count must be provided for vector_rank > 1")
+            ps = ', '.join([str(P)] * axes_count)
+>>>>>>> 4bb20af6a ( unpack_generator initialized)
             element_cpp_type = f"ntt::vector<{datatype.cpp_type}, {ps}>"
         else:
             raise ValueError(f"Invalid vector_rank: {vector_rank}")
 
         if continuity.is_contiguous:
+<<<<<<< HEAD
             code.append(f"auto {var_name} = ntt::make_tensor<{element_cpp_type}>({shape_expr});")
+=======
+            code.append(f"alignas(32) auto {var_name} = ntt::make_tensor<{element_cpp_type}>({shape_expr});")
+>>>>>>> 4bb20af6a ( unpack_generator initialized)
             code.append(f"NttTest::init_tensor({var_name}, min_input, max_input);")
         else:  # non-contiguous
             big_dims = dims.copy()
@@ -74,7 +92,11 @@ class BaseTestGenerator:
             big_shape_expr = self.generate_shape_init(shape_type, big_dims)
 
             code.append(f"// Create non-contiguous tensor (on dimension {dim_to_change})")
+<<<<<<< HEAD
             code.append(f"auto big_tensor = ntt::make_tensor<{element_cpp_type}>({big_shape_expr});")
+=======
+            code.append(f"alignas(32) auto big_tensor = ntt::make_tensor<{element_cpp_type}>({big_shape_expr});")
+>>>>>>> 4bb20af6a ( unpack_generator initialized)
             code.append(f"NttTest::init_tensor(big_tensor, min_input, max_input);")
             code.append(f"")
             code.append(f"auto {var_name} = ntt::make_tensor_view_from_address<{element_cpp_type}>(")
@@ -84,6 +106,7 @@ class BaseTestGenerator:
 
         return code
 
+<<<<<<< HEAD
     def generate_test_prologue(self, test_suite_prefix, datatype, test_name, P, dim_names, dims, axes=None):
         """generate test function header, constant P and dimension constants"""
         code = [f"TEST({test_suite_prefix}_{datatype.name_suffix}, {test_name}) {{"]
@@ -157,6 +180,8 @@ class BaseTestGenerator:
         code.append("")
         return code
 
+=======
+>>>>>>> 4bb20af6a ( unpack_generator initialized)
     def generate_header(self):
         return '''/* Copyright 2019-2024 Canaan Inc.
  *
@@ -195,6 +220,7 @@ using namespace ortki;
 }
 '''
 
+<<<<<<< HEAD
     def _build_vector_cpp_type(self, base_cpp_type: str, vector_rank: int, P: Optional[str], axes_count: Optional[int] = None) -> str:
         """Utility: given primitive cpp type, return the full `ntt::vector<..., ...>` expression.
         When ``vector_rank == 0`` it just returns the primitive type.
@@ -405,6 +431,14 @@ def generate_cmake_list(directory, filenames, output_filename, variable_name):
     with open(cmake_list_path, "w") as f:
         f.write(f"# This file is generated automatically. DO NOT EDIT.\n")
         f.write(f"set({variable_name}\n")
+=======
+def generate_cmake_list(directory, filenames):
+    """generate a .cmake file that contains the list of generated test files"""
+    cmake_list_path = os.path.join(directory, "generated_tests.cmake")
+    with open(cmake_list_path, "w") as f:
+        f.write("# This file is generated automatically. DO NOT EDIT.\n")
+        f.write("set(GENERATED_TEST_SOURCES\n")
+>>>>>>> 4bb20af6a ( unpack_generator initialized)
         for name in filenames:
             f.write(f"    ${{CMAKE_CURRENT_LIST_DIR}}/{name}\n") # use relative path to current CMakeLists.txt
         f.write(")\n")
