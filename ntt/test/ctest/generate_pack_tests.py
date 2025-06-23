@@ -10,36 +10,10 @@ Covering the following cases:
 
 import itertools
 from typing import List, Tuple
-from test_generator_base import *
+from test_generator_base import BaseTestGenerator, ALL_DATATYPES, Continuity, DataType, generate_cmake_list
 import os
 
-
-# is_contiguous: bool 
-# non_contiguous_dim: int or None 
-# big_tensor_op: str or None -  How to build the big tensor at given non_contiguous_dim
-Continuity = namedtuple('Continuity', ['is_contiguous', 'non_contiguous_dim', 'big_tensor_op'])
-DataType = namedtuple('DataType', ['cpp_type', 'name_suffix', 'min_val', 'max_val'])
-
-
-ALL_DATATYPES = [
-    DataType('bool', 'Bool', 'false', 'true'),
-    DataType('uint8_t', 'Uint8', '0', '255'),
-    DataType('uint16_t', 'Uint16', '0', '65535'),
-    DataType('uint32_t', 'Uint32', '0', '100000'),
-    DataType('uint64_t', 'Uint64', '0', '1000000'),
-    DataType('int8_t', 'Int8', '-127', '127'),
-    DataType('int16_t', 'Int16', '-32767', '32767'),
-    DataType('int32_t', 'Int32', '-100000', '100000'),
-    DataType('int64_t', 'Int64', '-1000000', '1000000'),
-    DataType('half', 'Float16', '-65504.0', '65504.0'), 
-    DataType('float', 'Float32', '-3.4e38', '3.4e38'),
-    DataType('double', 'Float64', '-1.7e308', '1.7e308'),
-    DataType('bfloat16', 'Bfloat16', '-3.3e38_bf16', '3.3e38_bf16'),
-    DataType('float_e4m3_t', 'Float8e4m3', 'float_e4m3_t(-448.0f)', 'float_e4m3_t(448.0f)'),
-    DataType('float_e5m2_t', 'Float8e5m2', 'float_e5m2_t(-57344.0f)', 'float_e5m2_t(57344.0f)'),
-]
-
-class PackTestGenerator:
+class PackTestGenerator(BaseTestGenerator):
     def __init__(self):
         super().__init__()
         
