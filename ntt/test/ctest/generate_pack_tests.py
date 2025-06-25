@@ -10,7 +10,7 @@ Covering the following cases:
 
 import itertools
 from typing import List, Tuple
-from test_generator_base import BaseTestGenerator, ALL_DATATYPES, Continuity, DataType, generate_cmake_list
+from test_generator_base import *
 import os
 
 class PackTestGenerator(BaseTestGenerator):
