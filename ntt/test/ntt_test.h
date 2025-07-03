@@ -298,10 +298,11 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
 }
 
 // 2D vector
-template <ntt::TensorOfVector TTensor>
-    requires(TTensor::element_type::rank() == 2)
-bool compare_tensor(TTensor &lhs, TTensor &rhs, double threshold = 0.999f) {
-    using vector_type = typename TTensor::element_type;
+template <ntt::TensorOfVector TTensor1, ntt::TensorOfVector TTensor2>
+    requires(TTensor1::element_type::rank() == 2 &&
+             TTensor2::element_type::rank() == 2)
+bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
+    using vector_type = typename TTensor1::element_type;
     constexpr size_t N0 = vector_type::template lane<0>();
     constexpr size_t N1 = vector_type::template lane<1>();
 

@@ -19,6 +19,8 @@ set(GENERATE_PACK_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/generate_pack_tests.py)
 set(GENERATED_PACK_CMAKE ${CMAKE_CURRENT_SOURCE_DIR}/generated_pack_tests.cmake)
 set(GENERATE_UNPACK_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/generate_unpack_tests.py)
 set(GENERATED_UNPACK_CMAKE ${CMAKE_CURRENT_SOURCE_DIR}/generated_unpack_tests.cmake)
+set(GENERATE_CAST_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/generate_cast_tests.py)
+set(GENERATED_CAST_CMAKE ${CMAKE_CURRENT_SOURCE_DIR}/generated_cast_tests.cmake)
 
 # Macro to run a generator script only when the output is missing or outdated
 macro(run_generator_if_needed script_path output_file)
@@ -40,11 +42,12 @@ endmacro()
 # Run the generators
 run_generator_if_needed(${GENERATE_PACK_SCRIPT} ${GENERATED_PACK_CMAKE})
 run_generator_if_needed(${GENERATE_UNPACK_SCRIPT} ${GENERATED_UNPACK_CMAKE})
+run_generator_if_needed(${GENERATE_CAST_SCRIPT} ${GENERATED_CAST_CMAKE})
 
 # Include the generated cmake files which define test source variables
 include(${GENERATED_PACK_CMAKE})
 include(${GENERATED_UNPACK_CMAKE})
-
+include(${GENERATED_CAST_CMAKE})
 
 macro(add_test_exec name)
     add_executable(${name} ${name}.cpp)
@@ -67,19 +70,18 @@ file(GLOB HANDWRITTEN_TESTS CONFIGURE_DEPENDS
     # test_ntt_gather.cpp
     # test_ntt_layer_norm.cpp
     test_ntt_matmul.cpp
-    # test_ntt_pack_generated_Float8e4m3.cpp
-    # test_ntt_reduce.cpp
-    # test_ntt_rms_norm.cpp
-    # test_ntt_scatter_nd.cpp
-    # test_ntt_slice.cpp
-    # test_ntt_softmax.cpp
-    # test_ntt_transpose.cpp
-    # test_ntt_transpose_half.cpp
-    # test_ntt_unpack.cpp
+    test_ntt_reduce.cpp
+    test_ntt_rms_norm.cpp
+    test_ntt_scatter_nd.cpp
+    test_ntt_slice.cpp
+    test_ntt_softmax.cpp
+    test_ntt_transpose.cpp
+    test_ntt_unpack.cpp
     # test_ntt_where.cpp
 )
 
-# list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} ${GENERATED_PACK_TEST_SOURCES} ${GENERATED_UNPACK_TEST_SOURCES})
+# list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} ${GENERATED_PACK_TEST_SOURCES} ${GENERATED_UNPACK_TEST_SOURCES} ${GENERATED_CAST_TEST_SOURCES})
+list(APPEND TEST_NAMES  ${GENERATED_CAST_TEST_SOURCES})
 
 
 foreach(test_name ${TEST_NAMES})

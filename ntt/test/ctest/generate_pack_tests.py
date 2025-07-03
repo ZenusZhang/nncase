@@ -34,11 +34,6 @@ class PackTestGenerator(BaseTestGenerator):
         return "_".join(parts)
     
     
-    def generate_pack_axes_str(self, axes):
-        if len(axes) == 1:
-            return f"ntt::fixed_shape_v<{axes[0]}>"
-        else:
-            return f"ntt::fixed_shape_v<{', '.join(map(str, axes))}>"
     
     def generate_ort_reference(self, input_dims, input_dim_names, pack_axes):
         code = []

@@ -101,6 +101,7 @@ class cast_impl {
 #if 0    
     template <size_t Axis, Dimension TContiguousDims, Shape TRestDims>
     constexpr void
+    //rest_dims is the dims of the tensor to be casted
     apply(const TContiguousDims &conti_dims, const TRestDims &rest_dims,
           dynamic_shape_t<rank> &index, const TIn &input, TOut &output) {
         if (conti_dims == rest_dims.rank()) {
