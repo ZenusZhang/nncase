@@ -35,7 +35,20 @@ class BaseTestGenerator:
     def __init__(self):
         self.test_cases = []
 
+    def get_unpacked_dims(self, dim_names, unpack_axes) -> List[str]:
+        """Generate dimension expressions for an unpack operation."""
+        output_dims = []
+        ndim = len(dim_names)
+        positive_unpack_axes = [ax if ax >= 0 else ndim + ax for ax in unpack_axes]
+        for i, name in enumerate(dim_names):
+            if i in positive_unpack_axes:
+                output_dims.append(f"{name} * P")
+            else:
+                output_dims.append(name)
+        return output_dims
+
     def generate_shape_init(self, shape_type, dims):
+        assert shape_type in ["fixed", "dynamic"], f"Invalid shape type: {shape_type}"
         if shape_type == "fixed":
             dim_strs = [f"{d}" for d in dims]
             return f"ntt::fixed_shape_v<{', '.join(dim_strs)}>"
@@ -43,30 +56,25 @@ class BaseTestGenerator:
             dim_strs = [str(d) for d in dims]
             return f"ntt::make_shape({', '.join(dim_strs)})"
 
+    def get_element_cpp_type(self, datatype: DataType, vector_rank: int, P: Optional[str]) -> str:
+        """Determine element C++ type based on vector_rank."""
+        if vector_rank == 0:
+            return datatype.cpp_type
+        if vector_rank > 0:
+            if P is None:
+                raise ValueError("P must be provided for vector_rank > 0")
+
+            # The rank of the vector is determined by vector_rank.
+            ps = ', '.join([f"P"] * vector_rank)
+            return f"ntt::vector<{datatype.cpp_type}, {ps}>"
+        
+        raise ValueError(f"Invalid vector_rank: {vector_rank}")
+
     def generate_tensor_init(self, datatype, shape_type, dims, continuity, var_name, vector_rank, P=None, axes_count=1):
         code = []
         shape_expr = self.generate_shape_init(shape_type, dims)
 
-        # Determine element type based on vector_rank
-        if vector_rank == 0:
-            element_cpp_type = datatype.cpp_type
-        elif vector_rank == 1:
-            if P is None:
-                raise ValueError("P must be provided for vector_rank 1")
-            element_cpp_type = f"ntt::vector<{datatype.cpp_type}, {P}>"
-        elif vector_rank > 1:
-            if P is None or axes_count is None:
-                raise ValueError("P and axes_count must be provided for vector_rank > 1")
-            ps = ', '.join([str(P)] * axes_count)
-        elif vector_rank > 0:
-            if P is None:
-                raise ValueError("P must be provided for vector_rank > 0")
-            
-            # The rank of the vector is determined by vector_rank.
-            ps = ', '.join([f"P"] * vector_rank)
-            element_cpp_type = f"ntt::vector<{datatype.cpp_type}, {ps}>"
-        else:
-            raise ValueError(f"Invalid vector_rank: {vector_rank}")
+        element_cpp_type = self.get_element_cpp_type(datatype, vector_rank, P)
 
         if continuity.is_contiguous:
             code.append(f"auto {var_name} = ntt::make_tensor<{element_cpp_type}>({shape_expr});")
@@ -92,15 +100,15 @@ class BaseTestGenerator:
 
         return code
 
-    def generate_test_prologue(self, test_suite_prefix, datatype, test_name, P, dim_names, dims, axes=None):
+    def generate_test_prologue(self, test_suite_prefix, datatype, test_name, P, dim_names, dims, pack_axes=None):
         """generate test function header, constant P and dimension constants"""
         code = [f"TEST({test_suite_prefix}_{datatype.name_suffix}, {test_name}) {{"]
-        if P:
+        if (P and (pack_axes is not None)) or ("unpack" in test_name):
             code.append(f"    constexpr size_t P = {P};")
 
         # define dimension constants
         for i, (name, size) in enumerate(zip(dim_names, dims)):
-            if axes and i in axes:
+            if pack_axes and i in pack_axes:
                 code.append(f"    constexpr size_t {name}_coefficient = {size};")
                 code.append(f"    constexpr size_t {name} = {name}_coefficient * P;")
             else:
@@ -109,6 +117,27 @@ class BaseTestGenerator:
         code.extend([f"    {datatype.cpp_type} min_input = {datatype.min_val};",
                      f"    {datatype.cpp_type} max_input = {datatype.max_val};", ""])
         return code
+
+    def generate_copy_to_contiguous_code(self, input_element_type, shape_type, dim_names, input_var_name="ntt_input", output_var_name="continuous_input"):
+        code = []
+        input_dims_expr = [f"{name}" for name in dim_names]
+        code.append("    // Copy to contiguous tensor for ORT reference")
+        code.append(f"    auto {output_var_name} = ntt::make_tensor<{input_element_type}>({self.generate_shape_init(shape_type, input_dims_expr)});")
+        code.append("    ")
+        for i, name in enumerate(dim_names):
+            code.append(f"    {'    ' * i}for (size_t {name.lower()} = 0; {name.lower()} < {name}; {name.lower()}++) {{")
+        indices = [f"{name.lower()}" for name in dim_names]
+        code.append(f"    {'    ' * len(dim_names)}{output_var_name}({', '.join(indices)}) = {input_var_name}({', '.join(indices)});")
+        for i in range(len(dim_names) - 1, -1, -1):
+            code.append(f"    {'    ' * i}}}")
+        code.append("")
+        return code, output_var_name
+
+    def generate_pack_axes_str(self, axes):
+        if len(axes) == 1:
+            return f"ntt::fixed_shape_v<{axes[0]}>"
+        else:
+            return f"ntt::fixed_shape_v<{', '.join(map(str, axes))}>"
 
     def generate_reference_and_comparison_code(self,
                                            datatype, continuity, dim_names, shape_type, is_fp8,
@@ -119,24 +148,13 @@ class BaseTestGenerator:
                                            ntt_output_var_name = "ntt_output1",
                                            ntt_output_var_is_vector = False):
         code = []
-        input_dims_expr = [f"{name}" for name in dim_names]
-
         ort_input_tensor = "ntt_input"
         if not continuity.is_contiguous:
             if is_fp8:
                 ort_input_tensor = "ntt_input_uint8"
             else:
-                code.append("    // Copy to contiguous tensor for ORT reference")
-                code.append(f"    auto continuous_input = ntt::make_tensor<{input_element_type}>({self.generate_shape_init(shape_type, input_dims_expr)});")
-                code.append("    ")
-                for i, name in enumerate(dim_names):
-                    code.append(f"    {'    ' * i}for (size_t {name.lower()} = 0; {name.lower()} < {name}; {name.lower()}++) {{")
-                indices = [f"{name.lower()}" for name in dim_names]
-                code.append(f"    {'    ' * len(dim_names)}continuous_input({', '.join(indices)}) = ntt_input({', '.join(indices)});")
-                for i in range(len(dim_names)-1, -1, -1):
-                    code.append(f"    {'    ' * i}}}")
-                code.append("")
-                ort_input_tensor = "continuous_input"
+                copy_code, ort_input_tensor = self.generate_copy_to_contiguous_code(input_element_type, shape_type, dim_names)
+                code.extend(copy_code)
         elif is_fp8:
             ort_input_tensor = "ntt_input_uint8"
 

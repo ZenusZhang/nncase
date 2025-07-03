@@ -66,12 +66,7 @@ class UnpackTestGenerator(BaseTestGenerator):
             reshape_source = "ort_input"
 
         # 2. Reshape to final output shape
-        output_dims = []
-        for i, name in enumerate(input_dim_names):
-            if i in unpack_axes:
-                output_dims.append(f"{name} * P")
-            else:
-                output_dims.append(name)
+        output_dims = self.get_unpacked_dims(input_dim_names, unpack_axes)
 
         code.append(f"int64_t reshape_data[] = {{{', '.join(output_dims)}}};")
         code.append("int64_t reshape_shape[] = {std::size(reshape_data)};")
@@ -114,12 +109,7 @@ class UnpackTestGenerator(BaseTestGenerator):
             var_name="ntt_input"))
 
         # 2. NTT operation (unpack)
-        output_dims = []
-        for i, name in enumerate(dim_names):
-            if i in unpack_axes:
-                output_dims.append(f"{name} * P")
-            else:
-                output_dims.append(name)
+        output_dims = self.get_unpacked_dims(dim_names, unpack_axes)
         output_shape_expr = self.generate_shape_init(shape_type, output_dims)
         
         unpack_call_code = self.generate_ntt_ops(unpack_axes)
