@@ -107,11 +107,10 @@ class PackTestGenerator(BaseTestGenerator):
         code.extend(self.generate_ntt_input_section(
             datatype=datatype,
             shape_type=shape_type,
-            dim_names=dim_names,
+            dims_spec=dim_names,
             continuity=continuity,
             vector_rank=0,  # Pack input is always scalar tensor
             P=P,
-            axes_count=len(pack_axes),
             var_name="ntt_input"))
 
         # 2. NTT operation (pack)
@@ -123,8 +122,7 @@ class PackTestGenerator(BaseTestGenerator):
                 output_dims.append(name)
         output_shape_expr = self.generate_shape_init(shape_type, output_dims)
         
-        output_element_type = self._build_vector_cpp_type(
-            datatype.cpp_type, vector_dim, 'P', len(pack_axes))
+        output_element_type = self.get_element_cpp_type(datatype.cpp_type, vector_dim, 'P')
 
         pack_call_code = self.generate_ntt_ops(pack_axes)
 
@@ -152,12 +150,11 @@ class PackTestGenerator(BaseTestGenerator):
         code.extend(self.generate_ort_input_section(
             datatype=datatype,
             shape_type=shape_type,
-            dim_names=dim_names,
+            dims_spec=dim_names,
             continuity=continuity,
             deal_fp8=deal_fp8,
             P=P,
             vector_rank=0, # Pack input is scalar
-            axes_count=len(pack_axes),
             ntt_input_var_name="ntt_input"))
 
         # 2. ORT kernel exec section

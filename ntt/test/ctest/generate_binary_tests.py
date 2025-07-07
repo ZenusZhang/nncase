@@ -1,0 +1,332 @@
+#test case combination:
+# 1. lhs/rhs
+# 2. dynamic/fixed
+# 3. lhs broadcast to rhs, rhs broadcast to lhs
+# 3.1. 1 dim broadcast
+# 3.2. 2 dims broadcast
+# 4. scalar/vector/2d vector
+# 5. tensor/ view
+
+import itertools
+import os
+from typing import List
+from test_generator_base import *
+
+
+class BinaryTestGenerator(BaseTestGenerator):
+    def __init__(self):
+        super().__init__()
+
+    def generate_test_name(self, datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape, 
+        lhs_dims_spec, rhs_dims_spec, 
+        lhs_vector_rank, rhs_vector_rank, 
+        lhs_continuity, rhs_continuity):
+        
+        parts = []
+        
+        # 1. 数据类型
+        parts.append(f"{datatype.name_suffix}")
+        
+        # 2. 左操作数信息
+        lhs_shape_type = "dynamic" if lhs_is_dynamic_shape else "fixed"
+        parts.append(f"lhs_{lhs_shape_type}")
+        
+        # 左操作数向量维度
+        if lhs_vector_rank == 0:
+            parts.append("scalar")
+        else:
+            parts.append(f"{lhs_vector_rank}D_vector")
+        
+        # 左操作数连续性 - contiguous改成view，non_contiguous改成raw_tensor
+        if lhs_continuity.is_contiguous:
+            parts.append("raw_tensor")
+        else:
+            op_str = "mul2" if lhs_continuity.big_tensor_op == "*2" else "add3" if lhs_continuity.big_tensor_op == "+3" else "add7"
+            parts.append(f"view_{lhs_continuity.non_contiguous_dim}_{op_str}")
+        
+        # 3. 右操作数信息
+        rhs_shape_type = "dynamic" if rhs_is_dynamic_shape else "fixed"
+        parts.append(f"rhs_{rhs_shape_type}")
+        
+        # 右操作数向量维度
+        if rhs_vector_rank == 0:
+            parts.append("scalar")
+        else:
+            parts.append(f"{rhs_vector_rank}D_vector")
+        
+        # 右操作数连续性 - contiguous改成view，non_contiguous改成raw_tensor
+        if rhs_continuity.is_contiguous:
+            parts.append("view")
+        else:
+            op_str = "mul2" if rhs_continuity.big_tensor_op == "*2" else "add3" if rhs_continuity.big_tensor_op == "+3" else "add7"
+            parts.append(f"raw_tensor_dim{rhs_continuity.non_contiguous_dim}_{op_str}")
+        
+        # 4. 广播信息 - 重新设计命名避免与元素类型的scalar/vector混淆
+        # 检测广播类型，使用更清晰的命名
+        if lhs_dims_spec == rhs_dims_spec:
+            broadcast_info = "no_broadcast"
+        elif lhs_dims_spec == [1]:
+            broadcast_info = "lhs_singleton_broadcast"  # [1] 表示单元素广播
+        elif rhs_dims_spec == [1]:
+            broadcast_info = "rhs_singleton_broadcast"  # [1] 表示单元素广播
+        elif len(lhs_dims_spec) == 1 and len(rhs_dims_spec) > 1:
+            broadcast_info = "lhs_1d_broadcast"  # 左操作数是一维张量广播
+        elif len(rhs_dims_spec) == 1 and len(lhs_dims_spec) > 1:
+            broadcast_info = "rhs_1d_broadcast"  # 右操作数是一维张量广播
+        else:
+            broadcast_info = "multi_broadcast"  # 多维广播
+            
+        parts.append(broadcast_info)
+        
+        return "_".join(parts)
+
+    def get_binary_output_shape(self, lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+                                lhs_shape, rhs_shape):
+        output_is_dynamic_shape = lhs_is_dynamic_shape or rhs_is_dynamic_shape
+
+        if len(lhs_shape) < len(rhs_shape):
+            shorter_shape, longer_shape = lhs_shape, rhs_shape
+        else:
+            shorter_shape, longer_shape = rhs_shape, lhs_shape
+
+        # Prepend 1s to the shorter shape to match the rank of the longer shape for broadcasting.
+        rank_diff = len(longer_shape) - len(shorter_shape)
+        padded_shorter_shape = [1] * rank_diff + shorter_shape
+        
+        # Check for broadcasting compatibility.
+        for dim1, dim2 in zip(longer_shape, padded_shorter_shape):
+            assert dim1 == dim2 or min(dim1, dim2) == 1, \
+                f"Shapes {lhs_shape} and {rhs_shape} are not broadcast-compatible"
+        
+        # The output shape is the element-wise maximum of the two shapes.
+        output_shape = [max(dim1, dim2) for dim1, dim2 in zip(longer_shape, padded_shorter_shape)]
+        
+        return output_is_dynamic_shape, output_shape
+
+
+    def get_op_call_lines(self, ntt_op_str):
+        """Generate NTT binary operation code"""
+        return [
+            "// Execute binary operation",
+            f"ntt::binary<ntt::ops::{ntt_op_str}>(ntt_input_lhs, ntt_input_rhs, ntt_output);",
+            ""
+        ]
+
+    def generate_ntt_output_to_test(self, datatype,
+                                    lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+                                    lhs_dims_spec, rhs_dims_spec,
+                                    lhs_vector_rank, rhs_vector_rank,
+                                    lhs_continuity, rhs_continuity,
+                                    lhs_pack_param, rhs_pack_param,
+                                    ntt_op_str):
+        indent = "    "
+        code = []
+        # generate ntt_input_lhs, ntt_input_rhs, ntt_output
+        code.append(f"{indent}//---init ntt_input_lhs---")
+        tensor_init_lhs_code = self.generate_tensor_init( datatype=datatype,
+            shape_type=lhs_is_dynamic_shape, dim_spec=lhs_dims_spec,
+            continuity=lhs_continuity, var_name="ntt_input_lhs",
+            name_suffix="_lhs", vector_rank=lhs_vector_rank,
+            P=lhs_pack_param)
+        code.extend([f"{indent}{line}" for line in tensor_init_lhs_code])
+
+        code.append(f"{indent}//---init ntt_input_rhs---")
+        tensor_init_rhs_code = self.generate_tensor_init( datatype=datatype,
+            shape_type=rhs_is_dynamic_shape, dim_spec=rhs_dims_spec,
+            continuity=rhs_continuity, var_name="ntt_input_rhs",
+            name_suffix="_rhs", vector_rank=rhs_vector_rank,
+            P=rhs_pack_param)
+        code.extend([f"{indent}{line}" for line in tensor_init_rhs_code])
+
+        output_is_dynamic_shape, output_dims_spec = self.get_binary_output_shape(
+            lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+            lhs_dims_spec, rhs_dims_spec)
+        output_vector_rank = max(lhs_vector_rank, rhs_vector_rank)
+        code.append(f"{indent}//---generate output tensor---")
+
+        output_shape_expr = self.generate_shape_init(output_is_dynamic_shape, output_dims_spec)
+        # For binary ops, output vector rank matches inputs. Assume lhs.
+        output_pack_param = lhs_pack_param if lhs_pack_param else rhs_pack_param
+        output_element_type = self.get_element_cpp_type(datatype.cpp_type, output_vector_rank, output_pack_param)
+
+        output_op_call_lines = self.get_op_call_lines(ntt_op_str)
+        ntt_output_and_op_code = self.generate_ntt_output_and_op_section(
+            datatype=datatype,
+            output_shape_expr=output_shape_expr,
+            deal_fp8=0,  # Placeholder for now
+            ntt_op_call_lines=output_op_call_lines,
+            output_var_name="ntt_output",
+            output_element_type=output_element_type
+        )
+        code.extend([f"{indent}{line}" for line in ntt_output_and_op_code])
+        return code
+
+    def generate_ntt_golden_output(self, datatype, 
+                                    lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+                                    lhs_dims_spec, rhs_dims_spec,
+                                    lhs_vector_rank, rhs_vector_rank,
+                                    lhs_continuity, rhs_continuity,
+                                    lhs_pack_param, rhs_pack_param,
+                                    ntt_op_str):
+        code = []
+        code.extend(self.generate_ort_input_section(datatype, 
+                lhs_is_dynamic_shape, lhs_dims_spec,
+                lhs_continuity, 0, lhs_pack_param, lhs_vector_rank,
+                ort_input_var_name="ort_input_lhs",
+                ntt_input_var_name="ntt_input_lhs", name_suffix="_lhs"))
+        code.extend(self.generate_ort_input_section(datatype, 
+                rhs_is_dynamic_shape, rhs_dims_spec,
+                rhs_continuity, 0, rhs_pack_param, ort_input_var_name="ort_input_rhs",
+                ntt_input_var_name="ntt_input_rhs", name_suffix="_rhs"))
+        return code
+    # lhs_dynamic: bool, lhs is dynamic or fixed
+    # rhs_dynamic: bool, rhs is dynamic or fixed
+    # lhs_shape: list[int], lhs shape, [1, 77, 3]
+    # rhs_shape: list[int], rhs shape, [1, 77, 3]
+    # braodcast_ways: list[int], broadcast ways, 0: no_broadcast 1: lhs_to_rhs, 2: rhs_to_lhs, 
+    # lhs_vector_ranks: list[int], lhs vector ranks, 0, 1, 2
+    # rhs_vector_ranks: list[int], rhs vector ranks, 0, 1, 2, 3
+    # lhs_tensor: list[int], lhs is tensor or view, 0: tensor, 1: view
+    # rhs_tensor: list[int], rhs is tensor or view
+    def generate_test_case(
+            self,
+            datatype,
+            lhs_is_dynamic_shape: bool,
+            rhs_is_dynamic_shape: bool,
+            lhs_dims_spec: List[int],
+            rhs_dims_spec: List[int],
+            lhs_vector_rank: int,
+            rhs_vector_rank: int,
+            lhs_continuity: Continuity,
+            rhs_continuity: Continuity):
+            
+
+            test_name = self.generate_test_name(datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape, 
+                lhs_dims_spec, rhs_dims_spec, 
+                lhs_vector_rank, rhs_vector_rank, 
+                lhs_continuity, rhs_continuity)
+
+
+            P = f"NTT_VLEN / (sizeof({datatype.cpp_type}) * 8)"
+            code: List[str] = []
+            lhs_pack_param = P if lhs_vector_rank > 0 else None
+            rhs_pack_param = P if rhs_vector_rank > 0 else None
+
+            # 1. Test header and constants
+            code.extend(self.generate_function_name("BinaryTestAdd", datatype, test_name))
+            code.extend(self.generate_min_max_constants(datatype))
+            if lhs_vector_rank > 0 or rhs_vector_rank > 0:
+                code.extend(self.generate_P_constants(P))
+
+            # # Generate output to test in ntt format
+            ntt_output_code = self.generate_ntt_output_to_test(datatype,
+                                lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+                                lhs_dims_spec, rhs_dims_spec,
+                                lhs_vector_rank, rhs_vector_rank,
+                                lhs_continuity, rhs_continuity,
+                                lhs_pack_param, rhs_pack_param,
+                                "add")
+            code.extend(ntt_output_code)
+
+
+            # Generate golden output in ort format
+            golden_output_code = self.generate_ntt_golden_output(datatype,lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+                lhs_dims_spec, rhs_dims_spec,
+                lhs_vector_rank, rhs_vector_rank,
+                lhs_continuity, rhs_continuity,
+                lhs_pack_param, rhs_pack_param,
+                "add")
+            code.extend([f"    {line}" for line in golden_output_code])
+
+            # # Compare outputs
+            # compare_code = self.generate_ort_back2ntt_and_compare_section(
+            #     datatype,
+            #     datatype.cpp_type,
+            #     output_shape_expr,
+            #     deal_fp8,
+            #     ntt_output_var_name="ntt_output1",
+            #     ort_output_var_name="ort_output")
+            # code.extend([f"    {line}" for line in compare_code])
+
+            return "\n".join(code)
+
+    def generate_all_tests_for_type(self, datatype):
+        code = []
+        
+        # Define combinations for test cases
+        is_dynamic_options = [False, True]
+        is_view_options = [False, True]
+        vector_rank_options = [0, 1, 2]  # 0: tensor, 1: 1d vector, etc. Keep it simple for now
+
+        simple_continuities = [
+            Continuity(is_contiguous=True, non_contiguous_dim=None, big_tensor_op=None),
+            Continuity(is_contiguous=False, non_contiguous_dim=1, big_tensor_op="*2"),
+            Continuity(is_contiguous=False, non_contiguous_dim=2, big_tensor_op="+3"),
+        ]
+
+        dims_specs_options = [
+                # No broadcast
+                ([2, 3, 16, 16], [2, 3, 16, 16]),
+                # Scalar broadcast
+                ([1], [2, 3, 16, 16]),
+                ([2, 3, 16, 16], [1]),
+                # Vector broadcast
+                ([16], [2, 3, 16, 16]),
+                ([2, 3, 16, 16], [16]),
+                # Multidirectional broadcast
+                ([2, 1, 16, 1], [1, 3, 1, 16]),
+            ]
+
+        code.append(self.generate_header())
+
+        param_combinations = itertools.product(
+            is_dynamic_options,          # lhs_is_dynamic_shape 2
+            is_dynamic_options,          # rhs_is_dynamic_shape 2
+            dims_specs_options,   # (lhs_dims_spec, rhs_dims_spec) 6
+            vector_rank_options,         # lhs_vector_rank 3
+            vector_rank_options,         # rhs_vector_rank 3
+            simple_continuities,         # lhs_continuity
+            simple_continuities          # rhs_continuity
+        )
+        # 2*2*6*3*3*2*2*2*2/4 = 3456/4 = 864
+        for lhs_is_dynamic, rhs_is_dynamic, (lhs_shape, rhs_shape), lhs_vec_rank, rhs_vec_rank, lhs_continuity, rhs_continuity in param_combinations:
+            # Skip invalid combinations if any in the future
+            # e.g. if lhs_shape == rhs_shape and ...
+            if not lhs_continuity.is_contiguous and (lhs_shape == [1]):
+                continue
+            if rhs_shape == [1] and not rhs_continuity.is_contiguous:
+                continue
+
+            # set non_contiguous_dim for 1 dimension tensor
+            if not lhs_continuity.is_contiguous and lhs_shape == [16]:
+                lhs_continuity = lhs_continuity._replace(non_contiguous_dim=0)
+            if not rhs_continuity.is_contiguous and rhs_shape == [16]:
+                rhs_continuity = rhs_continuity._replace(non_contiguous_dim=0)
+
+            test_code = self.generate_test_case(
+                datatype,
+                lhs_is_dynamic_shape=lhs_is_dynamic,
+                rhs_is_dynamic_shape=rhs_is_dynamic,
+                lhs_dims_spec=lhs_shape,
+                rhs_dims_spec=rhs_shape,
+                lhs_vector_rank=lhs_vec_rank,
+                rhs_vector_rank=rhs_vec_rank,
+                lhs_continuity=lhs_continuity,
+                rhs_continuity=rhs_continuity
+            )
+            code.append(test_code)
+
+        code.append(self.generate_footer())
+        return "\n".join(code)
+
+
+if __name__ == "__main__":
+    generator = BinaryTestGenerator()
+    script_directory = os.path.dirname(os.path.abspath(__file__))   
+    generated_filenames = []  # collect all generated file names
+
+    for datatype in ALL_DATATYPES:
+        code = generator.generate_all_tests_for_type(datatype)
+        generated_filenames.append(f"{script_directory}/binary_test_{datatype.name_suffix}.cpp")
+        with open(generated_filenames[-1], "w") as f:
+            f.write(code)

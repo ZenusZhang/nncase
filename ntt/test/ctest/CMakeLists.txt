@@ -57,6 +57,7 @@ endmacro()
 
 file(GLOB HANDWRITTEN_TESTS CONFIGURE_DEPENDS
 
+    test_ntt_binary_add.cpp
     # test_ntt_binary_mul.cpp
     # test_ntt_binary_sub.cpp
     # test_ntt_cast.cpp
@@ -69,19 +70,20 @@ file(GLOB HANDWRITTEN_TESTS CONFIGURE_DEPENDS
     # test_ntt_expand.cpp
     # test_ntt_gather.cpp
     # test_ntt_layer_norm.cpp
-    test_ntt_matmul.cpp
-    test_ntt_reduce.cpp
-    test_ntt_rms_norm.cpp
-    test_ntt_scatter_nd.cpp
-    test_ntt_slice.cpp
-    test_ntt_softmax.cpp
-    test_ntt_transpose.cpp
-    test_ntt_unpack.cpp
+    # test_ntt_matmul.cpp
+    # test_ntt_reduce.cpp
+    # test_ntt_rms_norm.cpp
+    # test_ntt_scatter_nd.cpp
+    # test_ntt_slice.cpp
+    # test_ntt_softmax.cpp
+    # test_ntt_transpose.cpp
+    # test_ntt_unpack.cpp
     # test_ntt_where.cpp
+    # test_ntt_cast_from_float32_generated.cpp
 )
 
-# list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} ${GENERATED_PACK_TEST_SOURCES} ${GENERATED_UNPACK_TEST_SOURCES} ${GENERATED_CAST_TEST_SOURCES})
-list(APPEND TEST_NAMES  ${GENERATED_CAST_TEST_SOURCES})
+list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} ${GENERATED_PACK_TEST_SOURCES} ${GENERATED_UNPACK_TEST_SOURCES} ${GENERATED_CAST_TEST_SOURCES})
+# list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS})
 
 
 foreach(test_name ${TEST_NAMES})
