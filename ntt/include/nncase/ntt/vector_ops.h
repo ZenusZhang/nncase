@@ -61,6 +61,8 @@ struct tensor_unary_impl<Op, TVector> {
 template <template <class T1, class T2> class Op, class T1, class T2>
 struct tensor_binary_impl;
 
+//T1 1D vector, T2 scalar or 1D vector
+//T1 2D vector, T2 scalar or 1D vector
 template <template <class T1, class T2> class Op, Vector TVector, class T2>
 struct tensor_binary_impl<Op, TVector, T2> {
     using element_type1 = typename TVector::element_type;
@@ -71,10 +73,12 @@ struct tensor_binary_impl<Op, TVector, T2> {
         TVector value{};
         if constexpr (Vector<T2>) {
             if constexpr (TVector::rank() == 2 && T2::rank() == 1) {
+                static_assert(TVector::shape().at(1) == T2::shape().at(0), "vector shape not match");
                 ntt::apply(v1.shape(), [&](auto index) {
                     value(index) = op_(v1(index), v2(index[1_dim]));
                 });
             } else {
+                static_assert(TVector::shape().at(0) == T2::shape().at(0), "vector shape not match");
                 ntt::apply(v1.shape(), [&](auto index) {
                     value(index) = op_(v1(index), v2(index));
                 });
@@ -91,6 +95,7 @@ struct tensor_binary_impl<Op, TVector, T2> {
     Op<element_type1, element_type2> op_;
 };
 
+//T1 2D vector, T2 2D vector
 template <template <class T1, class T2> class Op, Vector T1, Vector T2>
     requires(T1::rank() == 2 && T2::rank() == 2)
 struct tensor_binary_impl<Op, T1, T2> {
@@ -109,6 +114,7 @@ struct tensor_binary_impl<Op, T1, T2> {
     Op<sub_vector_type, sub_vector_type> op_;
 };
 
+//T1 scalar, T2 1D vector or 2D vector
 template <template <class T1, class T2> class Op, Scalar TScalar,
           Vector TVector>
 struct tensor_binary_impl<Op, TScalar, TVector> {
@@ -124,6 +130,26 @@ struct tensor_binary_impl<Op, TScalar, TVector> {
 
   private:
     Op<TScalar, element_type2> op_;
+};
+
+//T1 1D vector, T2 2D vector
+template <template <class T1, class T2> class Op, Vector TVec1,
+          Vector TVec2>
+    requires(TVec1::rank() == 1 && TVec2::rank() == 2)
+struct tensor_binary_impl<Op, TVec1, TVec2> {
+    using element_type1 = typename TVec1::element_type;
+    using element_type2 = typename TVec2::element_type;
+    constexpr TVec2 operator()(const TVec1 &v1, const TVec2 &v2) const noexcept {
+        TVec2 value;
+        static_assert(TVec1::shape().at(0) == TVec2::shape().at(1), "vector shape not match");
+        ntt::apply(v2.shape(), [&](auto index) {
+            value(index) = op_(v1(index[1_dim]), v2(index));
+        });
+        return value;
+    }
+
+  private:
+    Op<element_type1, element_type2> op_;
 };
 
 // compare tensor impl
