@@ -101,11 +101,10 @@ class UnpackTestGenerator(BaseTestGenerator):
         code.extend(self.generate_ntt_input_section(
             datatype=datatype,
             shape_type=shape_type,
-            dim_names=dim_names,
+            dims_spec=dim_names,
             continuity=continuity,
             vector_rank=vector_dim,
             P=P,
-            axes_count=len(unpack_axes),
             var_name="ntt_input"))
 
         # 2. NTT operation (unpack)
@@ -124,7 +123,7 @@ class UnpackTestGenerator(BaseTestGenerator):
         
         return code, output_shape_expr
 
-    def generate_ntt_golden_output(self, datatype, shape_type, dims, dim_names, continuity, vector_dim, P, unpack_axes, deal_fp8, output_shape_expr):
+    def generate_ort_golden_output(self, datatype, shape_type, dims, dim_names, continuity, vector_dim, P, unpack_axes, deal_fp8, output_shape_expr):
         """
         Generates the golden output using ORT as a reference.
         This includes:
@@ -137,12 +136,11 @@ class UnpackTestGenerator(BaseTestGenerator):
         code.extend(self.generate_ort_input_section(
             datatype=datatype,
             shape_type=shape_type,
-            dim_names=dim_names,
+            dims_spec=dim_names,
             continuity=continuity,
             deal_fp8=deal_fp8,
             P=P,
             vector_rank=vector_dim,
-            axes_count=len(unpack_axes),
             ntt_input_var_name="ntt_input"))
 
         # 2. ORT kernel exec section
@@ -174,7 +172,7 @@ class UnpackTestGenerator(BaseTestGenerator):
         code.extend([f"    {line}" for line in ntt_output_code])
 
         # Generate golden output in ort format
-        golden_output_code = self.generate_ntt_golden_output(datatype, shape_type, dims, dim_names, continuity, vector_dim, P, unpack_axes, deal_fp8, output_shape_expr)
+        golden_output_code = self.generate_ort_golden_output(datatype, shape_type, dims, dim_names, continuity, vector_dim, P, unpack_axes, deal_fp8, output_shape_expr)
         code.extend([f"    {line}" for line in golden_output_code])
 
         # Compare outputs

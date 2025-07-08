@@ -454,7 +454,7 @@ TEST(CastTestFloat32ToFloat8E4M3, NoVectorize) {
     // ntt
     auto ntt_output1 = ntt::make_tensor<float_e4m3_t>(ntt::fixed_shape_v<M, N>);
     ntt::cast(ntt_input, ntt_output1);
-//# generate_ntt_golden_output
+//# generate_ort_golden_output
     // float8
     auto ntt_output2 = ntt::make_tensor<float_e4m3_t>(ntt::fixed_shape_v<M, N>);
     nncase::ntt::apply(ntt_input.shape(), [&](auto index) {
@@ -486,7 +486,7 @@ TEST(CastTestFloat32ToFloat8E4M3, Vectorize) {
     auto ntt_output1 = ntt::make_tensor<float_e4m3_t>(ntt::fixed_shape_v<M, N>);
     ntt::unpack(vectorize_output, ntt_output1, ntt::fixed_shape_v<0>);
 
-//# generate_ntt_golden_output
+//# generate_ort_golden_output
     // float8
     auto ntt_output2 = ntt::make_tensor<float_e4m3_t>(ntt::fixed_shape_v<M, N>);
     nncase::ntt::apply(ntt_input.shape(), [&](auto index) {

@@ -18,22 +18,7 @@ class CastTestGenerator(BaseTestGenerator):
     def __init__(self):
         super().__init__()
         
-        # Mapping from DataType to ORT DataType constant
-        self.ort_datatype_map = {
-            'bool': 'DataType_BOOL',
-            'uint8_t': 'DataType_UINT8',
-            'uint16_t': 'DataType_UINT16', 
-            'uint32_t': 'DataType_UINT32',
-            'uint64_t': 'DataType_UINT64',
-            'int8_t': 'DataType_INT8',
-            'int16_t': 'DataType_INT16',
-            'int32_t': 'DataType_INT32',
-            'int64_t': 'DataType_INT64',
-            'half': 'DataType_FLOAT16',
-            'float': 'DataType_FLOAT',
-            'double': 'DataType_DOUBLE',
-            'bfloat16': 'DataType_BFLOAT16',
-        }
+
         
     def generate_test_name(self, from_type, to_type, shape_type, vector_dim, continuity: Continuity, ndim):
         parts = []
@@ -54,7 +39,7 @@ class CastTestGenerator(BaseTestGenerator):
         parts.append(f"{ndim}D")
         return "_".join(parts)
 
-    def generate_ort_reference(self, to_type):
+    def generate_ort_output(self, to_type):
         """Generate ORT reference implementation for cast operation"""
         ort_type = self.ort_datatype_map.get(to_type.cpp_type, 'DataType_FLOAT')
         return [
@@ -142,7 +127,7 @@ class CastTestGenerator(BaseTestGenerator):
         return code
 
 
-    def generate_ntt_golden_output(self, from_type, to_type, shape_type, dim_names, continuity, P, pack_axes, vector_dim, deal_fp8):
+    def generate_ort_golden_output(self, from_type, to_type, shape_type, dim_names, continuity, P, pack_axes, vector_dim, deal_fp8):
         """Generate golden output using ORT or lambda-based reference"""
         code = []
         is_fp8_cast = 'float_e' in from_type.cpp_type or 'float_e' in to_type.cpp_type
@@ -159,8 +144,8 @@ class CastTestGenerator(BaseTestGenerator):
                 vector_rank=vector_dim,
                 ntt_input_var_name="ntt_input"))
             
-            # Use ORT reference
-            ort_kernel_lines = self.generate_ort_reference(to_type)
+            # Use ORT output
+            ort_kernel_lines = self.generate_ort_output(to_type)
             code.extend(self.generate_ort_operation_section(ort_kernel_lines))
         else:
             # Use lambda-based reference
@@ -211,7 +196,7 @@ class CastTestGenerator(BaseTestGenerator):
         code.extend([f"    {line}" for line in ntt_output_code])
 
         # 3. Generate golden output in ORT format, or in ntt format for fp8 cast
-        golden_output_code = self.generate_ntt_golden_output(
+        golden_output_code = self.generate_ort_golden_output(
             from_type, to_type, shape_type, dim_names, continuity, P, pack_axes, vector_dim, deal_fp8)
     
         code.extend([f"    {line}" for line in golden_output_code])

@@ -112,6 +112,14 @@ class BinaryTestGenerator(BaseTestGenerator):
             ""
         ]
 
+    def generate_ort_output(self, datatype, ntt_op_str):
+        ort_type = self.ort_datatype_map.get(datatype.cpp_type, 'DataType_FLOAT')
+        return [
+            "// Execute binary operation",
+            f"auto ort_output = ortki_{ntt_op_str.capitalize()}(ort_input_lhs, ort_input_rhs);",
+            ""
+        ]
+
     def generate_ntt_output_to_test(self, datatype,
                                     lhs_is_dynamic_shape, rhs_is_dynamic_shape,
                                     lhs_dims_spec, rhs_dims_spec,
@@ -159,25 +167,54 @@ class BinaryTestGenerator(BaseTestGenerator):
             output_element_type=output_element_type
         )
         code.extend([f"{indent}{line}" for line in ntt_output_and_op_code])
-        return code
+        return code, output_shape_expr, output_element_type
 
-    def generate_ntt_golden_output(self, datatype, 
+    def generate_ort_golden_output(self, datatype, 
                                     lhs_is_dynamic_shape, rhs_is_dynamic_shape,
                                     lhs_dims_spec, rhs_dims_spec,
                                     lhs_vector_rank, rhs_vector_rank,
                                     lhs_continuity, rhs_continuity,
                                     lhs_pack_param, rhs_pack_param,
-                                    ntt_op_str):
+                                    ntt_op_str, output_shape_expr):
         code = []
-        code.extend(self.generate_ort_input_section(datatype, 
-                lhs_is_dynamic_shape, lhs_dims_spec,
-                lhs_continuity, 0, lhs_pack_param, lhs_vector_rank,
-                ort_input_var_name="ort_input_lhs",
-                ntt_input_var_name="ntt_input_lhs", name_suffix="_lhs"))
-        code.extend(self.generate_ort_input_section(datatype, 
-                rhs_is_dynamic_shape, rhs_dims_spec,
-                rhs_continuity, 0, rhs_pack_param, ort_input_var_name="ort_input_rhs",
-                ntt_input_var_name="ntt_input_rhs", name_suffix="_rhs"))
+        # code.extend(self.generate_ort_input_section(datatype, 
+        #         lhs_is_dynamic_shape, lhs_dims_spec,
+        #         lhs_continuity, 0, lhs_pack_param, lhs_vector_rank,
+        #         ort_input_var_name="ort_input_lhs",
+        #         ntt_input_var_name="ntt_input_lhs", name_suffix="_lhs"))
+        # code.extend(self.generate_ort_input_section(datatype, 
+        #         rhs_is_dynamic_shape, rhs_dims_spec,
+        #         rhs_continuity, 0, rhs_pack_param, rhs_vector_rank, ort_input_var_name="ort_input_rhs",
+        #         ntt_input_var_name="ntt_input_rhs", name_suffix="_rhs"))
+        lhs_continuity_var_name = "ntt_input_lhs"
+        lhs_element_type = self.get_element_cpp_type(datatype.cpp_type, lhs_vector_rank, lhs_pack_param)
+        if not lhs_continuity.is_contiguous:
+            lhs_continuity_var_name = "ntt_input_lhs_contiguous"
+            copy_code, _ = self.generate_copy_to_contiguous_code(
+                lhs_element_type,
+                lhs_is_dynamic_shape,
+                lhs_dims_spec,
+                "ntt_input_lhs",
+                lhs_continuity_var_name
+            )
+            code.extend(copy_code)
+
+        rhs_continuity_var_name = "ntt_input_rhs"
+        rhs_element_type = self.get_element_cpp_type(datatype.cpp_type, rhs_vector_rank, rhs_pack_param)
+        if not rhs_continuity.is_contiguous:
+            rhs_continuity_var_name = "ntt_input_rhs_contiguous"
+            copy_code, _ = self.generate_copy_to_contiguous_code(
+                rhs_element_type,
+                rhs_is_dynamic_shape,
+                rhs_dims_spec,
+                "ntt_input_rhs",
+                rhs_continuity_var_name
+            )
+            code.extend(copy_code)
+
+        code.extend([f"auto [ort_input_lhs, ort_input_rhs] = NttTest::convert_and_align_to_ort({lhs_continuity_var_name}, {rhs_continuity_var_name});"])
+        code.extend(self.generate_ort_output(datatype, ntt_op_str))
+
         return code
     # lhs_dynamic: bool, lhs is dynamic or fixed
     # rhs_dynamic: bool, rhs is dynamic or fixed
@@ -219,7 +256,7 @@ class BinaryTestGenerator(BaseTestGenerator):
                 code.extend(self.generate_P_constants(P))
 
             # # Generate output to test in ntt format
-            ntt_output_code = self.generate_ntt_output_to_test(datatype,
+            ntt_output_code, output_shape_expr, output_element_type = self.generate_ntt_output_to_test(datatype,
                                 lhs_is_dynamic_shape, rhs_is_dynamic_shape,
                                 lhs_dims_spec, rhs_dims_spec,
                                 lhs_vector_rank, rhs_vector_rank,
@@ -230,23 +267,23 @@ class BinaryTestGenerator(BaseTestGenerator):
 
 
             # Generate golden output in ort format
-            golden_output_code = self.generate_ntt_golden_output(datatype,lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+            golden_output_code = self.generate_ort_golden_output(datatype,lhs_is_dynamic_shape, rhs_is_dynamic_shape,
                 lhs_dims_spec, rhs_dims_spec,
                 lhs_vector_rank, rhs_vector_rank,
                 lhs_continuity, rhs_continuity,
                 lhs_pack_param, rhs_pack_param,
-                "add")
+                "add", output_shape_expr)
             code.extend([f"    {line}" for line in golden_output_code])
 
-            # # Compare outputs
-            # compare_code = self.generate_ort_back2ntt_and_compare_section(
-            #     datatype,
-            #     datatype.cpp_type,
-            #     output_shape_expr,
-            #     deal_fp8,
-            #     ntt_output_var_name="ntt_output1",
-            #     ort_output_var_name="ort_output")
-            # code.extend([f"    {line}" for line in compare_code])
+            # Compare outputs
+            compare_code = self.generate_ort_back2ntt_and_compare_section(
+                datatype,
+                output_element_type,
+                output_shape_expr,
+                deal_fp8=0,
+                ntt_output_var_name="ntt_output",
+                ort_output_var_name="ort_output")
+            code.extend([f"    {line}" for line in compare_code])
 
             return "\n".join(code)
 
@@ -330,3 +367,4 @@ if __name__ == "__main__":
         generated_filenames.append(f"{script_directory}/binary_test_{datatype.name_suffix}.cpp")
         with open(generated_filenames[-1], "w") as f:
             f.write(code)
+    generate_cmake_list(script_directory, generated_filenames, "binary_test_generated.cmake", "BINARY_TEST_GENERATED_TESTS")

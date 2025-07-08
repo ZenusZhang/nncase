@@ -63,6 +63,21 @@ ALL_DATATYPES = [
 class BaseTestGenerator:
     def __init__(self):
         self.test_cases = []
+        self.ort_datatype_map = {
+            'bool': 'DataType_BOOL',
+            'uint8_t': 'DataType_UINT8',
+            'uint16_t': 'DataType_UINT16', 
+            'uint32_t': 'DataType_UINT32',
+            'uint64_t': 'DataType_UINT64',
+            'int8_t': 'DataType_INT8',
+            'int16_t': 'DataType_INT16',
+            'int32_t': 'DataType_INT32',
+            'int64_t': 'DataType_INT64',
+            'half': 'DataType_FLOAT16',
+            'float': 'DataType_FLOAT',
+            'double': 'DataType_DOUBLE',
+            'bfloat16': 'DataType_BFLOAT16',
+        }
 
     def get_unpacked_dims(self, dim_names, unpack_axes) -> List[str]:
         """Generate dimension expressions for an unpack operation."""
@@ -115,10 +130,11 @@ class BaseTestGenerator:
             code.append(f"")
             code.append(f"auto {var_name} = ntt::make_tensor_view_from_address<{element_cpp_type}>(")
             code.append(f"    big_tensor{name_suffix}.elements().data(),")
-            code.append(f"    {shape_expr},")
-            code.append(f"    big_tensor{name_suffix}.strides());")
+            code.append(f"    {shape_expr}")
+            code.append(f"    );")
 
         return code
+
 
     def generate_demension_constants(self, dim_names, dims, datatype, P):
         code = []
@@ -164,9 +180,11 @@ class BaseTestGenerator:
         code.append("    // Copy to contiguous tensor for ORT reference")
         code.append(f"    auto {output_var_name} = ntt::make_tensor<{input_element_type}>({self.generate_shape_init(shape_type, input_dims_expr)});")
         code.append("    ")
+
+        iter_var_names = ["i", "j", "k", "l", "m"]
         for i, name in enumerate(dim_names):
-            code.append(f"    {'    ' * i}for (size_t {name.lower()} = 0; {name.lower()} < {name}; {name.lower()}++) {{")
-        indices = [f"{name.lower()}" for name in dim_names]
+            code.append(f"    {'    ' * i}for (size_t {iter_var_names[i]} = 0; {iter_var_names[i]} < {name}; {iter_var_names[i]}++) {{")
+        indices = [f"{iter_var_names[i]}" for i in range(len(dim_names))]
         code.append(f"    {'    ' * len(dim_names)}{output_var_name}({', '.join(indices)}) = {input_var_name}({', '.join(indices)});")
         for i in range(len(dim_names) - 1, -1, -1):
             code.append(f"    {'    ' * i}}}")
