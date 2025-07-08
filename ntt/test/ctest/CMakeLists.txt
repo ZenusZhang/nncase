@@ -21,6 +21,8 @@ set(GENERATE_UNPACK_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/generate_unpack_tests.py)
 set(GENERATED_UNPACK_CMAKE ${CMAKE_CURRENT_SOURCE_DIR}/generated_unpack_tests.cmake)
 set(GENERATE_CAST_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/generate_cast_tests.py)
 set(GENERATED_CAST_CMAKE ${CMAKE_CURRENT_SOURCE_DIR}/generated_cast_tests.cmake)
+set(GENERATE_BINARY_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/generate_binary_tests.py)
+set(GENERATED_BINARY_CMAKE ${CMAKE_CURRENT_SOURCE_DIR}/binary_test_generated.cmake)
 
 # Macro to run a generator script only when the output is missing or outdated
 macro(run_generator_if_needed script_path output_file)
@@ -43,11 +45,13 @@ endmacro()
 run_generator_if_needed(${GENERATE_PACK_SCRIPT} ${GENERATED_PACK_CMAKE})
 run_generator_if_needed(${GENERATE_UNPACK_SCRIPT} ${GENERATED_UNPACK_CMAKE})
 run_generator_if_needed(${GENERATE_CAST_SCRIPT} ${GENERATED_CAST_CMAKE})
+run_generator_if_needed(${GENERATE_BINARY_SCRIPT} ${GENERATED_BINARY_CMAKE})
 
 # Include the generated cmake files which define test source variables
 include(${GENERATED_PACK_CMAKE})
 include(${GENERATED_UNPACK_CMAKE})
 include(${GENERATED_CAST_CMAKE})
+include(${GENERATED_BINARY_CMAKE})
 
 macro(add_test_exec name)
     add_executable(${name} ${name}.cpp)
@@ -82,8 +86,8 @@ file(GLOB HANDWRITTEN_TESTS CONFIGURE_DEPENDS
     # test_ntt_cast_from_float32_generated.cpp
 )
 
-list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} ${GENERATED_PACK_TEST_SOURCES} ${GENERATED_UNPACK_TEST_SOURCES} ${GENERATED_CAST_TEST_SOURCES})
-# list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS})
+# list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} ${GENERATED_PACK_TEST_SOURCES} ${GENERATED_UNPACK_TEST_SOURCES} ${GENERATED_CAST_TEST_SOURCES})
+list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} ${BINARY_TEST_GENERATED_TESTS})
 
 
 foreach(test_name ${TEST_NAMES})

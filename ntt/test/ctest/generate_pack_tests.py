@@ -137,7 +137,7 @@ class PackTestGenerator(BaseTestGenerator):
         
         return code, output_shape_expr, output_element_type
 
-    def generate_ntt_golden_output(self, datatype, shape_type, dims, dim_names, continuity, P, pack_axes, deal_fp8):
+    def generate_ort_golden_output(self, datatype, shape_type, dims, dim_names, continuity, P, pack_axes, deal_fp8):
         """
         Generates the golden output using ORT as a reference.
         This includes:
@@ -193,7 +193,7 @@ class PackTestGenerator(BaseTestGenerator):
         code.extend([f"    {line}" for line in ntt_output_code])
 
         # 3. Generate golden output in ort format
-        golden_output_code = self.generate_ntt_golden_output(
+        golden_output_code = self.generate_ort_golden_output(
             datatype, shape_type, dims, dim_names, continuity, P, pack_axes, deal_fp8)
         code.extend([f"    {line}" for line in golden_output_code])
 

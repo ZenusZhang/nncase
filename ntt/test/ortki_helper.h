@@ -93,7 +93,6 @@ ortki::OrtKITensor *ntt2ort(TTensor &tensor) {
     std::vector<size_t> v(r2, N);
     for (size_t i = 0; i < r1; i++)
         v[i] = tensor.shape()[i];
-
     vec_elem_type *buffer = new vec_elem_type[tensor.shape().length() * vec_type::size()];
     vec_elem_type *buffer_ptr = buffer;
     ntt::apply(tensor.shape(), [&](auto tindex) {
@@ -154,37 +153,73 @@ void print_ort_shape(ortki::OrtKITensor *ort_tensor) {
     }
 }
 
+//reshape means append dimension 1 at proper position
 template <ntt::TensorOrVector TLhs, ntt::TensorOrVector TRhs>
 auto convert_and_align_to_ort(TLhs &lhs, TRhs &rhs) {
     auto ort_lhs = NttTest::ntt2ort(lhs);
     auto ort_rhs = NttTest::ntt2ort(rhs);
 
-    constexpr bool lhs_is_vec = ntt::Vector<typename TLhs::element_type>;
-    constexpr bool rhs_is_vec = ntt::Vector<typename TRhs::element_type>;
-    // TODO: deal with the case that 2D vector and 1D vector
-    auto reshape_op = [](auto &orttensor_to_append,
-                         const auto &ntttensor_to_append) {
-        auto rank = ntttensor_to_append.shape().rank();
-        std::vector<int64_t> new_shape_data;
-        new_shape_data.reserve(rank + 1);
-        for (size_t i = 0; i < rank; ++i) {
-            new_shape_data.push_back(ntttensor_to_append.shape()[i]);
+
+    auto get_element_rank = [](auto &tensor){
+        using tensor_element_type = typename std::decay_t<decltype(tensor)>::element_type;
+        if constexpr (ntt::Vector<tensor_element_type>) {
+            return tensor_element_type::rank();
+        } else {
+            return 0;
         }
-        new_shape_data.push_back(1);
+    };
+
+    constexpr size_t lhs_vector_rank = get_element_rank(lhs);
+    
+    constexpr size_t rhs_vector_rank = get_element_rank(rhs);
+    
+    // TODO: deal with the case that 2D vector and 1D vector
+    auto reshape_op = [&](auto &ort_tensor,
+                         const auto &ntt_tensor, const auto &ntt_higher_dim_tensor) {
+        using higher_element_type = typename std::decay_t<decltype(ntt_higher_dim_tensor)>::element_type;
+        static_assert(ntt::Vector<higher_element_type> && higher_element_type::rank() > 0, "element of ntt_higher_dim_tensor must be a vector");
+        
+        auto rank = ntt_tensor.shape().rank();
+        std::vector<int64_t> new_shape_data;
+        constexpr auto higher_vector_rank = higher_element_type::rank();
+        
+        constexpr auto lower_vector_rank = get_element_rank(ntt_tensor);
+        
+        new_shape_data.reserve(rank + higher_vector_rank);
+
+        for (size_t i = 0; i < rank; ++i) {
+            new_shape_data.push_back(ntt_tensor.shape()[i]);
+        }
+        for (size_t i = 0; i < higher_vector_rank; ++i) {
+            new_shape_data.push_back(1);
+        }
+        if constexpr (lower_vector_rank > 0) {
+            static_assert(lower_vector_rank == 1, "only support 1D vectors");
+            using tensor_element_type = typename std::decay_t<decltype(ntt_tensor)>::element_type;
+            new_shape_data[rank+higher_vector_rank-1] = tensor_element_type::size();
+        }
+
         int64_t reshape_shape[] = {static_cast<int64_t>(new_shape_data.size())};
         auto ort_type = NttTest::primitive_type2ort_type<int64_t>();
         auto shape_tensor =
             make_tensor(reinterpret_cast<void *>(new_shape_data.data()),
                         ort_type, reshape_shape, std::size(reshape_shape));
-        orttensor_to_append =
-            ortki_Reshape(orttensor_to_append, shape_tensor, 0);
+        ort_tensor =
+            ortki_Reshape(ort_tensor, shape_tensor, 0);
     };
 
-    if constexpr (lhs_is_vec && !rhs_is_vec) {
-        reshape_op(ort_rhs, rhs);
-    } else if constexpr (!lhs_is_vec && rhs_is_vec) {
-        reshape_op(ort_lhs, lhs);
+    // if constexpr (lhs_is_vec && !rhs_is_vec) {
+    //     reshape_op(ort_rhs, rhs);
+    // } else if constexpr (!lhs_is_vec && rhs_is_vec) {
+    //     reshape_op(ort_lhs, lhs);
+    // }
+
+    if constexpr (lhs_vector_rank > rhs_vector_rank) {
+        reshape_op(ort_rhs, rhs, lhs);
+    } else if constexpr (lhs_vector_rank < rhs_vector_rank) {
+        reshape_op(ort_lhs, lhs, rhs);
     }
+
     return std::make_pair(ort_lhs, ort_rhs);
 }
 } // namespace NttTest

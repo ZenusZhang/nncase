@@ -43,7 +43,7 @@ TEST(BinaryTestAddFloat, fixed_fixed_fixed_broadcast_lhs_vector) {
     auto ort_output = ortki_Add(ort_lhs, ort_rhs);
     // ortki_Add(ort_lhs, ort_rhs);
     // // compare
-    auto ntt_output2 = make_tensor<ntt::vector<float, 8>>(ntt::fixed_shape_v<1, 3, 1, 16>);
+    auto ntt_output2 = make_tensor<ntt::vector<uint32_t, 8>>(ntt::fixed_shape_v<1, 3, 1, 16>);
     NttTest::ort2ntt(ort_output, ntt_output2);
     EXPECT_TRUE(NttTest::compare_tensor(ntt_output1, ntt_output2));
 
