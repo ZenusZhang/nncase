@@ -173,7 +173,6 @@ void init_tensor(TTensor &tensor, T start = static_cast<T>(0),
         ntt::apply(tensor.shape(), [&](auto &index) {
             auto value = dis(gen);
             tensor(index) = static_cast<bfloat16>(value);
-            printf("%f ", value);
         });
     } else {
         std::cerr << __FUNCTION__ << ": unsupported data type" << std::endl;
@@ -212,12 +211,12 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.99f) {
         v1.push_back(d1);
         v2.push_back(d2);
         if (d1 != d2) {
-            // #ifndef NDEBUG
+            #ifndef NDEBUG
             std::cout << "index = (";
             for (size_t i = 0; i < index.rank(); i++)
                 std::cout << index[i] << " ";
             std::cout << "): lhs = " << d1 << ", rhs = " << d2 << std::endl;
-            // #endif
+            #endif
             pass = false;
         }
     });
@@ -274,12 +273,12 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.99f) {
             v1.push_back(d1);
             v2.push_back(d2);
             if (d1 != d2) {
-                // #ifndef NDEBUG
+                #ifndef NDEBUG
                 std::cout << "index = (";
                 for (size_t i = 0; i < index.rank(); i++)
                     std::cout << index[i] << " ";
                 std::cout << "): lhs = " << d1 << ", rhs = " << d2 << std::endl;
-                // #endif
+                #endif
                 pass = false;
             }
         });
@@ -338,12 +337,12 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.99f) {
             v1.push_back(d1);
             v2.push_back(d2);
             if (d1 != d2) {
-                // #ifndef NDEBUG
+                #ifndef NDEBUG
                 std::cout << "index = (";
                 for (size_t i = 0; i < index.rank(); i++)
                     std::cout << index[i] << " ";
                 std::cout << "): lhs = " << d1 << ", rhs = " << d2 << std::endl;
-                // #endif
+                #endif
                 pass = false;
             }
         });

@@ -13,9 +13,24 @@ from typing import List
 from test_generator_base import *
 
 
+
 class BinaryTestGenerator(BaseTestGenerator):
     def __init__(self):
         super().__init__()
+        
+        # ORT binary operations do not support these data types, need to cast to float32
+        self.types_need_to_be_cast = [
+            'bool',
+            'uint8_t', 
+            'uint16_t',
+            'uint32_t',
+            'uint64_t',
+            'int8_t',
+            'int16_t', 
+            'bfloat16',
+            'float_e4m3_t',
+            'float_e5m2_t'
+        ]
 
     def generate_test_name(self, datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape, 
         lhs_dims_spec, rhs_dims_spec, 
@@ -56,10 +71,10 @@ class BinaryTestGenerator(BaseTestGenerator):
         
         # 右操作数连续性 - contiguous改成view，non_contiguous改成raw_tensor
         if rhs_continuity.is_contiguous:
-            parts.append("view")
+            parts.append("raw_tensor")
         else:
             op_str = "mul2" if rhs_continuity.big_tensor_op == "*2" else "add3" if rhs_continuity.big_tensor_op == "+3" else "add7"
-            parts.append(f"raw_tensor_dim{rhs_continuity.non_contiguous_dim}_{op_str}")
+            parts.append(f"view_dim{rhs_continuity.non_contiguous_dim}_{op_str}")
         
         # 4. 广播信息 - 重新设计命名避免与元素类型的scalar/vector混淆
         # 检测广播类型，使用更清晰的命名
@@ -120,6 +135,78 @@ class BinaryTestGenerator(BaseTestGenerator):
             ""
         ]
 
+    def _prepare_contiguous_input(self, input_name, datatype, vector_rank, pack_param, 
+                                  is_dynamic_shape, dims_spec, continuity):
+        
+        continuity_var_name = input_name
+        element_type = self.get_element_cpp_type(datatype.cpp_type, vector_rank, pack_param)
+        code = []
+        
+        if not continuity.is_contiguous:
+            continuity_var_name = f"{input_name}_contiguous"
+            copy_code, _ = self.generate_copy_to_contiguous_code(
+                element_type,
+                is_dynamic_shape,
+                dims_spec,
+                input_name,
+                continuity_var_name
+            )
+            continuity_var_name = f"*{continuity_var_name}"
+            code.extend(copy_code)
+        
+        return continuity_var_name, code
+
+    def generate_ort_golden_output(self, datatype, 
+                                    lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+                                    lhs_dims_spec, rhs_dims_spec,
+                                    lhs_vector_rank, rhs_vector_rank,
+                                    lhs_continuity, rhs_continuity,
+                                    lhs_pack_param, rhs_pack_param,
+                                    ntt_op_str, output_shape_expr):
+        code = []
+        
+        # Check if datatype needs to be cast to float32
+        need_cast = datatype.cpp_type in self.types_need_to_be_cast
+            
+        lhs_continuity_var_name, lhs_copy_code = self._prepare_contiguous_input(
+            "ntt_input_lhs", datatype, lhs_vector_rank, lhs_pack_param,
+            lhs_is_dynamic_shape, lhs_dims_spec, lhs_continuity
+        )
+        code.extend(lhs_copy_code)
+        ort_input_lhs = lhs_continuity_var_name
+
+        rhs_continuity_var_name, rhs_copy_code = self._prepare_contiguous_input(
+            "ntt_input_rhs", datatype, rhs_vector_rank, rhs_pack_param,
+            rhs_is_dynamic_shape, rhs_dims_spec, rhs_continuity
+        )
+        code.extend(rhs_copy_code)
+        ort_input_rhs = rhs_continuity_var_name
+
+        if need_cast:
+            # Cast inputs to float32 before sending to ort
+            code.append("// Cast inputs to float32 for ORT computation")
+            
+            # Lambda function to cast input to float32
+            cast_to_float = lambda side, input_var, vector_rank, pack_param, is_dynamic, dims_spec: (
+                code.append(f"auto ntt_{side}_float = ntt::make_tensor<{self.get_element_cpp_type('float', vector_rank, pack_param)}>({self.generate_shape_init(is_dynamic, dims_spec)});"),
+                code.append(f"ntt::cast({input_var}, ntt_{side}_float);")
+            )
+            
+            # Cast both inputs
+            cast_to_float("lhs", ort_input_lhs, lhs_vector_rank, lhs_pack_param, lhs_is_dynamic_shape, lhs_dims_spec)
+            cast_to_float("rhs", ort_input_rhs, rhs_vector_rank, rhs_pack_param, rhs_is_dynamic_shape, rhs_dims_spec)
+            
+            # Update variable references
+            ort_input_lhs = "ntt_lhs_float"
+            ort_input_rhs = "ntt_rhs_float"
+            
+            code.append("")
+
+        code.extend([f"auto [ort_input_lhs, ort_input_rhs] = NttTest::convert_and_align_to_ort({ort_input_lhs}, {ort_input_rhs});"])
+        code.extend(self.generate_ort_output(datatype, ntt_op_str))
+
+        return code
+
     def generate_ntt_output_to_test(self, datatype,
                                     lhs_is_dynamic_shape, rhs_is_dynamic_shape,
                                     lhs_dims_spec, rhs_dims_spec,
@@ -161,7 +248,7 @@ class BinaryTestGenerator(BaseTestGenerator):
         ntt_output_and_op_code = self.generate_ntt_output_and_op_section(
             datatype=datatype,
             output_shape_expr=output_shape_expr,
-            deal_fp8=0,  # Placeholder for now
+            cast_mode=0,  # Placeholder for now
             ntt_op_call_lines=output_op_call_lines,
             output_var_name="ntt_output",
             output_element_type=output_element_type
@@ -169,53 +256,9 @@ class BinaryTestGenerator(BaseTestGenerator):
         code.extend([f"{indent}{line}" for line in ntt_output_and_op_code])
         return code, output_shape_expr, output_element_type
 
-    def generate_ort_golden_output(self, datatype, 
-                                    lhs_is_dynamic_shape, rhs_is_dynamic_shape,
-                                    lhs_dims_spec, rhs_dims_spec,
-                                    lhs_vector_rank, rhs_vector_rank,
-                                    lhs_continuity, rhs_continuity,
-                                    lhs_pack_param, rhs_pack_param,
-                                    ntt_op_str, output_shape_expr):
-        code = []
-        # code.extend(self.generate_ort_input_section(datatype, 
-        #         lhs_is_dynamic_shape, lhs_dims_spec,
-        #         lhs_continuity, 0, lhs_pack_param, lhs_vector_rank,
-        #         ort_input_var_name="ort_input_lhs",
-        #         ntt_input_var_name="ntt_input_lhs", name_suffix="_lhs"))
-        # code.extend(self.generate_ort_input_section(datatype, 
-        #         rhs_is_dynamic_shape, rhs_dims_spec,
-        #         rhs_continuity, 0, rhs_pack_param, rhs_vector_rank, ort_input_var_name="ort_input_rhs",
-        #         ntt_input_var_name="ntt_input_rhs", name_suffix="_rhs"))
-        lhs_continuity_var_name = "ntt_input_lhs"
-        lhs_element_type = self.get_element_cpp_type(datatype.cpp_type, lhs_vector_rank, lhs_pack_param)
-        if not lhs_continuity.is_contiguous:
-            lhs_continuity_var_name = "ntt_input_lhs_contiguous"
-            copy_code, _ = self.generate_copy_to_contiguous_code(
-                lhs_element_type,
-                lhs_is_dynamic_shape,
-                lhs_dims_spec,
-                "ntt_input_lhs",
-                lhs_continuity_var_name
-            )
-            code.extend(copy_code)
 
-        rhs_continuity_var_name = "ntt_input_rhs"
-        rhs_element_type = self.get_element_cpp_type(datatype.cpp_type, rhs_vector_rank, rhs_pack_param)
-        if not rhs_continuity.is_contiguous:
-            rhs_continuity_var_name = "ntt_input_rhs_contiguous"
-            copy_code, _ = self.generate_copy_to_contiguous_code(
-                rhs_element_type,
-                rhs_is_dynamic_shape,
-                rhs_dims_spec,
-                "ntt_input_rhs",
-                rhs_continuity_var_name
-            )
-            code.extend(copy_code)
 
-        code.extend([f"auto [ort_input_lhs, ort_input_rhs] = NttTest::convert_and_align_to_ort({lhs_continuity_var_name}, {rhs_continuity_var_name});"])
-        code.extend(self.generate_ort_output(datatype, ntt_op_str))
 
-        return code
     # lhs_dynamic: bool, lhs is dynamic or fixed
     # rhs_dynamic: bool, rhs is dynamic or fixed
     # lhs_shape: list[int], lhs shape, [1, 77, 3]
@@ -274,13 +317,13 @@ class BinaryTestGenerator(BaseTestGenerator):
                 lhs_pack_param, rhs_pack_param,
                 "add", output_shape_expr)
             code.extend([f"    {line}" for line in golden_output_code])
-
+            cast_mode = 2 if datatype.cpp_type in self.types_need_to_be_cast else 0
             # Compare outputs
             compare_code = self.generate_ort_back2ntt_and_compare_section(
                 datatype,
                 output_element_type,
                 output_shape_expr,
-                deal_fp8=0,
+                cast_mode=cast_mode,
                 ntt_output_var_name="ntt_output",
                 ort_output_var_name="ort_output")
             code.extend([f"    {line}" for line in compare_code])
@@ -359,12 +402,26 @@ class BinaryTestGenerator(BaseTestGenerator):
 
 if __name__ == "__main__":
     generator = BinaryTestGenerator()
-    script_directory = os.path.dirname(os.path.abspath(__file__))   
+    script_directory = os.path.dirname(os.path.abspath(__file__))
+    # Get the parent directory (ctest) and then the generated subdirectory
+    ctest_directory = os.path.dirname(script_directory)
+    generated_directory = os.path.join(ctest_directory, "generated")
+    
+    # Ensure generated directory exists
+    os.makedirs(generated_directory, exist_ok=True)
+    
     generated_filenames = []  # collect all generated file names
 
     for datatype in ALL_DATATYPES:
-        code = generator.generate_all_tests_for_type(datatype)
-        generated_filenames.append(f"{script_directory}/binary_test_{datatype.name_suffix}.cpp")
-        with open(generated_filenames[-1], "w") as f:
-            f.write(code)
-    generate_cmake_list(script_directory, generated_filenames, "binary_test_generated.cmake", "BINARY_TEST_GENERATED_TESTS")
+        test_code = generator.generate_all_tests_for_type(datatype)
+        filename = f"test_ntt_binary_{datatype.name_suffix.lower()}_generated.cpp"
+        output_filepath = os.path.join(generated_directory, filename)
+
+        with open(output_filepath, "w") as f:
+            f.write(test_code)
+        
+        print(f"Test file generated: {output_filepath}")
+        generated_filenames.append(filename)
+    
+    # Generate cmake list file in the generated directory
+    generate_cmake_list(generated_directory, generated_filenames, "generated_binary_tests.cmake", "GENERATED_BINARY_TEST_SOURCES")
