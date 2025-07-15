@@ -116,7 +116,7 @@ class UnpackTestGenerator(BaseTestGenerator):
         op_code = self.generate_ntt_output_and_op_section(
             datatype=datatype,
             output_shape_expr=output_shape_expr,
-            deal_fp8=deal_fp8,
+            cast_mode=deal_fp8,
             ntt_op_call_lines=unpack_call_code
         )
         code.extend(op_code)
@@ -138,7 +138,7 @@ class UnpackTestGenerator(BaseTestGenerator):
             shape_type=shape_type,
             dims_spec=dim_names,
             continuity=continuity,
-            deal_fp8=deal_fp8,
+            cast_mode=deal_fp8,
             P=P,
             vector_rank=vector_dim,
             ntt_input_var_name="ntt_input"))
@@ -235,12 +235,19 @@ if __name__ == "__main__":
     generator = UnpackTestGenerator()
     script_directory = os.path.dirname(os.path.abspath(__file__))
 
+    # Get the parent directory (ctest) and then the generated subdirectory
+    ctest_directory = os.path.dirname(script_directory)
+    generated_directory = os.path.join(ctest_directory, "generated")
+    
+    # Ensure generated directory exists
+    os.makedirs(generated_directory, exist_ok=True)
+
     generated_filenames = []
 
     for datatype in ALL_DATATYPES:
         test_code = generator.generate_all_tests_for_type(datatype)
         filename = f"test_ntt_unpack_generated_{datatype.name_suffix}.cpp"
-        output_filepath = os.path.join(script_directory, filename)
+        output_filepath = os.path.join(generated_directory, filename)
 
         with open(output_filepath, "w") as f:
             f.write(test_code)
@@ -248,4 +255,4 @@ if __name__ == "__main__":
         print(f"Test file generated: {output_filepath}")
         generated_filenames.append(filename)
 
-    generate_cmake_list(script_directory, generated_filenames, "generated_unpack_tests.cmake", "GENERATED_UNPACK_TEST_SOURCES")
+    generate_cmake_list(generated_directory, generated_filenames, "generated_unpack_tests.cmake", "GENERATED_UNPACK_TEST_SOURCES")

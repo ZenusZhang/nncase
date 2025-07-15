@@ -16,7 +16,7 @@ include_directories(${CMAKE_CURRENT_LIST_DIR}/..)
 # --- Generate test source files ---
 # Define kernel names for automatic test generation. Add more kernels here.
 # set(KERNEL_NAMES binary pack unpack cast)
-set(KERNEL_NAMES binary  cast)
+set(KERNEL_NAMES binary pack unpack)
 
 # Set directories
 set(TEST_GENERATOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test_generator)
@@ -71,7 +71,7 @@ endmacro()
 file(GLOB HANDWRITTEN_TESTS CONFIGURE_DEPENDS
     # generated/test_ntt_binary_generated_add_Uint16.cpp
     test_ntt_binary_add.cpp
-    generated/test_ntt_cast_from_bfloat16_generated.cpp
+    # generated/test_ntt_cast_from_bfloat16_generated.cpp
     # test_ntt_pack_generated_Uint64
     # test_ntt_binary_mul.cpp
     # test_ntt_binary_sub.cpp
@@ -98,8 +98,8 @@ file(GLOB HANDWRITTEN_TESTS CONFIGURE_DEPENDS
 )
 
 # Combine handwritten and generated tests
-# list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} ${GENERATED_TEST_SOURCES})
-list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} )
+list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} ${GENERATED_TEST_SOURCES})
+# list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} )
 
 foreach(test_file ${TEST_NAMES})
     add_test_exec(${test_file})
