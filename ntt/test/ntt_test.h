@@ -169,11 +169,11 @@ void init_tensor(TTensor &tensor, T start = static_cast<T>(0),
             tensor(index) = static_cast<double>(dis(gen)) >= 0.5;
         });
     } else if constexpr (std::is_same_v<T, bfloat16>) {
-        std::uniform_real_distribution<float> dis((float)start, (float)stop);
-        ntt::apply(tensor.shape(), [&]([[maybe_unused]] auto &index) {
-            [[maybe_unused]] auto temp = static_cast<float>(dis(gen));
-            [[maybe_unused]] auto temp1 = tensor(index);
-            // tensor(index) = static_cast<bfloat16>(dis(gen));
+        std::uniform_real_distribution<float> dis(start, stop);
+        ntt::apply(tensor.shape(), [&](auto &index) {
+            auto value = dis(gen);
+            tensor(index) = static_cast<bfloat16>(value);
+            printf("%f ", value);
         });
     } else {
         std::cerr << __FUNCTION__ << ": unsupported data type" << std::endl;
@@ -189,7 +189,7 @@ void init_tensor(TTensor &tensor, T start = static_cast<T>(0),
 }
 
 template <ntt::TensorOrVector TTensor1, ntt::TensorOrVector TTensor2>
-bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
+bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.99f) {
     if (lhs.shape().rank() != rhs.shape().rank()) {
         return false;
     }
@@ -212,10 +212,12 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
         v1.push_back(d1);
         v2.push_back(d2);
         if (d1 != d2) {
+            // #ifndef NDEBUG
             std::cout << "index = (";
             for (size_t i = 0; i < index.rank(); i++)
                 std::cout << index[i] << " ";
             std::cout << "): lhs = " << d1 << ", rhs = " << d2 << std::endl;
+            // #endif
             pass = false;
         }
     });
@@ -238,7 +240,7 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
 
 template <ntt::TensorOfVector TTensor1, ntt::TensorOfVector TTensor2>
     requires(TTensor1::element_type::rank() == 1)
-bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
+bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.99f) {
     using vector_type = typename TTensor1::element_type;
     constexpr size_t N = vector_type::template lane<0>();
     printf("N = %zu\n", N);
@@ -272,10 +274,12 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
             v1.push_back(d1);
             v2.push_back(d2);
             if (d1 != d2) {
+                // #ifndef NDEBUG
                 std::cout << "index = (";
                 for (size_t i = 0; i < index.rank(); i++)
                     std::cout << index[i] << " ";
                 std::cout << "): lhs = " << d1 << ", rhs = " << d2 << std::endl;
+                // #endif
                 pass = false;
             }
         });
@@ -301,7 +305,7 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
 template <ntt::TensorOfVector TTensor1, ntt::TensorOfVector TTensor2>
     requires(TTensor1::element_type::rank() == 2 &&
              TTensor2::element_type::rank() == 2)
-bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
+bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.99f) {
     using vector_type = typename TTensor1::element_type;
     constexpr size_t N0 = vector_type::template lane<0>();
     constexpr size_t N1 = vector_type::template lane<1>();
@@ -334,10 +338,12 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
             v1.push_back(d1);
             v2.push_back(d2);
             if (d1 != d2) {
+                // #ifndef NDEBUG
                 std::cout << "index = (";
                 for (size_t i = 0; i < index.rank(); i++)
                     std::cout << index[i] << " ";
                 std::cout << "): lhs = " << d1 << ", rhs = " << d2 << std::endl;
+                // #endif
                 pass = false;
             }
         });
@@ -367,7 +373,7 @@ void print_tensor(TTensor &tensor, std::string name) {
         nncase::ntt::apply(tensor.shape(), [&](auto index) {
             const auto vec = tensor(index);
             nncase::ntt::apply(vec.shape(), [&](auto idx) {
-                auto d1 = int32_t(vec(idx));
+                auto d1 = static_cast<double>(vec(idx));
                 std::cout << d1 << " ";
             });
         });

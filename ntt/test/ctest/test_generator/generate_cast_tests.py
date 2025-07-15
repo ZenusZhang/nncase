@@ -139,7 +139,7 @@ class CastTestGenerator(BaseTestGenerator):
                 shape_type=shape_type,
                 dims_spec=dim_names,
                 continuity=continuity,
-                deal_fp8=deal_fp8,
+                cast_mode=deal_fp8,
                 P=P,
                 vector_rank=vector_dim,
                 ntt_input_var_name="ntt_input"))
@@ -272,13 +272,20 @@ class CastTestGenerator(BaseTestGenerator):
 
 if __name__ == "__main__":
     generator = CastTestGenerator()
-    script_directory = os.path.dirname(os.path.abspath(__file__))   
+    script_directory = os.path.dirname(os.path.abspath(__file__))
+    # Get the parent directory (ctest) and then the generated subdirectory
+    ctest_directory = os.path.dirname(script_directory)
+    generated_directory = os.path.join(ctest_directory, "generated")
+    
+    # Ensure generated directory exists
+    os.makedirs(generated_directory, exist_ok=True)
+    
     generated_filenames = []  # collect all generated file names
 
     for from_type in ALL_DATATYPES:
         test_code = generator.generate_all_tests_for_from_type(from_type)
         filename = f"test_ntt_cast_from_{from_type.name_suffix.lower()}_generated.cpp"
-        output_filepath = os.path.join(script_directory, filename)
+        output_filepath = os.path.join(generated_directory, filename)
 
         with open(output_filepath, "w") as f:
             f.write(test_code)
@@ -286,4 +293,5 @@ if __name__ == "__main__":
         print(f"Test file generated: {output_filepath}")
         generated_filenames.append(filename)
     
-    generate_cmake_list(script_directory, generated_filenames, "generated_cast_tests.cmake", "GENERATED_CAST_TEST_SOURCES") 
+    # Generate cmake list file in the generated directory
+    generate_cmake_list(generated_directory, generated_filenames, "generated_cast_tests.cmake", "GENERATED_CAST_TEST_SOURCES") 

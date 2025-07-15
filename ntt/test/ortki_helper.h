@@ -84,15 +84,16 @@ ortki::OrtKITensor *ntt2ort(TTensor &tensor) {
 template <ntt::TensorOfVector TTensor>
 ortki::OrtKITensor *ntt2ort(TTensor &tensor) {
     using vec_type = typename std::decay_t<TTensor>::element_type;
-    size_t N = vec_type::shape()[0];
     auto RankDim = vec_type::rank();
     using vec_elem_type = ntt::element_or_scalar_t<vec_type>;
     auto ort_type = primitive_type2ort_type<vec_elem_type>();
     auto r1 = tensor.shape().rank();
     auto r2 = r1 + RankDim;
-    std::vector<size_t> v(r2, N);
+    std::vector<size_t> v(r2, 0);
     for (size_t i = 0; i < r1; i++)
         v[i] = tensor.shape()[i];
+    for (size_t i = r1; i < r2; i++)
+        v[i] = vec_type::shape()[i-r1];
     vec_elem_type *buffer = new vec_elem_type[tensor.shape().length() * vec_type::size()];
     vec_elem_type *buffer_ptr = buffer;
     ntt::apply(tensor.shape(), [&](auto tindex) {
