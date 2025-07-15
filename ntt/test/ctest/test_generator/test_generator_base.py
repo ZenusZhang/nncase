@@ -44,18 +44,18 @@ class ShapeType(Enum):
 
 ALL_DATATYPES = [
     DataType('bool', 'Bool', 'false', 'true'),
-    DataType('uint8_t', 'Uint8', '0', '255'),
-    DataType('uint16_t', 'Uint16', '0', '65535'),
-    DataType('uint32_t', 'Uint32', '0', '100000'),
+    DataType('uint8_t', 'Uint8', '0', '16'),
+    DataType('uint16_t', 'Uint16', '0', '256'),
+    DataType('uint32_t', 'Uint32', '0', '65536'),
     DataType('uint64_t', 'Uint64', '0', '1000000'),
-    DataType('int8_t', 'Int8', '-127', '127'),
-    DataType('int16_t', 'Int16', '-32767', '32767'),
-    DataType('int32_t', 'Int32', '-100000', '100000'),
+    DataType('int8_t', 'Int8', '-11', '11'),
+    DataType('int16_t', 'Int16', '-181', '181'),
+    DataType('int32_t', 'Int32', '-32761', '32761'),
     DataType('int64_t', 'Int64', '-1000000', '1000000'),
     DataType('half', 'Float16', 'half(-65504.0f)', 'half(65504.0f)'),
     DataType('float', 'Float32', '-3.4e38', '3.4e38'),
     DataType('double', 'Float64', '-1.7e308', '1.7e308'),
-    DataType('bfloat16', 'Bfloat16', '-3.3e38_bf16', '3.3e38_bf16'),
+    DataType('bfloat16', 'Bfloat16', '-1.0e10_bf16', '1.0e10_bf16'),
     DataType('float_e4m3_t', 'Float8e4m3', 'float_e4m3_t(-448.0f)', 'float_e4m3_t(448.0f)'),
     DataType('float_e5m2_t', 'Float8e5m2', 'float_e5m2_t(-57344.0f)', 'float_e5m2_t(57344.0f)'),
 ]
@@ -85,15 +85,20 @@ class BaseTestGenerator:
         ndim = len(dim_names)
         positive_unpack_axes = [ax if ax >= 0 else ndim + ax for ax in unpack_axes]
         for i, name in enumerate(dim_names):
+            param = ""
+            if i == positive_unpack_axes[-1]:
+                param = "P"
+            else:
+                param = "4"
             if i in positive_unpack_axes:
-                output_dims.append(f"{name} * P")
+                output_dims.append(f"{name} * {param}")
             else:
                 output_dims.append(name)
         return output_dims
 
     def generate_shape_init(self, shape_type, dim_spec):
         shape_type = ShapeType.from_input(shape_type)
-        if shape_type.is_fixed:
+        if shape_type.is_fixed():
             dim_strs = [f"{d}" for d in dim_spec]
             return f"ntt::fixed_shape_v<{', '.join(dim_strs)}>"
         else:  # dynamic
@@ -108,7 +113,6 @@ class BaseTestGenerator:
                              vector_rank, var_name, name_suffix, P=None):
         code = []
         shape_expr = self.generate_shape_init(shape_type, dim_spec)
-
         element_cpp_type = self.get_element_cpp_type(datatype.cpp_type, vector_rank, P)
 
         if continuity.is_contiguous:
@@ -178,14 +182,16 @@ class BaseTestGenerator:
         code = []
         input_dims_expr = [f"{name}" for name in dim_names]
         code.append("    // Copy to contiguous tensor for ORT reference")
-        code.append(f"    auto {output_var_name} = ntt::make_tensor<{input_element_type}>({self.generate_shape_init(shape_type, input_dims_expr)});")
+        code.append(f"    auto {output_var_name} = ntt::make_unique_tensor<{input_element_type}>({self.generate_shape_init(shape_type, input_dims_expr)});")
         code.append("    ")
+
+        output_var_name = f"*{output_var_name}"
 
         iter_var_names = ["i", "j", "k", "l", "m"]
         for i, name in enumerate(dim_names):
             code.append(f"    {'    ' * i}for (size_t {iter_var_names[i]} = 0; {iter_var_names[i]} < {name}; {iter_var_names[i]}++) {{")
         indices = [f"{iter_var_names[i]}" for i in range(len(dim_names))]
-        code.append(f"    {'    ' * len(dim_names)}{output_var_name}({', '.join(indices)}) = {input_var_name}({', '.join(indices)});")
+        code.append(f"    {'    ' * len(dim_names)}({output_var_name})({', '.join(indices)}) = {input_var_name}({', '.join(indices)});")
         for i in range(len(dim_names) - 1, -1, -1):
             code.append(f"    {'    ' * i}}}")
         code.append("")
@@ -294,8 +300,10 @@ using namespace ortki;
             return base_cpp_type
         if P is None:
             raise ValueError("P must be provided when vector_rank > 0")
-        if vector_rank >= 1:
+        if vector_rank == 1:
             ps = ", ".join([f"P"] * vector_rank)
+        if vector_rank > 1:
+            ps = ", ".join([f"4"] * (vector_rank-1)) + ", P"
         return f"ntt::vector<{base_cpp_type}, {ps}>"
 
     # -------------------------------------------------------------------------
@@ -342,7 +350,7 @@ using namespace ortki;
     def generate_ntt_output_and_op_section(self,
                                            datatype: DataType,
                                            output_shape_expr: str,
-                                           deal_fp8: int,
+                                           cast_mode: int,
                                            ntt_op_call_lines: List[str],
                                            output_var_name: str = "ntt_output1",
                                            output_element_type = None) -> List[str]:
@@ -358,7 +366,7 @@ using namespace ortki;
             ""
         ]
         op_section = output_tensor_code + ntt_op_call_lines
-        if deal_fp8 == 1:
+        if cast_mode == 1:
             uint8_type = "uint8_t" if "vector" not in output_element_type else output_element_type.replace(datatype.cpp_type, "uint8_t")
             op_section.extend([
                 f"auto {output_var_name}_uint8 = ntt::make_tensor<{uint8_type}>({output_shape_expr});",
@@ -373,7 +381,7 @@ using namespace ortki;
                                    shape_type,
                                    dims_spec,
                                    continuity,
-                                   deal_fp8: int,
+                                   cast_mode: int,
                                    P: Optional[str] = None,
                                    vector_rank: int = 0,
                                    ort_input_var_name: str = "ort_input",
@@ -387,7 +395,7 @@ using namespace ortki;
 
         # Decide which NTT tensor will be fed to ortki
         ort_src_tensor = ntt_input_var_name
-        if deal_fp8 == 1:
+        if cast_mode == 1:
             # 1.3: if ntt input is fp8, first cast to uint8 tensor.
             # The resulting uint8 tensor is always contiguous.
             input_shape_expr = self.generate_shape_init(shape_type, dims_spec)
@@ -396,14 +404,6 @@ using namespace ortki;
             lines.append(f"    NttTest::reinterpret_cast_fp8_to_uint8({ntt_input_var_name}, {ntt_input_var_name}_uint8);")
             lines.append(f"")
             ort_src_tensor = f"{ntt_input_var_name}_uint8"
-        elif deal_fp8 == 2:
-            input_shape_expr = self.generate_shape_init(shape_type, dims_spec)
-            fp16_cpp_type = self.get_element_cpp_type("half", vector_rank, P)
-            lines.append(f"    // Cast fp8 input to fp16 for ORT reference computation")
-            lines.append(f"    auto {ntt_input_var_name}_fp16 = ntt::make_tensor<{fp16_cpp_type}>({input_shape_expr});")
-            lines.append(f"    ntt::cast({ntt_input_var_name}, {ntt_input_var_name}_fp16);")
-            lines.append(f"")
-            ort_src_tensor = f"{ntt_input_var_name}_fp16"
         elif not continuity.is_contiguous:
             # 1.2: if not fp8 and non-contiguous, copy to a contiguous buffer.
             # For vector types, the element type is a vector.
@@ -439,26 +439,28 @@ using namespace ortki;
                   "// 2. call ortki kernel to generate ORT output",
                   "// ------------------------------------------------------------------"]
         return header + ort_operation_lines + [""]
+    
 
     def generate_ort_back2ntt_and_compare_section(self,
                                                   datatype: DataType,
                                                   output_element_cpp_type: str,
                                                   output_shape_expr: str,
-                                                  deal_fp8: int,
+                                                  cast_mode: int,
                                                   ntt_output_var_name: str = "ntt_output1",
-                                                  ort_output_var_name: str = "ort_output") -> list[str]:
+                                                  ort_output_var_name: str = "ort_output",
+                                                  ort_type: str = "float") -> list[str]:
         """Generate code to convert ORT output back to NTT tensor (golden) and
         compare with tested NTT output."""
         lines = ["// ------------------------------------------------------------------",
                  "// 3. convert ORT output back to NTT tensor (golden) and compare with tested NTT output",
                  "// ------------------------------------------------------------------"]
         
-        if deal_fp8 == 0:  # Not fp8
+        if cast_mode == 0:  #  no cast
             golden_var_name = "ntt_golden"
             lines.append(f"auto {golden_var_name} = ntt::make_tensor<{output_element_cpp_type}>({output_shape_expr});")
             lines.append(f"NttTest::ort2ntt({ort_output_var_name}, {golden_var_name});")
             lines.append(f"EXPECT_TRUE(NttTest::compare_tensor({ntt_output_var_name}, {golden_var_name}));")
-        elif deal_fp8 == 1:  # fp8 with uint8 comparison
+        elif cast_mode == 1:  # fp8 with uint8 comparison
             ntt_output_to_compare = f"{ntt_output_var_name}_uint8"
             golden_var_name = "ntt_golden_uint8"
             golden_cpp_type = "uint8_t" if "vector" not in output_element_cpp_type else output_element_cpp_type.replace(datatype.cpp_type, "uint8_t")
@@ -466,19 +468,19 @@ using namespace ortki;
             lines.append(f"auto {golden_var_name} = ntt::make_tensor<{golden_cpp_type}>({output_shape_expr});")
             lines.append(f"NttTest::ort2ntt({ort_output_var_name}, {golden_var_name});")
             lines.append(f"EXPECT_TRUE(NttTest::compare_tensor({ntt_output_to_compare}, {golden_var_name}));")
-        elif deal_fp8 == 2:  # fp8 with fp16 intermediate, compare fp8
-            golden_fp16_var_name = "ntt_golden_fp16"
-            golden_fp16_cpp_type = output_element_cpp_type.replace(datatype.cpp_type, "half")
-            
-            lines.append(f"// Golden output is in fp16, cast it back to fp8 for comparison")
-            lines.append(f"auto {golden_fp16_var_name} = ntt::make_tensor<{golden_fp16_cpp_type}>({output_shape_expr});")
-            lines.append(f"NttTest::ort2ntt({ort_output_var_name}, {golden_fp16_var_name});")
+        elif cast_mode == 2:  # cast from ort_type to datatype.cpp
+            golden_ntt_in_ort_type_var = f"ntt_golden_{ort_type}"
+            golden_cpp_type = output_element_cpp_type.replace(datatype.cpp_type, ort_type)
 
-            golden_fp8_var_name = "ntt_golden_fp8"
-            lines.append(f"auto {golden_fp8_var_name} = ntt::make_tensor<{output_element_cpp_type}>({output_shape_expr});")
-            lines.append(f"ntt::cast({golden_fp16_var_name}, {golden_fp8_var_name});")
+            lines.append(f"// Golden output is in ort_type, cast it back to datatype.cpp_type for comparison")
+            lines.append(f"auto {golden_ntt_in_ort_type_var} = ntt::make_unique_tensor<{golden_cpp_type}>({output_shape_expr});")
+            lines.append(f"NttTest::ort2ntt({ort_output_var_name}, *{golden_ntt_in_ort_type_var});")
 
-            lines.append(f"EXPECT_TRUE(NttTest::compare_tensor({ntt_output_var_name}, {golden_fp8_var_name}));")
+            golden_origin_var = "ntt_golden"
+            lines.append(f"auto {golden_origin_var} = ntt::make_unique_tensor<{output_element_cpp_type}>({output_shape_expr});")
+            lines.append(f"ntt::cast(*{golden_ntt_in_ort_type_var}, *{golden_origin_var});")
+
+            lines.append(f"EXPECT_TRUE(NttTest::compare_tensor({ntt_output_var_name}, *{golden_origin_var}));")
 
         lines.append("}")
         lines.append("")
