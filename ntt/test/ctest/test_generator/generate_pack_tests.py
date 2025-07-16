@@ -44,10 +44,11 @@ class PackTestGenerator(BaseTestGenerator):
         dim_idx = 0
         for i in range(ndim):
             if i in pack_axes:
+                pack_param = "P" if i == pack_axes[-1] else "4"
                 axis_idx = pack_axes.index(i)
                 # Use string expressions instead of calculated results
-                reshape_dims_str.append(f"(int64_t)({input_dim_names[i]} / P)")
-                reshape_dims_str.append(f"(int64_t)P")
+                reshape_dims_str.append(f"(int64_t)({input_dim_names[i]} / {pack_param})")
+                reshape_dims_str.append(f"(int64_t){pack_param}")
             else:
                 reshape_dims_str.append(f"(int64_t){input_dim_names[i]}")
         
@@ -117,7 +118,8 @@ class PackTestGenerator(BaseTestGenerator):
         output_dims = []
         for i, name in enumerate(dim_names):
             if i in pack_axes:
-                output_dims.append(f"{name} / P")
+                pack_param = "P" if i == pack_axes[-1] else "4"
+                output_dims.append(f"{name} / {pack_param}")
             else:
                 output_dims.append(name)
         output_shape_expr = self.generate_shape_init(shape_type, output_dims)
@@ -174,7 +176,7 @@ class PackTestGenerator(BaseTestGenerator):
 
         P = f"NTT_VLEN / (sizeof({datatype.cpp_type}) * 8)"
         if ndim == 3:
-            dims, dim_names = [1, 77, 3], ['C', 'H', 'W']
+            dims, dim_names = [2, 77, 3], ['C', 'H', 'W']
         elif ndim == 4:
             dims, dim_names = [2, 8, 4, 4], ['N', 'C', 'H', 'W']
         else:
