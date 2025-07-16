@@ -32,11 +32,22 @@ class BinaryTestGenerator(BaseTestGenerator):
             'float_e5m2_t'
         ]
         self.op_str_map = {
-            "add": "Add",
-            "sub": "Sub",
-            "mul": "Mul",
-            "div": "Div"
+            "add": f"auto ort_output = ortki_Add(ort_input_lhs, ort_input_rhs);",
+            "sub": f"auto ort_output = ortki_Sub(ort_input_lhs, ort_input_rhs);",
+            "mul": f"auto ort_output = ortki_Mul(ort_input_lhs, ort_input_rhs);",
+            "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
+            # "ceil_div": f"auto ort_output = ortki_CeilDiv(ort_input_lhs, ort_input_rhs);",
+            # "floor_mod": f"auto ort_output = ortki_FloorMod(ort_input_lhs, ort_input_rhs);",
+            # "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs);",
+            # "min": f"auto ort_output = ortki_Min(ort_input_lhs, ort_input_rhs);",
+            # "max": f"auto ort_output = ortki_Max(ort_input_lhs, ort_input_rhs);",
+            # "pow": f"auto ort_output = ortki_Pow(ort_input_lhs, ort_input_rhs);",
         }
+
+    def is_div_operation(self) -> bool:
+        """Check if the current operation is division, to disable zero generation."""
+        result = (hasattr(self, 'ntt_op_str') and self.ntt_op_str in ["div", "mod"])
+        return result
 
     def generate_test_name(self, datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape, 
         lhs_dims_spec, rhs_dims_spec, 
@@ -137,7 +148,7 @@ class BinaryTestGenerator(BaseTestGenerator):
         ort_type = self.ort_datatype_map.get(datatype.cpp_type, 'DataType_FLOAT')
         return [
             "// Execute binary operation",
-            f"auto ort_output = ortki_{self.op_str_map[ntt_op_str]}(ort_input_lhs, ort_input_rhs);",
+            f"{self.op_str_map[ntt_op_str]}",
             ""
         ]
 
@@ -286,56 +297,58 @@ class BinaryTestGenerator(BaseTestGenerator):
             lhs_continuity: Continuity,
             rhs_continuity: Continuity,
             ntt_op_str):
-            
+        
+        self.ntt_op_str = ntt_op_str  # Store operation type for is_div_operation check
+        
 
-            test_name = self.generate_test_name(datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape, 
-                lhs_dims_spec, rhs_dims_spec, 
-                lhs_vector_rank, rhs_vector_rank, 
-                lhs_continuity, rhs_continuity)
-
-
-            P = f"NTT_VLEN / (sizeof({datatype.cpp_type}) * 8)"
-            code: List[str] = []
-            lhs_pack_param = P if lhs_vector_rank > 0 else None
-            rhs_pack_param = P if rhs_vector_rank > 0 else None
-
-            # 1. Test header and constants
-            code.extend(self.generate_function_name("BinaryTestAdd", datatype, test_name))
-            code.extend(self.generate_min_max_constants(datatype))
-            if lhs_vector_rank > 0 or rhs_vector_rank > 0:
-                code.extend(self.generate_P_constants(P))
-
-            # # Generate output to test in ntt format
-            ntt_output_code, output_shape_expr, output_element_type = self.generate_ntt_output_to_test(datatype,
-                                lhs_is_dynamic_shape, rhs_is_dynamic_shape,
-                                lhs_dims_spec, rhs_dims_spec,
-                                lhs_vector_rank, rhs_vector_rank,
-                                lhs_continuity, rhs_continuity,
-                                lhs_pack_param, rhs_pack_param,
-                                ntt_op_str)
-            code.extend(ntt_output_code)
+        test_name = self.generate_test_name(datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape, 
+            lhs_dims_spec, rhs_dims_spec, 
+            lhs_vector_rank, rhs_vector_rank, 
+            lhs_continuity, rhs_continuity)
 
 
-            # Generate golden output in ort format
-            golden_output_code = self.generate_ort_golden_output(datatype,lhs_is_dynamic_shape, rhs_is_dynamic_shape,
-                lhs_dims_spec, rhs_dims_spec,
-                lhs_vector_rank, rhs_vector_rank,
-                lhs_continuity, rhs_continuity,
-                lhs_pack_param, rhs_pack_param,
-                "add", output_shape_expr)
-            code.extend([f"    {line}" for line in golden_output_code])
-            cast_mode = 2 if datatype.cpp_type in self.types_need_to_be_cast else 0
-            # Compare outputs
-            compare_code = self.generate_ort_back2ntt_and_compare_section(
-                datatype,
-                output_element_type,
-                output_shape_expr,
-                cast_mode=cast_mode,
-                ntt_output_var_name="ntt_output",
-                ort_output_var_name="ort_output")
-            code.extend([f"    {line}" for line in compare_code])
+        P = f"NTT_VLEN / (sizeof({datatype.cpp_type}) * 8)"
+        code: List[str] = []
+        lhs_pack_param = P if lhs_vector_rank > 0 else None
+        rhs_pack_param = P if rhs_vector_rank > 0 else None
 
-            return "\n".join(code)
+        # 1. Test header and constants
+        code.extend(self.generate_function_name(f"BinaryTest{ntt_op_str}", datatype, test_name))
+        code.extend(self.generate_min_max_constants(datatype))
+        if lhs_vector_rank > 0 or rhs_vector_rank > 0:
+            code.extend(self.generate_P_constants(P))
+
+        # # Generate output to test in ntt format
+        ntt_output_code, output_shape_expr, output_element_type = self.generate_ntt_output_to_test(datatype,
+                            lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+                            lhs_dims_spec, rhs_dims_spec,
+                            lhs_vector_rank, rhs_vector_rank,
+                            lhs_continuity, rhs_continuity,
+                            lhs_pack_param, rhs_pack_param,
+                            ntt_op_str)
+        code.extend(ntt_output_code)
+
+
+        # Generate golden output in ort format
+        golden_output_code = self.generate_ort_golden_output(datatype,lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+            lhs_dims_spec, rhs_dims_spec,
+            lhs_vector_rank, rhs_vector_rank,
+            lhs_continuity, rhs_continuity,
+            lhs_pack_param, rhs_pack_param,
+            ntt_op_str, output_shape_expr)
+        code.extend([f"    {line}" for line in golden_output_code])
+        cast_mode = 2 if datatype.cpp_type in self.types_need_to_be_cast else 0
+        # Compare outputs
+        compare_code = self.generate_ort_back2ntt_and_compare_section(
+            datatype,
+            output_element_type,
+            output_shape_expr,
+            cast_mode=cast_mode,
+            ntt_output_var_name="ntt_output",
+            ort_output_var_name="ort_output")
+        code.extend([f"    {line}" for line in compare_code])
+
+        return "\n".join(code)
 
     def generate_all_tests_for_type(self, datatype, op_str):
         code = []
@@ -409,6 +422,8 @@ class BinaryTestGenerator(BaseTestGenerator):
 
 def generate_tests_for_op(op_str, generator):
     for datatype in ALL_DATATYPES:
+        if datatype.cpp_type == "bool":
+            continue
         test_code = generator.generate_all_tests_for_type(datatype, op_str)
         filename = f"test_ntt_binary_{datatype.name_suffix.lower()}_{op_str}_generated.cpp"
         output_filepath = os.path.join(generated_directory, filename)
