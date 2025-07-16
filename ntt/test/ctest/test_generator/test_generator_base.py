@@ -162,8 +162,9 @@ class BaseTestGenerator:
         # define dimension constants
         for i, (name, size) in enumerate(zip(dim_names, dims)):
             if pack_axes and (i in pack_axes):
+                pack_param = "P" if i  == pack_axes[-1] else "4"
                 code.append(f"    constexpr size_t {name}_coefficient = {size};")
-                code.append(f"    constexpr size_t {name} = {name}_coefficient * P;")
+                code.append(f"    constexpr size_t {name} = {name}_coefficient * {pack_param};")
             else:
                 code.append(f"    constexpr size_t {name} = {size};")
 

@@ -31,6 +31,12 @@ class BinaryTestGenerator(BaseTestGenerator):
             'float_e4m3_t',
             'float_e5m2_t'
         ]
+        self.op_str_map = {
+            "add": "Add",
+            "sub": "Sub",
+            "mul": "Mul",
+            "div": "Div"
+        }
 
     def generate_test_name(self, datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape, 
         lhs_dims_spec, rhs_dims_spec, 
@@ -131,7 +137,7 @@ class BinaryTestGenerator(BaseTestGenerator):
         ort_type = self.ort_datatype_map.get(datatype.cpp_type, 'DataType_FLOAT')
         return [
             "// Execute binary operation",
-            f"auto ort_output = ortki_{ntt_op_str.capitalize()}(ort_input_lhs, ort_input_rhs);",
+            f"auto ort_output = ortki_{self.op_str_map[ntt_op_str]}(ort_input_lhs, ort_input_rhs);",
             ""
         ]
 
@@ -278,7 +284,8 @@ class BinaryTestGenerator(BaseTestGenerator):
             lhs_vector_rank: int,
             rhs_vector_rank: int,
             lhs_continuity: Continuity,
-            rhs_continuity: Continuity):
+            rhs_continuity: Continuity,
+            ntt_op_str):
             
 
             test_name = self.generate_test_name(datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape, 
@@ -305,7 +312,7 @@ class BinaryTestGenerator(BaseTestGenerator):
                                 lhs_vector_rank, rhs_vector_rank,
                                 lhs_continuity, rhs_continuity,
                                 lhs_pack_param, rhs_pack_param,
-                                "add")
+                                ntt_op_str)
             code.extend(ntt_output_code)
 
 
@@ -330,7 +337,7 @@ class BinaryTestGenerator(BaseTestGenerator):
 
             return "\n".join(code)
 
-    def generate_all_tests_for_type(self, datatype):
+    def generate_all_tests_for_type(self, datatype, op_str):
         code = []
         
         # Define combinations for test cases
@@ -392,13 +399,26 @@ class BinaryTestGenerator(BaseTestGenerator):
                 lhs_vector_rank=lhs_vec_rank,
                 rhs_vector_rank=rhs_vec_rank,
                 lhs_continuity=lhs_continuity,
-                rhs_continuity=rhs_continuity
+                rhs_continuity=rhs_continuity,
+                ntt_op_str=op_str
             )
             code.append(test_code)
 
         code.append(self.generate_footer())
         return "\n".join(code)
 
+def generate_tests_for_op(op_str, generator):
+    for datatype in ALL_DATATYPES:
+        test_code = generator.generate_all_tests_for_type(datatype, op_str)
+        filename = f"test_ntt_binary_{datatype.name_suffix.lower()}_{op_str}_generated.cpp"
+        output_filepath = os.path.join(generated_directory, filename)
+
+        with open(output_filepath, "w") as f:
+            f.write(test_code)
+        
+        print(f"Test file generated: {output_filepath}")
+        generated_filenames.append(filename)
+    
 
 if __name__ == "__main__":
     generator = BinaryTestGenerator()
@@ -412,16 +432,18 @@ if __name__ == "__main__":
     
     generated_filenames = []  # collect all generated file names
 
-    for datatype in ALL_DATATYPES:
-        test_code = generator.generate_all_tests_for_type(datatype)
-        filename = f"test_ntt_binary_{datatype.name_suffix.lower()}_generated.cpp"
-        output_filepath = os.path.join(generated_directory, filename)
+    # for datatype in ALL_DATATYPES:
+    #     test_code = generator.generate_all_tests_for_type(datatype)
+    #     filename = f"test_ntt_binary_{datatype.name_suffix.lower()}_generated.cpp"
+    #     output_filepath = os.path.join(generated_directory, filename)
 
-        with open(output_filepath, "w") as f:
-            f.write(test_code)
+    #     with open(output_filepath, "w") as f:
+    #         f.write(test_code)
         
-        print(f"Test file generated: {output_filepath}")
-        generated_filenames.append(filename)
+    #     print(f"Test file generated: {output_filepath}")
+    #     generated_filenames.append(filename)
     
+    for op_str in generator.op_str_map.keys():
+        generate_tests_for_op(op_str, generator)
     # Generate cmake list file in the generated directory
     generate_cmake_list(generated_directory, generated_filenames, "generated_binary_tests.cmake", "GENERATED_BINARY_TEST_SOURCES")
