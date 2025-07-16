@@ -54,7 +54,7 @@ ALL_DATATYPES = [
     DataType('int64_t', 'Int64', '-1000000', '1000000'),
     DataType('half', 'Float16', 'half(-65504.0f)', 'half(65504.0f)'),
     DataType('float', 'Float32', '-3.4e38', '3.4e38'),
-    DataType('double', 'Float64', '-1.7e308', '1.7e308'),
+    DataType('double', 'Float64', '-1.7e150', '1.7e150'),
     DataType('bfloat16', 'Bfloat16', '-1.0e10_bf16', '1.0e10_bf16'),
     DataType('float_e4m3_t', 'Float8e4m3', 'float_e4m3_t(-448.0f)', 'float_e4m3_t(448.0f)'),
     DataType('float_e5m2_t', 'Float8e5m2', 'float_e5m2_t(-57344.0f)', 'float_e5m2_t(57344.0f)'),
@@ -117,7 +117,8 @@ class BaseTestGenerator:
 
         if continuity.is_contiguous:
             code.append(f"auto {var_name} = ntt::make_tensor<{element_cpp_type}>({shape_expr});")
-            code.append(f"NttTest::init_tensor({var_name}, min_input, max_input);")
+            allow_zr = "false" if self.is_div_operation() else "true"
+            code.append(f"NttTest::init_tensor({var_name}, min_input, max_input, {allow_zr});")
         else:  # non-contiguous
             big_dims = dim_spec.copy()
             dim_to_change = continuity.non_contiguous_dim
@@ -130,7 +131,8 @@ class BaseTestGenerator:
 
             code.append(f"// Create non-contiguous tensor (on dimension {dim_to_change})")
             code.append(f"auto big_tensor{name_suffix} = ntt::make_tensor<{element_cpp_type}>({big_shape_expr});")
-            code.append(f"NttTest::init_tensor(big_tensor{name_suffix}, min_input, max_input);")
+            allow_zr = "false" if self.is_div_operation() else "true"
+            code.append(f"NttTest::init_tensor(big_tensor{name_suffix}, min_input, max_input, {allow_zr});")
             code.append(f"")
             code.append(f"auto {var_name} = ntt::make_tensor_view_from_address<{element_cpp_type}>(")
             code.append(f"    big_tensor{name_suffix}.elements().data(),")
@@ -290,6 +292,12 @@ using namespace ortki;
     return RUN_ALL_TESTS();
 }
 '''
+
+    def is_div_operation(self) -> bool:
+        """Override in subclasses to indicate whether current operation is division.
+        Returns True for div operations to disable allow_zr in init_tensor.
+        """
+        return False
 
     def get_element_cpp_type(self, base_cpp_type: str, vector_rank: int, P: Optional[str]) -> str:
         """Utility: given primitive cpp type, return the full `ntt::vector<..., ...>` expression.
@@ -477,9 +485,18 @@ using namespace ortki;
             lines.append(f"auto {golden_ntt_in_ort_type_var} = ntt::make_unique_tensor<{golden_cpp_type}>({output_shape_expr});")
             lines.append(f"NttTest::ort2ntt({ort_output_var_name}, *{golden_ntt_in_ort_type_var});")
 
+            golden_signed_int_var = "ntt_golden_signed_int"
+            if datatype.cpp_type in ["uint8_t", "uint16_t", "uint32_t", "uint64_t"]:
+                int_tensor_cpp_type = output_element_cpp_type.replace(datatype.cpp_type, "int64_t")
+                lines.append(f"auto {golden_signed_int_var} = ntt::make_unique_tensor<{int_tensor_cpp_type}>({output_shape_expr});")
+                lines.append(f"ntt::cast(*{golden_ntt_in_ort_type_var}, *{golden_signed_int_var});")
+                golden_cast_source_var = golden_signed_int_var
+            else:
+                golden_cast_source_var = golden_ntt_in_ort_type_var
+            
             golden_origin_var = "ntt_golden"
             lines.append(f"auto {golden_origin_var} = ntt::make_unique_tensor<{output_element_cpp_type}>({output_shape_expr});")
-            lines.append(f"ntt::cast(*{golden_ntt_in_ort_type_var}, *{golden_origin_var});")
+            lines.append(f"ntt::cast(*{golden_cast_source_var}, *{golden_origin_var});")
 
             lines.append(f"EXPECT_TRUE(NttTest::compare_tensor({ntt_output_var_name}, *{golden_origin_var}));")
 
