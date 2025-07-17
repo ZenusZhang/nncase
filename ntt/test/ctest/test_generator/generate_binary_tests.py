@@ -32,18 +32,19 @@ class BinaryTestGenerator(BaseTestGenerator):
             'float_e5m2_t'
         ]
         self.op_str_map = {
-            "add": f"auto ort_output = ortki_Add(ort_input_lhs, ort_input_rhs);",
-            "sub": f"auto ort_output = ortki_Sub(ort_input_lhs, ort_input_rhs);",
-            "mul": f"auto ort_output = ortki_Mul(ort_input_lhs, ort_input_rhs);",
-            "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
+            # "add": f"auto ort_output = ortki_Add(ort_input_lhs, ort_input_rhs);",
+            # "sub": f"auto ort_output = ortki_Sub(ort_input_lhs, ort_input_rhs);",
+            # "mul": f"auto ort_output = ortki_Mul(ort_input_lhs, ort_input_rhs);",
+            # "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
             # "ceil_div": f"auto ort_output = ortki_CeilDiv(ort_input_lhs, ort_input_rhs);",
-            # "floor_mod": f"auto ort_output = ortki_FloorMod(ort_input_lhs, ort_input_rhs);",
-            # "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs);",
+            "floor_mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 0);",
+            # "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 1);",
             # "min": f"auto ort_output = ortki_Min(ort_input_lhs, ort_input_rhs);",
             # "max": f"auto ort_output = ortki_Max(ort_input_lhs, ort_input_rhs);",
             # "pow": f"auto ort_output = ortki_Pow(ort_input_lhs, ort_input_rhs);",
         }
 
+    "floor_mod" : f"auto ort_output = ortki_sub(ort_input_lhs, ortki_mul(ortki_floor(ortki_div(ort_input_lhs, ort_input_rhs)), ort_input_rhs));"
     def is_div_operation(self) -> bool:
         """Check if the current operation is division, to disable zero generation."""
         result = (hasattr(self, 'ntt_op_str') and self.ntt_op_str in ["div", "mod"])
