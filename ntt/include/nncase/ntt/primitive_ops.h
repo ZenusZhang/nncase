@@ -203,6 +203,16 @@ template <class T1, class T2> struct floor_mod {
     }
 };
 
+
+template <typename T>
+requires (std::is_same_v<T, float_e4m3_t> || std::is_same_v<T, float_e5m2_t>)
+struct floor_mod<T, T> {
+    constexpr auto operator()(T v1,
+                              T v2) const noexcept {
+        return T(v1 - floor(v1 / v2) * v2);
+    }
+};
+
 template <class T1, class T2> struct inner_product {
     constexpr auto operator()(const T1 &v1, const T2 &v2) const noexcept {
         return v1 * v2;
@@ -220,9 +230,22 @@ template <class T1, class T2> struct outer_product {
  */
 template <class T1, class T2> struct mod {
     constexpr auto operator()(const T1 &v1, const T2 &v2) const noexcept {
-        return static_cast<T1>(std::fmod(v1, v2));
+        return std::fmod(v1, v2);
     }
 };
+
+
+template <typename T>
+requires (std::is_same_v<T, float_e4m3_t> || std::is_same_v<T, float_e5m2_t>)
+struct mod<T, T> {
+    constexpr auto operator()(T v1,
+                              T v2) const noexcept {
+        return T(
+            std::fmod(static_cast<float>(v1), static_cast<float>(v2)));
+    }
+};
+
+
 
 template <class T1, class T2> struct min {
     constexpr auto operator()(const T1 &v1, const T2 &v2) const noexcept {
