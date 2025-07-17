@@ -16,9 +16,9 @@ include_directories(${CMAKE_CURRENT_LIST_DIR}/..)
 # --- Generate test source files ---
 # Define kernel names for automatic test generation. Add more kernels here.
 # set(KERNEL_NAMES binary pack unpack cast)
-set(KERNEL_NAMES binary pack unpack)
+# set(KERNEL_NAMES binary pack unpack)
 # set(KERNEL_NAMES  pack unpack)
-# set(KERNEL_NAMES binary)
+set(KERNEL_NAMES binary)
 
 # Set directories
 set(TEST_GENERATOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test_generator)
