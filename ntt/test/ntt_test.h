@@ -103,6 +103,7 @@ void generate_random_tensor(TTensor &tensor, std::mt19937 &gen, T start = static
         } else {
             do {
                 tensor(index) = static_cast<T>(dis(gen));
+                // std::cout << tensor(index) << std::endl;
             } while (tensor(index) == static_cast<T>(0));
         }
     });
@@ -241,12 +242,12 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
             v1.push_back(d1);
             v2.push_back(d2);
             if (d1 != d2) {
-                #ifndef NDEBUG
+                // #ifndef NDEBUG
                 std::cout << "index = (";
                 for (size_t i = 0; i < index.rank(); i++)
                     std::cout << index[i] << " ";
                 std::cout << "): lhs = " << d1 << ", rhs = " << d2 << std::endl;
-                #endif
+                // #endif
                 pass = false;
             }
         });
@@ -305,12 +306,12 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
             v1.push_back(d1);
             v2.push_back(d2);
             if (d1 != d2) {
-                #ifndef NDEBUG
+                // #ifndef NDEBUG
                 std::cout << "index = (";
                 for (size_t i = 0; i < index.rank(); i++)
                     std::cout << index[i] << " ";
                 std::cout << "): lhs = " << d1 << ", rhs = " << d2 << std::endl;
-                #endif
+                // #endif
                 pass = false;
             }
         });
@@ -338,15 +339,19 @@ void print_tensor(TTensor &tensor, std::string name) {
     using element_type = typename TTensor::element_type;
     if constexpr (ntt::Vector<element_type>) {
         nncase::ntt::apply(tensor.shape(), [&](auto index) {
-            const auto vec = tensor(index);
-            nncase::ntt::apply(vec.shape(), [&](auto idx) {
-                auto d1 = static_cast<double>(vec(idx));
-                std::cout << d1 << " ";
-            });
+            print_tensor(tensor(index), name + "[" +
+                                       std::to_string(index[0]) + "]");
+
         });
     } else {
         nncase::ntt::apply(tensor.shape(), [&](auto index) {
-            std::cout << double(tensor(index)) << " ";
+            auto value = tensor(index);
+            using value_type = decltype(value);
+            // if constexpr (std::is_integral_v<value_type> && !std::is_same_v<value_type, bool>) {
+                std::cout << static_cast<int64_t>(value) << " ";
+            // } else {
+                // std::cout << static_cast<double>(float(value)) << " ";
+            // }
         });
     }
 

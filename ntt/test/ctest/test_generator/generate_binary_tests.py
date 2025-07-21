@@ -31,15 +31,19 @@ class BinaryTestGenerator(BaseTestGenerator):
             'float_e4m3_t',
             'float_e5m2_t'
         ]
+
+        self.integer_types = ['int8_t', 'int16_t', 'int32_t', 'int64_t', 'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t'] 
         self.op_str_map = {
             # "add": f"auto ort_output = ortki_Add(ort_input_lhs, ort_input_rhs);",
             # "sub": f"auto ort_output = ortki_Sub(ort_input_lhs, ort_input_rhs);",
             # "mul": f"auto ort_output = ortki_Mul(ort_input_lhs, ort_input_rhs);",
             # "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
             # "ceil_div": f"auto ort_output = ortki_CeilDiv(ort_input_lhs, ort_input_rhs);",
-            # "floor_mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 0);",
-            # "floor_mod" : f"auto ort_output = ortki_Sub(ort_input_lhs, ortki_Mul(ortki_Floor(ortki_Div(ort_input_lhs, ort_input_rhs)), ort_input_rhs));",
-            "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 1);",
+            "floor_mod": lambda datatype: \
+                "auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 0);" \
+                if datatype.cpp_type in self.integer_types and datatype.cpp_type not in self.types_need_to_be_cast \
+                else "auto ort_output = ortki_Sub(ort_input_lhs, ortki_Mul(ortki_Floor(ortki_Div(ort_input_lhs, ort_input_rhs)), ort_input_rhs));"
+            # "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 1);",
             # "min": f"auto ort_output = ortki_Min(ort_input_lhs, ort_input_rhs);",
             # "max": f"auto ort_output = ortki_Max(ort_input_lhs, ort_input_rhs);",
             # "pow": f"auto ort_output = ortki_Pow(ort_input_lhs, ort_input_rhs);",
@@ -47,7 +51,7 @@ class BinaryTestGenerator(BaseTestGenerator):
 
     def is_div_operation(self) -> bool:
         """Check if the current operation is division, to disable zero generation."""
-        result = (hasattr(self, 'ntt_op_str') and self.ntt_op_str in ["div", "mod"])
+        result = (hasattr(self, 'ntt_op_str') and self.ntt_op_str in ["div", "mod", "floor_mod"])
         return result
 
     def generate_test_name(self, datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape, 
@@ -147,9 +151,12 @@ class BinaryTestGenerator(BaseTestGenerator):
 
     def generate_ort_output(self, datatype, ntt_op_str):
         ort_type = self.ort_datatype_map.get(datatype.cpp_type, 'DataType_FLOAT')
+        op_str = self.op_str_map[ntt_op_str]
+        if callable(op_str):
+            op_str = op_str(datatype)
         return [
             "// Execute binary operation",
-            f"{self.op_str_map[ntt_op_str]}",
+            f"{op_str}",
             ""
         ]
 
