@@ -17,6 +17,7 @@
 #include "tensor_traits.h"
 #include <cmath>
 #include <type_traits>
+// #include <iostream>
 
 namespace nncase::ntt {
 enum class reduce_op {
@@ -186,6 +187,8 @@ template <class T1, class T2> struct div {
 };
 
 template <class T1, class T2> struct ceil_div {
+    static_assert(std::is_integral_v<T1> && std::is_integral_v<T2>,
+                  "T1 and T2 must be integral types");
     constexpr auto operator()(const T1 &v1, const T2 &v2) const noexcept {
         return (v1 + (v2 - 1)) / v2;
     }
@@ -209,7 +212,7 @@ requires (std::is_same_v<T, float_e4m3_t> || std::is_same_v<T, float_e5m2_t>)
 struct floor_mod<T, T> {
     constexpr auto operator()(T v1,
                               T v2) const noexcept {
-        return T(v1 - floor(v1 / v2) * v2);
+        return T(v1 - (std::floor(float(v1) / float(v2)) * v2));
     }
 };
 

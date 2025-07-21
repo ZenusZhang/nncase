@@ -117,7 +117,7 @@ class BaseTestGenerator:
 
         if continuity.is_contiguous:
             code.append(f"auto {var_name} = ntt::make_tensor<{element_cpp_type}>({shape_expr});")
-            allow_zr = "false" if self.is_div_operation() else "true"
+            allow_zr = "false" if self.is_div_operation() and "rhs" in var_name else "true"
             code.append(f"NttTest::init_tensor({var_name}, min_input, max_input, {allow_zr});")
         else:  # non-contiguous
             big_dims = dim_spec.copy()
