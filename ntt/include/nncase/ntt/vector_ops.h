@@ -144,9 +144,10 @@ struct tensor_binary_impl<Op, TScalar, TVector> {
 
     constexpr TVector operator()(const TScalar &v1,
                                  const TVector &v2) const noexcept {
-        TVector value;
-        ntt::apply(v2.shape(),
-                   [&](auto index) { value(index) = op_(v1, v2(index)); });
+        TVector value{};
+        ntt::apply(v2.shape(), [&](auto index) {
+            value(index) = static_cast<element_type2>(op_(v1, v2(index)));
+        });
         return value;
     }
 
@@ -163,7 +164,7 @@ struct tensor_binary_impl<Op, TVec1, TVec2> {
     using element_type2 = TVec2::element_type;
     using vec_1D_type2 = get_last_lane_vector_t<TVec2>;
     constexpr TVec2 operator()(const TVec1 &v1, const TVec2 &v2) const noexcept {
-        TVec2 value;
+        TVec2 value{};
         static_assert(TVec1::shape().at(0) == TVec2::shape().at(1), "vector shape not match");
         ntt::loop<TVec2::shape().at(0)>([&](auto m) {
             // std::cout << "floor_mod<1D,2D> entered" << std::endl;

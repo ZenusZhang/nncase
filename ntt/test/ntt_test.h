@@ -180,12 +180,12 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
         v1.push_back(d1);
         v2.push_back(d2);
         if (d1 != d2) {
-            // #ifndef NDEBUG
+            #ifndef NDEBUG
             std::cout << "index = (";
             for (size_t i = 0; i < index.rank(); i++)
                 std::cout << index[i] << " ";
             std::cout << "): lhs = " << d1 << ", rhs = " << d2 << std::endl;
-            // #endif
+            #endif
             pass = false;
         }
     });
@@ -242,12 +242,12 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
             v1.push_back(d1);
             v2.push_back(d2);
             if (d1 != d2) {
-                // #ifndef NDEBUG
+                #ifndef NDEBUG
                 std::cout << "index = (";
                 for (size_t i = 0; i < index.rank(); i++)
                     std::cout << index[i] << " ";
                 std::cout << "): lhs = " << d1 << ", rhs = " << d2 << std::endl;
-                // #endif
+                #endif
                 pass = false;
             }
         });
@@ -306,12 +306,12 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
             v1.push_back(d1);
             v2.push_back(d2);
             if (d1 != d2) {
-                // #ifndef NDEBUG
+                #ifndef NDEBUG
                 std::cout << "index = (";
                 for (size_t i = 0; i < index.rank(); i++)
                     std::cout << index[i] << " ";
                 std::cout << "): lhs = " << d1 << ", rhs = " << d2 << std::endl;
-                // #endif
+                #endif
                 pass = false;
             }
         });
@@ -347,11 +347,11 @@ void print_tensor(TTensor &tensor, std::string name) {
         nncase::ntt::apply(tensor.shape(), [&](auto index) {
             auto value = tensor(index);
             using value_type = decltype(value);
-            // if constexpr (std::is_integral_v<value_type> && !std::is_same_v<value_type, bool>) {
+            if constexpr (std::is_integral_v<value_type> && !std::is_same_v<value_type, bool>) {
                 std::cout << static_cast<int64_t>(value) << " ";
-            // } else {
-                // std::cout << static_cast<double>(float(value)) << " ";
-            // }
+            } else {
+                std::cout << static_cast<double>(float(value)) << " ";
+            }
         });
     }
 
