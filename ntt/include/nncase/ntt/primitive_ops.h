@@ -200,9 +200,15 @@ template <class T1, class T2> struct ceil_div {
  */
 template <class T1, class T2> struct floor_mod {
     constexpr auto operator()(const T1 &v1, const T2 &v2) const noexcept {
+<<<<<<< HEAD
         return (T1)((double)v1 - std::floor(static_cast<double>(v1) /
                                             static_cast<double>(v2)) *
                                      (double)v2);
+=======
+            return v1 -
+                   std::floor(static_cast<double>(v1) / static_cast<double>(v2)) *
+                       v2;
+>>>>>>> c0721c6a8 ( Floor mod passed on almost all types on x86 except float16)
     }
 };
 
