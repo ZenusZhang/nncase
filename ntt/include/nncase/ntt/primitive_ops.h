@@ -218,6 +218,7 @@ requires (std::is_same_v<T, float_e4m3_t> || std::is_same_v<T, float_e5m2_t>)
 struct floor_mod<T, T> {
     constexpr auto operator()(T v1,
                               T v2) const noexcept {
+
         return T(v1 - (std::floor(float(v1) / float(v2)) * v2));
     }
 };

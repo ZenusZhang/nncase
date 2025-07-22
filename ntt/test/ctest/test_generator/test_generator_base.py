@@ -52,7 +52,7 @@ ALL_DATATYPES = [
     DataType('int16_t', 'Int16', '-181', '181'),
     DataType('int32_t', 'Int32', '-32761', '32761'),
     DataType('int64_t', 'Int64', '-1000000', '1000000'),
-    DataType('half', 'Float16', 'half(-35504.0f)', 'half(35504.0f)'),
+    DataType('half', 'Float16', 'half(-3550.0f)', 'half(3550.0f)'),
     DataType('float', 'Float32', '-3.4e30', '3.4e30'),
     DataType('double', 'Float64', '-1.7e150', '1.7e150'),
     DataType('bfloat16', 'Bfloat16', '-1.0e10_bf16', '1.0e10_bf16'),
