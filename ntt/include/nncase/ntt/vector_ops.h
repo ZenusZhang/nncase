@@ -146,7 +146,7 @@ struct tensor_binary_impl<Op, TScalar, TVector> {
                                  const TVector &v2) const noexcept {
         TVector value{};
         ntt::apply(v2.shape(), [&](auto index) {
-            value(index) = static_cast<element_type2>(op_(v1, v2(index)));
+            value(index) = (op_(v1, v2(index)));
         });
         return value;
     }

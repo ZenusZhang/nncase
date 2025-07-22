@@ -156,6 +156,15 @@ void init_tensor(TTensor &tensor, T start = static_cast<T>(0),
                [&](auto &index) { init_tensor(tensor(index), start, stop, allow_zr); });
 }
 
+inline double calculate_cosine_similarity(const std::vector<double>& v1, const std::vector<double>& v2) {
+    double dotProduct = std::inner_product(v1.begin(), v1.end(), v2.begin(), 0.0);
+    double norm1 = std::sqrt(std::inner_product(v1.begin(), v1.end(), v1.begin(), 0.0));
+    double norm2 = std::sqrt(std::inner_product(v2.begin(), v2.end(), v2.begin(), 0.0));
+    std::cout << "dotProduct: " << dotProduct << ", norm1: " << norm1
+              << ", norm2: " << norm2 << std::endl;
+    return dotProduct / (norm1 * norm2);
+}
+
 template <ntt::TensorOrVector TTensor1, ntt::TensorOrVector TTensor2>
 bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
     if (lhs.shape().rank() != rhs.shape().rank()) {
@@ -180,28 +189,27 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
         v1.push_back(d1);
         v2.push_back(d2);
         if (d1 != d2) {
-            #ifndef NDEBUG
+            // #ifndef NDEBUG
             std::cout << "index = (";
             for (size_t i = 0; i < index.rank(); i++)
                 std::cout << index[i] << " ";
             std::cout << "): lhs = " << d1 << ", rhs = " << d2 << std::endl;
-            #endif
+            // #endif
             pass = false;
         }
     });
 
     if (!pass) {
-        double dotProduct =
-            std::inner_product(v1.begin(), v1.end(), v2.begin(), (double)0.0);
-        double norm1 = std::sqrt(
-            std::inner_product(v1.begin(), v1.end(), v1.begin(), (double)0.0));
-        double norm2 = std::sqrt(
-            std::inner_product(v2.begin(), v2.end(), v2.begin(), (double)0.0));
-        double cosine_similarity = dotProduct / (norm1 * norm2);
+        double dotProduct = std::inner_product(v1.begin(), v1.end(), v2.begin(), 0.0);
+        std::cout << "dotProduct" << dotProduct << std::endl;
+        double norm1 = std::sqrt(std::inner_product(v1.begin(), v1.end(), v1.begin(), 0.0));
+        std::cout << "norm1" << norm1 << std::endl;
+        double norm2 = std::sqrt(std::inner_product(v2.begin(), v2.end(), v2.begin(), 0.0));
+        std::cout << "norm2" << norm2 << std::endl;
+        double cosine_similarity = calculate_cosine_similarity(v1, v2);
         pass = cosine_similarity > threshold;
         if (!pass)
-            std::cerr << "cosine_similarity = " << cosine_similarity
-                      << std::endl;
+            std::cerr << "cosine_similarity = " << cosine_similarity << std::endl;
     }
     return pass;
 }
@@ -254,13 +262,7 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
     });
 
     if (!pass) {
-        double dotProduct =
-            std::inner_product(v1.begin(), v1.end(), v2.begin(), (double)0.0);
-        double norm1 = std::sqrt(
-            std::inner_product(v1.begin(), v1.end(), v1.begin(), (double)0.0));
-        double norm2 = std::sqrt(
-            std::inner_product(v2.begin(), v2.end(), v2.begin(), (double)0.0));
-        double cosine_similarity = dotProduct / (norm1 * norm2);
+        double cosine_similarity = calculate_cosine_similarity(v1, v2);
         pass = cosine_similarity > threshold;
         if (!pass)
             std::cerr << "cosine_similarity = " << cosine_similarity
@@ -318,13 +320,7 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
     });
 
     if (!pass) {
-        double dotProduct =
-            std::inner_product(v1.begin(), v1.end(), v2.begin(), (double)0.0);
-        double norm1 = std::sqrt(
-            std::inner_product(v1.begin(), v1.end(), v1.begin(), (double)0.0));
-        double norm2 = std::sqrt(
-            std::inner_product(v2.begin(), v2.end(), v2.begin(), (double)0.0));
-        double cosine_similarity = dotProduct / (norm1 * norm2);
+        double cosine_similarity = calculate_cosine_similarity(v1, v2);
         pass = cosine_similarity > threshold;
         if (!pass)
             std::cerr << "cosine_similarity = " << cosine_similarity

@@ -28,22 +28,23 @@ class BinaryTestGenerator(BaseTestGenerator):
             'int8_t',
             'int16_t', 
             'bfloat16',
+            'half',
             'float_e4m3_t',
             'float_e5m2_t'
         ]
 
         self.integer_types = ['int8_t', 'int16_t', 'int32_t', 'int64_t', 'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t'] 
         self.op_str_map = {
-            # "add": f"auto ort_output = ortki_Add(ort_input_lhs, ort_input_rhs);",
-            # "sub": f"auto ort_output = ortki_Sub(ort_input_lhs, ort_input_rhs);",
-            # "mul": f"auto ort_output = ortki_Mul(ort_input_lhs, ort_input_rhs);",
-            # "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
+            "add": f"auto ort_output = ortki_Add(ort_input_lhs, ort_input_rhs);",
+            "sub": f"auto ort_output = ortki_Sub(ort_input_lhs, ort_input_rhs);",
+            "mul": f"auto ort_output = ortki_Mul(ort_input_lhs, ort_input_rhs);",
+            "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
             # "ceil_div": f"auto ort_output = ortki_CeilDiv(ort_input_lhs, ort_input_rhs);",
             "floor_mod": lambda datatype: \
                 "auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 0);" \
                 if datatype.cpp_type in self.integer_types and datatype.cpp_type not in self.types_need_to_be_cast \
-                else "auto ort_output = ortki_Sub(ort_input_lhs, ortki_Mul(ortki_Floor(ortki_Div(ort_input_lhs, ort_input_rhs)), ort_input_rhs));"
-            # "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 1);",
+                else "auto ort_output = ortki_Sub(ort_input_lhs, ortki_Mul(ortki_Floor(ortki_Div(ort_input_lhs, ort_input_rhs)), ort_input_rhs));",
+            "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 1);",
             # "min": f"auto ort_output = ortki_Min(ort_input_lhs, ort_input_rhs);",
             # "max": f"auto ort_output = ortki_Max(ort_input_lhs, ort_input_rhs);",
             # "pow": f"auto ort_output = ortki_Pow(ort_input_lhs, ort_input_rhs);",
