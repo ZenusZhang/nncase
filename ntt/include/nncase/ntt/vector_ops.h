@@ -173,7 +173,8 @@ struct tensor_binary_impl<Op, TVec1, TVec2> {
         TVec2 value{};
         static_assert(TVec1::shape().at(0) == TVec2::shape().at(1), "vector shape not match");
         ntt::loop<TVec2::shape().at(0)>([&](auto m) {
-            // std::cout << "floor_mod<1D,2D> entered" << std::endl;
+            std::cout << "floor_mod<1D,2D> entered" << std::endl;
+
             value(m) = op_(v1, v2(m));
         });
         return value;

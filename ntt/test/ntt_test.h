@@ -250,12 +250,12 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
             v1.push_back(d1);
             v2.push_back(d2);
             if (d1 != d2) {
-                #ifndef NDEBUG
+                // #ifndef NDEBUG
                 std::cout << "index = (";
                 for (size_t i = 0; i < index.rank(); i++)
                     std::cout << index[i] << " ";
                 std::cout << "): lhs = " << d1 << ", rhs = " << d2 << std::endl;
-                #endif
+                // #endif
                 pass = false;
             }
         });
@@ -308,12 +308,12 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
             v1.push_back(d1);
             v2.push_back(d2);
             if (d1 != d2) {
-                #ifndef NDEBUG
+                // #ifndef NDEBUG
                 std::cout << "index = (";
                 for (size_t i = 0; i < index.rank(); i++)
                     std::cout << index[i] << " ";
                 std::cout << "): lhs = " << d1 << ", rhs = " << d2 << std::endl;
-                #endif
+                // #endif
                 pass = false;
             }
         });

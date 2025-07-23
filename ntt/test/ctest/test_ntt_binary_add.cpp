@@ -23,16 +23,16 @@
 // 4. scalar/vector/2d vector
 // 5. tensor/ view
 
-// TEST(BinaryTestAddFloat, fixed_fixed_fixed_broadcast_lhs_vector) {
+// TEST(BinaryTestAddint, fixed_fixed_fixed_broadcast_lhs_vector) {
 //     // init
-//     auto ntt_tensor_lhs =  make_tensor<ntt::vector<float, 8>>(ntt::fixed_shape_v<1>);
-//     NttTest::init_tensor(ntt_tensor_lhs, -10.f, 10.f);
+//     auto ntt_tensor_lhs =  make_tensor<ntt::vector<int, 8>>(ntt::fixed_shape_v<1>);
+//     NttTest::init_tensor(ntt_tensor_lhs, -10, 10);
 
-//     auto ntt_tensor_rhs =  make_tensor<float>(ntt::fixed_shape_v<1, 3, 1, 16>);
-//     NttTest::init_tensor(ntt_tensor_rhs, -10.f, 10.f);
+//     auto ntt_tensor_rhs =  make_tensor<int>(ntt::fixed_shape_v<1, 3, 1, 16>);
+//     NttTest::init_tensor(ntt_tensor_rhs, -10, 10);
 
 //     // ntt
-//     auto ntt_output1 = make_tensor<ntt::vector<float, 8>>(ntt::fixed_shape_v<1, 3, 1, 16>);
+//     auto ntt_output1 = make_tensor<ntt::vector<int, 8>>(ntt::fixed_shape_v<1, 3, 1, 16>);
 //     ntt::binary<ntt::ops::add>(ntt_tensor_lhs, ntt_tensor_rhs, ntt_output1);
 
 //     // // if mxn tensor-of-vector<v> op mxn tensor-of-scalar, 
@@ -51,27 +51,31 @@
 
 
 
-TEST(BinaryTestAddFloat, fixed_fixed_fixed_broadcast_lhs_1D_vector_rhs_2D_vector) {
+TEST(BinaryTestAddint, fixed_fixed_fixed_broadcast_lhs_1D_vector_rhs_2D_vector) {
     // init
-    auto ntt_tensor_lhs =  make_tensor<ntt::vector<float, 8>>(ntt::fixed_shape_v<1>);
-    NttTest::init_tensor(ntt_tensor_lhs, -10.f, 10.f);
+    auto ntt_tensor_lhs =  make_tensor<ntt::vector<int, 8>>(ntt::fixed_shape_v<1>);
+    NttTest::init_tensor(ntt_tensor_lhs, -10, 10);
 
-    auto ntt_tensor_rhs =  make_tensor<ntt::vector<float, 8, 8>>(ntt::fixed_shape_v<1>);
-    NttTest::init_tensor(ntt_tensor_rhs, -10.f, 10.f);
+    auto ntt_tensor_rhs =  make_tensor<ntt::vector<int, 8>>(ntt::fixed_shape_v<1>);
+    NttTest::init_tensor(ntt_tensor_rhs, -10, 10);
 
     // ntt
-    auto ntt_output1 = make_tensor<ntt::vector<float, 8, 8>>(ntt::fixed_shape_v<1>);
-    ntt::binary<ntt::ops::add>(ntt_tensor_lhs, ntt_tensor_rhs, ntt_output1);
+    auto ntt_output1 = make_tensor<ntt::vector<int, 8>>(ntt::fixed_shape_v<1>);
+    ntt::binary<ntt::ops::ceil_div>(ntt_tensor_lhs, ntt_tensor_rhs, ntt_output1);
 
     // // if mxn tensor-of-vector<v> op mxn tensor-of-scalar, 
     // //broadcast the ntt mxn tensor-of-scalar to ort mxnxv tensor-of-scalar
 
     // // ort
     auto [ort_lhs, ort_rhs] = NttTest::convert_and_align_to_ort(ntt_tensor_lhs, ntt_tensor_rhs);
-    auto ort_output = ortki_Add(ort_lhs, ort_rhs);
+    auto ntt_neg1 = make_tensor<int>(ntt::fixed_shape_v<1>);
+    ntt_neg1(0) = -1;
+    auto ort_neg1 = NttTest::ntt2ort(ntt_neg1);
+
+    auto ort_output = ortki_Div(ortki_Add(ortki_Add(ort_rhs,ort_neg1), ort_lhs), ort_rhs);
     // ortki_Add(ort_lhs, ort_rhs);
     // // compare
-    auto ntt_output2 = make_tensor<ntt::vector<float, 8, 8>>(ntt::fixed_shape_v<1>);
+    auto ntt_output2 = make_tensor<ntt::vector<int, 8>>(ntt::fixed_shape_v<1>);
     NttTest::ort2ntt(ort_output, ntt_output2);
     EXPECT_TRUE(NttTest::compare_tensor(ntt_output1, ntt_output2));
 
@@ -79,45 +83,45 @@ TEST(BinaryTestAddFloat, fixed_fixed_fixed_broadcast_lhs_1D_vector_rhs_2D_vector
 
 
 // //fixed fixed fixed group, for demonstrate the basic test macro
-// GENERATE_BINARY_TEST(BinaryTestAddFloat, fixed_fixed_fixed_normal,  
+// GENERATE_BINARY_TEST(BinaryTestAddint, fixed_fixed_fixed_normal,  
 //                             (fixed_shape_v<1, 3, 16, 16>), (fixed_shape_v<1, 3, 16, 16>), (fixed_shape_v<1, 3, 16, 16>),
-//                            float, add, Add) 
+//                            int, add, Add) 
 
-// GENERATE_BINARY_TEST(BinaryTestAddFloat, fixed_fixed_fixed_broadcast_lhs_scalar,  
+// GENERATE_BINARY_TEST(BinaryTestAddint, fixed_fixed_fixed_broadcast_lhs_scalar,  
 //                             (fixed_shape_v<1>), (fixed_shape_v<1, 3, 16, 16>), (fixed_shape_v<1, 3, 16, 16>),
-//                            float, add, Add) 
+//                            int, add, Add) 
 
-// GENERATE_BINARY_TEST(BinaryTestAddFloat, fixed_fixed_fixed_broadcast_rhs_scalar,  
+// GENERATE_BINARY_TEST(BinaryTestAddint, fixed_fixed_fixed_broadcast_rhs_scalar,  
 //                             (fixed_shape_v<1, 3, 16, 16>), (fixed_shape_v<1>), (fixed_shape_v<1, 3, 16, 16>),
-//                            float, add, Add) 
+//                            int, add, Add) 
 
-// GENERATE_BINARY_TEST(BinaryTestAddFloat, fixed_fixed_fixed_broadcast_lhs_vector,  
+// GENERATE_BINARY_TEST(BinaryTestAddint, fixed_fixed_fixed_broadcast_lhs_vector,  
 //                             (fixed_shape_v<16>), (fixed_shape_v<1, 3, 16, 16>), (fixed_shape_v<1, 3, 16, 16>),
-//                            float, add, Add) 
+//                            int, add, Add) 
 
-// GENERATE_BINARY_TEST(BinaryTestAddFloat, fixed_fixed_fixed_broadcast_rhs_vector,  
+// GENERATE_BINARY_TEST(BinaryTestAddint, fixed_fixed_fixed_broadcast_rhs_vector,  
 //                             (fixed_shape_v<1, 3, 16, 16>), (fixed_shape_v<16>), (fixed_shape_v<1, 3, 16, 16>),
-//                            float, add, Add) 
+//                            int, add, Add) 
 
-// GENERATE_BINARY_TEST(BinaryTestAddFloat, fixed_fixed_fixed_broadcast_multidirectional,  
+// GENERATE_BINARY_TEST(BinaryTestAddint, fixed_fixed_fixed_broadcast_multidirectional,  
 //                             (fixed_shape_v<1, 3, 1, 16>), (fixed_shape_v<3, 1, 16, 1>), (fixed_shape_v<3, 3, 16, 16>),
-//                            float, add, Add) 
+//                            int, add, Add) 
 
 // //fixed dynamic dynamic group(with default shape)
-// GENERATE_BINARY_TEST_GROUP(BinaryTestAddFloat, fixed, dynamic,dynamic,  
-//                            float, add, Add) 
+// GENERATE_BINARY_TEST_GROUP(BinaryTestAddint, fixed, dynamic,dynamic,  
+//                            int, add, Add) 
 // //dynamic fixed dynamic group
-// GENERATE_BINARY_TEST_GROUP(BinaryTestAddFloat, dynamic, fixed, dynamic,  
-//                            float, add, Add) 
+// GENERATE_BINARY_TEST_GROUP(BinaryTestAddint, dynamic, fixed, dynamic,  
+//                            int, add, Add) 
 // //dynamic dynamic dynamic group
-// GENERATE_BINARY_TEST_GROUP(BinaryTestAddFloat, dynamic ,dynamic,dynamic,  
-//                            float, add, Add) 
+// GENERATE_BINARY_TEST_GROUP(BinaryTestAddint, dynamic ,dynamic,dynamic,  
+//                            int, add, Add) 
                            
 
 
 // DEFINE_test_vector(add, Add)
-// TEST(BinaryTestAddFloat, vector) {                                        
-//     TEST_VECTOR(float)                                                    
+// TEST(BinaryTestAddint, vector) {                                        
+//     TEST_VECTOR(int)                                                    
 //     TEST_VECTOR(int32_t)                                                  
 //     TEST_VECTOR(int64_t)                                                  
 // }                                                                          

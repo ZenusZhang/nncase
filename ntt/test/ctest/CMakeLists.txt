@@ -66,7 +66,7 @@ endforeach()
 macro(add_test_exec test_source_file)
     get_filename_component(tname ${test_source_file} NAME_WE)
     add_executable(${tname} ${test_source_file})
-    # target_compile_options(${tname} PRIVATE -g -fopt-info-vec)
+    target_compile_options(${tname} PRIVATE -g)
     target_link_libraries(${tname} PRIVATE GTest::gtest_main nncaseruntime ortki::ortki)
     add_test(NAME ${tname} COMMAND ${CMAKE_COMMAND} -DTEST_EXECUTABLE=$<TARGET_FILE:${tname}> -P ${NNCASE_CMAKE_DIR}/run_test.cmake)
 endmacro()
@@ -74,9 +74,10 @@ endmacro()
 file(GLOB HANDWRITTEN_TESTS CONFIGURE_DEPENDS
     # generated/test_ntt_binary_generated_add_Uint16.cpp
     test_ntt_binary_add.cpp
+    test_vrem_behavior.cpp
     # generated/test_ntt_binary_float32_floor_mod_generated.cpp
-    generated/test_ntt_binary_float16_floor_mod_generated.cpp
-    generated/test_ntt_binary_float64_floor_mod_generated.cpp
+    # generated/test_ntt_binary_float16_floor_mod_generated.cpp
+    # generated/test_ntt_binary_float64_floor_mod_generated.cpp
     # generated/test_ntt_binary_int16_floor_mod_generated.cpp
     # generated/test_ntt_binary_float32_sub_generated.cpp
     # generated/test_ntt_cast_from_bfloat16_generated.cpp
@@ -107,9 +108,9 @@ file(GLOB HANDWRITTEN_TESTS CONFIGURE_DEPENDS
 )
 
 # Combine handwritten and generated tests
-# list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} ${GENERATED_TEST_SOURCES})
+list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} ${GENERATED_TEST_SOURCES})
 # list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} )
-list(APPEND TEST_NAMES ${GENERATED_TEST_SOURCES} )
+# list(APPEND TEST_NAMES ${GENERATED_TEST_SOURCES} )
 
 foreach(test_file ${TEST_NAMES})
     add_test_exec(${test_file})

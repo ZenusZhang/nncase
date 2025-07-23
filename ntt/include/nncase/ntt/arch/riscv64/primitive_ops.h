@@ -17,9 +17,95 @@
 #include "../../vector.h"
 #include "arch_types.h"
 #include "rvv_mathfun.h"
+#include <iostream>
 
 #ifdef __riscv_vector
 #include <riscv_vector.h>
+#endif
+
+// Print RVV vector helper function
+#ifdef __riscv_vector
+template <size_t vl>
+void print_rvv_vector_i32(const vint32m1_t &vec, const char *label, const size_t print_vl) {
+    int32_t temp[vl];
+    __riscv_vse32_v_i32m1(temp, vec, print_vl);
+    std::cout << label << ": ";
+    for (size_t i = 0; i < print_vl; ++i) {
+        std::cout << temp[i] << " ";
+    }
+    std::cout << std::endl;
+}
+
+template <size_t vl>
+void print_rvv_vector_i32(const vint32m2_t &vec, const char *label, const size_t print_vl) {
+    int32_t temp[vl];
+    __riscv_vse32_v_i32m2(temp, vec, print_vl);
+    std::cout << label << ": ";
+    for (size_t i = 0; i < print_vl; ++i) {
+        std::cout << temp[i] << " ";
+    }
+    std::cout << std::endl;
+}
+
+template <size_t vl>
+void print_rvv_vector_i32(const vint32m4_t &vec, const char *label, const size_t print_vl) {
+    int32_t temp[vl];
+    __riscv_vse32_v_i32m4(temp, vec, print_vl);
+    std::cout << label << ": ";
+    for (size_t i = 0; i < print_vl; ++i) {
+        std::cout << temp[i] << " ";
+    }
+    std::cout << std::endl;
+}
+
+template <size_t vl>
+void print_rvv_vector_i32(const vint32m8_t &vec, const char *label, const size_t print_vl) {
+    int32_t temp[vl];
+    __riscv_vse32_v_i32m8(temp, vec, print_vl);
+    std::cout << label << ": ";
+    for (size_t i = 0; i < print_vl; ++i) {
+        std::cout << temp[i] << " ";
+    }
+    std::cout << std::endl;
+}
+
+// Print RVV mask helper functions
+void print_rvv_mask(const vbool32_t &mask, const char *label, const size_t print_vl) {
+    uint8_t temp[32];
+    __riscv_vsm_v_b32(temp, mask, print_vl);
+    std::cout << label << ": ";
+    for (size_t i = 0; i < print_vl; ++i) {
+        std::cout << static_cast<int>(temp[i]) << " ";
+    }
+    std::cout << std::endl;
+}
+void print_rvv_mask(const vbool16_t &mask, const char *label, const size_t print_vl) {
+    uint8_t temp[16];
+    __riscv_vsm_v_b16(temp, mask, print_vl);
+    std::cout << label << ": ";
+    for (size_t i = 0; i < print_vl; ++i) {
+        std::cout << static_cast<int>(temp[i]) << " ";
+    }
+    std::cout << std::endl;
+}
+void print_rvv_mask(const vbool8_t &mask, const char *label, const size_t print_vl) {
+    uint8_t temp[8];
+    __riscv_vsm_v_b8(temp, mask, print_vl);
+    std::cout << label << ": ";
+    for (size_t i = 0; i < print_vl; ++i) {
+        std::cout << static_cast<int>(temp[i]) << " ";
+    }
+    std::cout << std::endl;
+}
+void print_rvv_mask(const vbool4_t &mask, const char *label, const size_t print_vl) {
+    uint8_t temp[4];
+    __riscv_vsm_v_b4(temp, mask, print_vl);
+    std::cout << label << ": ";
+    for (size_t i = 0; i < print_vl; ++i) {
+        std::cout << static_cast<int>(temp[i]) << " ";
+    }
+    std::cout << std::endl;
+}
 #endif
 
 namespace nncase::ntt::ops {
@@ -882,17 +968,30 @@ REGISTER_RVV_BINARY_OP(pow, float, pow_float32)
     inline vint32m##lmul##_t floor_mod_int32(const vint32m##lmul##_t &v1,      \
                                              const vint32m##lmul##_t &v2,      \
                                              const size_t vl) {                \
-        auto remainder = __riscv_vrem_vv_i32m##lmul(v1, v2, vl);               \
+        /*if no fence, the result would be  incorrect on large testcases*/      \
+        __asm__("fence" ::: "memory");                                         \
+        auto remainder1 = __riscv_vrem_vv_i32m##lmul(v1, v2, vl);               \
         auto tmp = __riscv_vxor_vv_i32m##lmul(v1, v2, vl);                     \
-        auto mask1 = __riscv_vmsne_vx_i32m##lmul##_b##mlen(remainder, 0, vl);  \
+        auto mask1 = __riscv_vmsne_vx_i32m##lmul##_b##mlen(remainder1, 0, vl);  \
         auto mask2 = __riscv_vmslt_vx_i32m##lmul##_b##mlen(tmp, 0, vl);        \
         mask1 = __riscv_vmand_mm_b##mlen(mask1, mask2, vl);                    \
-        remainder = __riscv_vadd_vv_i32m##lmul##_m(mask1, remainder, v2, vl);  \
-        return remainder;                                                      \
+        __asm__("fence" ::: "memory");                                         \
+        auto remainder2 = __riscv_vadd_vv_i32m##lmul##_m(mask1, remainder1, v2, vl);  \
+        /* Debug output mask values */                                                                 \
+        std::cout << "=== FLOOR_MOD_INT32 DEBUG ===" << std::endl;             \
+        print_rvv_vector_i32<NTT_VLEN/32>(v1, "v1", vl);                       \
+        print_rvv_vector_i32<NTT_VLEN/32>(v2, "v2", vl);                       \
+        print_rvv_vector_i32<NTT_VLEN/32>(remainder1, "remainder1", vl);          \
+        print_rvv_vector_i32<NTT_VLEN/32>(tmp, "tmp (v1^v2)", vl);              \
+        print_rvv_vector_i32<NTT_VLEN/32>(remainder2, "final result", vl);       \
+        std::cout << "=== END DEBUG ===" << std::endl;                         \
+        return remainder2;                                                      \
     }                                                                          \
                                                                                \
     inline vint32m##lmul##_t floor_mod_int32(                                  \
         const vint32m##lmul##_t &v1, const int32_t &s, const size_t vl) {      \
+        /*if no fence, the result would be  incorrect on large testcases*/      \
+        __asm__("fence" ::: "memory");                                         \
         auto remainder = __riscv_vrem_vx_i32m##lmul(v1, s, vl);                \
         auto tmp = __riscv_vxor_vx_i32m##lmul(v1, s, vl);                      \
         auto mask1 = __riscv_vmsne_vx_i32m##lmul##_b##mlen(remainder, 0, vl);  \
@@ -904,6 +1003,8 @@ REGISTER_RVV_BINARY_OP(pow, float, pow_float32)
                                                                                \
     inline vint32m##lmul##_t floor_mod_int32(                                  \
         const int32_t &s, const vint32m##lmul##_t &v2, const size_t vl) {      \
+        /*if no fence, the result would be  incorrect on large testcases*/      \
+        __asm__("fence" ::: "memory");                                         \
         auto v1 = __riscv_vmv_v_x_i32m##lmul(s, vl);                           \
         auto remainder = __riscv_vrem_vv_i32m##lmul(v1, v2, vl);               \
         auto tmp = __riscv_vxor_vv_i32m##lmul(v1, v2, vl);                     \
@@ -913,9 +1014,13 @@ REGISTER_RVV_BINARY_OP(pow, float, pow_float32)
         remainder = __riscv_vadd_vv_i32m##lmul##_m(mask1, remainder, v2, vl);  \
         return remainder;                                                      \
     }
-
-REGISTER_RVV_KERNEL(FLOOR_MOD_INT32)
-REGISTER_RVV_BINARY_OP(floor_mod, int32_t, floor_mod_int32)
+//Compiler or qemu error on rvv int32 floor_mod kernel.
+//1D 2D binary, an error case is as following:
+// auto ntt_input_lhs = ntt::make_tensor<ntt::vector<int32_t, P>>(ntt::fixed_shape_v<2>);
+// auto ntt_input_rhs = ntt::make_tensor<ntt::vector<int32_t, 4, P>>(ntt::fixed_shape_v<2>);
+// auto ntt_output = ntt::make_tensor<ntt::vector<int32_t, 4, P>>(ntt::fixed_shape_v<2>);
+// REGISTER_RVV_KERNEL(FLOOR_MOD_INT32)
+// REGISTER_RVV_BINARY_OP(floor_mod, int32_t, floor_mod_int32)
 
 // swish
 // swish(v) = v / (exp(-v) + 1)

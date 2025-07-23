@@ -39,7 +39,12 @@ class BinaryTestGenerator(BaseTestGenerator):
             "sub": f"auto ort_output = ortki_Sub(ort_input_lhs, ort_input_rhs);",
             "mul": f"auto ort_output = ortki_Mul(ort_input_lhs, ort_input_rhs);",
             "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
-            # "ceil_div": f"auto ort_output = ortki_CeilDiv(ort_input_lhs, ort_input_rhs);",
+            "ceil_div": (
+                "auto ntt_neg1 = make_tensor<int>(ntt::fixed_shape_v<1>);\n"
+                "   ntt_neg1(0) = -1;\n"
+                "   auto ort_neg1 = NttTest::ntt2ort(ntt_neg1);\n"
+                "   auto ort_output = ortki_Div(ortki_Add(ortki_Add(ort_rhs,ort_neg1), ort_lhs), ort_rhs);"
+            ),
             "floor_mod": lambda datatype: \
                 "auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 0);" \
                 if datatype.cpp_type in self.integer_types and datatype.cpp_type not in self.types_need_to_be_cast \
