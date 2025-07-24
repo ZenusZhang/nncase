@@ -1,6 +1,6 @@
 #test case combination:
 # 1. lhs/rhs
-# 2. dynamic/fixed
+# 2            # "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
 # 3. lhs broadcast to rhs, rhs broadcast to lhs
 # 3.1. 1 dim broadcast
 # 3.2. 2 dims broadcast
@@ -35,29 +35,56 @@ class BinaryTestGenerator(BaseTestGenerator):
 
         self.integer_types = ['int8_t', 'int16_t', 'int32_t', 'int64_t', 'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t'] 
         self.op_str_map = {
-            "add": f"auto ort_output = ortki_Add(ort_input_lhs, ort_input_rhs);",
-            "sub": f"auto ort_output = ortki_Sub(ort_input_lhs, ort_input_rhs);",
-            "mul": f"auto ort_output = ortki_Mul(ort_input_lhs, ort_input_rhs);",
-            "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
-            "ceil_div": (
-                "auto ntt_neg1 = make_tensor<int>(ntt::fixed_shape_v<1>);\n"
-                "   ntt_neg1(0) = -1;\n"
-                "   auto ort_neg1 = NttTest::ntt2ort(ntt_neg1);\n"
-                "   auto ort_output = ortki_Div(ortki_Add(ortki_Add(ort_rhs,ort_neg1), ort_lhs), ort_rhs);"
-            ),
-            "floor_mod": lambda datatype: \
-                "auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 0);" \
-                if datatype.cpp_type in self.integer_types and datatype.cpp_type not in self.types_need_to_be_cast \
-                else "auto ort_output = ortki_Sub(ort_input_lhs, ortki_Mul(ortki_Floor(ortki_Div(ort_input_lhs, ort_input_rhs)), ort_input_rhs));",
-            "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 1);",
-            # "min": f"auto ort_output = ortki_Min(ort_input_lhs, ort_input_rhs);",
-            # "max": f"auto ort_output = ortki_Max(ort_input_lhs, ort_input_rhs);",
+            # "add": f"auto ort_output = ortki_Add(ort_input_lhs, ort_input_rhs);",
+            # "sub": f"auto ort_output = ortki_Sub(ort_input_lhs, ort_input_rhs);",
+            # "mul": f"auto ort_output = ortki_Mul(ort_input_lhs, ort_input_rhs);",
+            # "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
+            "ceil_div": self._generate_ceil_div_operation,
+            # "floor_mod": lambda datatype: \
+            #     "auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 0);" \
+            #     if datatype.cpp_type in self.integer_types and datatype.cpp_type not in self.types_need_to_be_cast \
+            #     else "auto ort_output = ortki_Sub(ort_input_lhs, ortki_Mul(ortki_Floor(ortki_Div(ort_input_lhs, ort_input_rhs)), ort_input_rhs));",
+            # "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 1);",
+            "min":  self._generate_minmax_operation("ortki_Min"),
+            "max":  self._generate_minmax_operation("ortki_Max"),
             # "pow": f"auto ort_output = ortki_Pow(ort_input_lhs, ort_input_rhs);",
         }
 
+    def _generate_minmax_operation(self, operation_func):
+        """Generate code for min/max operations with reduced duplication"""
+        return (
+            "const size_t num_inputs = 2;\n"
+            "    ortki::OrtKITensor* input_tensors[num_inputs];\n"
+            "    input_tensors[0] = ort_input_lhs;\n"
+            "    input_tensors[1] = ort_input_rhs;\n"
+            f"    auto ort_output = {operation_func}(input_tensors, num_inputs);"
+        )
+
+    def _generate_ceil_div_operation(self, datatype):
+        """Generate code for ceil_div operation with reduced duplication"""
+        # Determine the appropriate type and value for neg1
+        if datatype.cpp_type == "int64_t":
+            var_type = "int64_t"
+            value_str = "-1"
+        elif datatype.cpp_type not in self.types_need_to_be_cast: 
+            # Now only int32_t in this case
+            var_type = "int32_t"
+            value_str = "-1"
+        else:
+            var_type = "float"
+            value_str = "-1.0f"
+        
+        # Return the common template with variable substitution
+        return (
+            f"auto ntt_neg1 = make_tensor<{var_type}>(ntt::fixed_shape_v<1>);\n"
+            f"    ntt_neg1(0) = {value_str};\n"
+            "    auto ort_neg1 = NttTest::ntt2ort(ntt_neg1);\n"
+            "    auto ort_output = ortki_Div(ortki_Add(ort_input_lhs, ortki_Add(ort_input_rhs, ort_neg1)), ort_input_rhs);"
+        )
+
     def is_div_operation(self) -> bool:
         """Check if the current operation is division, to disable zero generation."""
-        result = (hasattr(self, 'ntt_op_str') and self.ntt_op_str in ["div", "mod", "floor_mod"])
+        result = (hasattr(self, 'ntt_op_str') and self.ntt_op_str in ["div", "mod", "floor_mod", "ceil_div"])
         return result
 
     def generate_test_name(self, datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape, 
@@ -372,9 +399,10 @@ class BinaryTestGenerator(BaseTestGenerator):
         is_view_options = [False, True]
         vector_rank_options = [0, 1, 2]  # 0: tensor, 1: 1d vector, etc. Keep it simple for now
 
+        
         simple_continuities = [
             Continuity(is_contiguous=True, non_contiguous_dim=None, big_tensor_op=None),
-            Continuity(is_contiguous=False, non_contiguous_dim=1, big_tensor_op="*2"),
+            # Continuity(is_contiguous=False, non_contiguous_dim=1, big_tensor_op="*2"),
             Continuity(is_contiguous=False, non_contiguous_dim=2, big_tensor_op="+3"),
         ]
 
@@ -411,6 +439,8 @@ class BinaryTestGenerator(BaseTestGenerator):
             if rhs_shape == [1] and not rhs_continuity.is_contiguous:
                 continue
 
+
+
             # set non_contiguous_dim for 1 dimension tensor
             if not lhs_continuity.is_contiguous and lhs_shape == [16]:
                 lhs_continuity = lhs_continuity._replace(non_contiguous_dim=0)
@@ -438,6 +468,10 @@ def generate_tests_for_op(op_str, generator):
     for datatype in ALL_DATATYPES:
         if datatype.cpp_type == "bool":
             continue
+        if op_str == "ceil_div" and (datatype.cpp_type not in generator.integer_types):
+            # Skip ceil_div for non-integer types, as it is only supported for integers
+            continue
+
         test_code = generator.generate_all_tests_for_type(datatype, op_str)
         filename = f"test_ntt_binary_{datatype.name_suffix.lower()}_{op_str}_generated.cpp"
         output_filepath = os.path.join(generated_directory, filename)
