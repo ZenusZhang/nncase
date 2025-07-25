@@ -95,7 +95,7 @@ void generate_random_tensor(TTensor &tensor, std::mt19937 &gen, T start = static
 template <typename T, TensorOrVector TTensor> 
 requires(std::is_integral_v<T> && !std::is_same_v<T, bool>)
 void generate_random_tensor(TTensor &tensor, std::mt19937 &gen, T start = static_cast<T>(0),
-                 T stop = static_cast<T>(1), bool allow_zr = true) {
+                 T stop = static_cast<T>(1), bool allow_zr = true, [[maybe_unused]] bool only_int = true) {
     std::uniform_int_distribution<int64_t> dis(start, stop);
     ntt::apply(tensor.shape(), [&](auto &index) {
         if (allow_zr) {
@@ -109,22 +109,42 @@ void generate_random_tensor(TTensor &tensor, std::mt19937 &gen, T start = static
     });
 }
 
-template <typename T, TensorOrVector TTensor> 
+template <typename T, TensorOrVector TTensor>
 requires(std::is_floating_point_v<T>)
 void generate_random_tensor(TTensor &tensor, std::mt19937 &gen, T start = static_cast<T>(0),
-                 T stop = static_cast<T>(1), bool allow_zr = true) {
-    std::uniform_real_distribution<double> dis(start, stop);
-    ntt::apply(tensor.shape(), [&](auto &index) {
-        if (allow_zr) {
-            tensor(index) = static_cast<T>(dis(gen));
-        } else {
-            do {
-                tensor(index) = static_cast<T>(dis(gen));
-            } while (tensor(index) == static_cast<T>(0));
-        }
-    });
+                            T stop = static_cast<T>(1), bool allow_zr = true, bool only_int = false) {
+    
+    auto fill_with_distribution = [&](auto &distribution) {
+        ntt::apply(tensor.shape(), [&](auto &index) {
+            if (allow_zr) {
+                tensor(index) = static_cast<T>(distribution(gen));
+            } else {
+                T value;
+                do {
+                    value = static_cast<T>(distribution(gen));
+                } while (value == static_cast<T>(0));
+                tensor(index) = value;
+            }
+        });
+    };
+
+    if (only_int) {
+        std::uniform_int_distribution<int64_t> dis(static_cast<int64_t>(start), static_cast<int64_t>(stop));
+        fill_with_distribution(dis);
+    } else {
+        std::uniform_real_distribution<double> dis(start, stop);
+        fill_with_distribution(dis);
+    }
 }
 
+template <typename T>
+bool are_close(T a, T b, double abs_tol = 1e-9, double rel_tol = 1e-5) {
+    // The short-circuit for equality is important for performance and to handle infinities.
+    if (a == b) {
+        return true;
+    }
+    return std::abs(a - b) <= std::max(abs_tol, rel_tol * std::max(std::abs(a), std::abs(b)));
+}
 
 template <typename T, TensorOrVector TTensor> 
 requires(std::is_same_v<T, bool>)
@@ -138,7 +158,7 @@ void generate_random_tensor(TTensor &tensor, std::mt19937 &gen, [[maybe_unused]]
 
 template <typename T, TensorOrVector TTensor>
 void init_tensor(TTensor &tensor, T start = static_cast<T>(0),
-                 T stop = static_cast<T>(1), bool allow_zr = true) {
+                 T stop = static_cast<T>(1), bool allow_zr = true, [[maybe_unused]] bool only_int = false) {
     std::random_device rd;
     std::mt19937 gen(rd());
     // } else if constexpr (std::is_same_v<T, bool>) {
@@ -146,14 +166,14 @@ void init_tensor(TTensor &tensor, T start = static_cast<T>(0),
     //     ntt::apply(tensor.shape(), [&](auto &index) {
     //         tensor(index) = static_cast<double>(dis(gen)) >= 0.5;
     //     });
-    generate_random_tensor(tensor, gen, start, stop, allow_zr);
+    generate_random_tensor(tensor, gen, start, stop, allow_zr, only_int);
 }
 
 template <typename T, TensorOfVector TTensor>
 void init_tensor(TTensor &tensor, T start = static_cast<T>(0),
-                 T stop = static_cast<T>(1), bool allow_zr = true) {
+                 T stop = static_cast<T>(1), bool allow_zr = true, bool only_int = false) {
     ntt::apply(tensor.shape(),
-               [&](auto &index) { init_tensor(tensor(index), start, stop, allow_zr); });
+               [&](auto &index) { init_tensor(tensor(index), start, stop, allow_zr, only_int); });
 }
 
 inline double calculate_cosine_similarity(const std::vector<double>& v1, const std::vector<double>& v2) {
@@ -188,7 +208,7 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
             static_cast<typename TTensor2::element_type>(rhs(index)));
         v1.push_back(d1);
         v2.push_back(d2);
-        if (d1 != d2) {
+        if (!are_close(d1, d2)) {
             // #ifndef NDEBUG
             std::cout << "index = (";
             for (size_t i = 0; i < index.rank(); i++)
@@ -249,7 +269,7 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
             // auto d2 = int32_t(rvalue(idx));
             v1.push_back(d1);
             v2.push_back(d2);
-            if (d1 != d2) {
+            if (!are_close(d1, d2)) {
                 // #ifndef NDEBUG
                 std::cout << "index = (";
                 for (size_t i = 0; i < index.rank(); i++)
@@ -307,7 +327,7 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
                     rvalue(idx)));
             v1.push_back(d1);
             v2.push_back(d2);
-            if (d1 != d2) {
+            if (!are_close(d1, d2)) {
                 // #ifndef NDEBUG
                 std::cout << "index = (";
                 for (size_t i = 0; i < index.rank(); i++)

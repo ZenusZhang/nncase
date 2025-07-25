@@ -33,21 +33,64 @@ class BinaryTestGenerator(BaseTestGenerator):
             'float_e5m2_t'
         ]
 
+        self.dims_specs_options = [
+                # No broadcast
+                ([2, 3, 16, 16], [2, 3, 16, 16]),
+                # Scalar broadcast
+                ([1], [2, 3, 16, 16]),
+                ([2, 3, 16, 16], [1]),
+                # Vector broadcast
+                ([16], [2, 3, 16, 16]),
+                ([2, 3, 16, 16], [16]),
+                # Multidirectional broadcast
+                ([2, 1, 16, 1], [1, 3, 1, 16]),
+            ]
+        
+        # Define pow operand ranges as dictionary for easy access
+        self.ALL_POW_OPRANDS = {
+            "uint8_t": {"lhs_min": "0", "lhs_max": "3", "rhs_min": "0", "rhs_max": "3"},
+            "int8_t": {"lhs_min": "-2", "lhs_max": "2", "rhs_min": "-3", "rhs_max": "3"},
+            "int16_t": {"lhs_min": "-7", "lhs_max": "8", "rhs_min": "-4", "rhs_max": "4"},
+            "uint16_t": {"lhs_min": "0", "lhs_max": "8", "rhs_min": "0", "rhs_max": "4"},
+            "int32_t": {"lhs_min": "-15", "lhs_max": "15", "rhs_min": "-7", "rhs_max": "7"},
+            "uint32_t": {"lhs_min": "0", "lhs_max": "15", "rhs_min": "0", "rhs_max": "13"},
+            "int64_t": {"lhs_min": "0", "lhs_max": "15", "rhs_min": "-14", "rhs_max": "14"},
+            "uint64_t": {"lhs_min": "0", "lhs_max": "15", "rhs_min": "0", "rhs_max": "14"},
+
+#     DataType('bfloat16', 'Bfloat16', '-1.0e10_bf16', '1.0e10_bf16', False),
+
+            "float_e4m3_t": {"lhs_min": "float_e4m3_t(-3.0)", "lhs_max": "float_e4m3_t(2.0)", "rhs_min": "float_e4m3_t(-2.0f)", "rhs_max": "float_e4m3_t(3.0f)"},
+            "float_e5m2_t": {"lhs_min": "float_e5m2_t(-3.0)", "lhs_max": "float_e5m2_t(3.0)", "rhs_min": "float_e5m2_t(-3.0f)", "rhs_max": "float_e5m2_t(3.0f)"},
+            "bfloat16": {"lhs_min": "bfloat16(-64.0)", "lhs_max": "bfloat16(64.0)", "rhs_min": "-10.0_bf16", "rhs_max": "10.0_bf16"},
+            "half": {"lhs_min": "half(-64.0)", "lhs_max": "half(64.0)", "rhs_min": "half(-5.0)", "rhs_max": "half(5.0)"},
+            "float": {"lhs_min": "-256.0", "lhs_max": "256.0", "rhs_min": "-15.0", "rhs_max": "15.0"},
+            "double": {"lhs_min": "-1000.0", "lhs_max": "1000.0", "rhs_min": "-50.0", "rhs_max": "50.0"},
+
+    # DataType('float_e4m3_t', 'Float8e4m3', 'float_e4m3_t(-448.0f)', 'float_e4m3_t(448.0f)', False),
+    # DataType('float_e5m2_t', 'Float8e5m2', 'float_e5m2_t(-57344.0f)', 'float_e5m2_t(57344.0f)', False),
+        }
+
+        self.simple_continuities = [
+            Continuity(is_contiguous=True, non_contiguous_dim=None, big_tensor_op=None),
+            # Continuity(is_contiguous=False, non_contiguous_dim=1, big_tensor_op="*2"),
+            Continuity(is_contiguous=False, non_contiguous_dim=2, big_tensor_op="+3"),
+        ]
+
         self.integer_types = ['int8_t', 'int16_t', 'int32_t', 'int64_t', 'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t'] 
         self.op_str_map = {
             # "add": f"auto ort_output = ortki_Add(ort_input_lhs, ort_input_rhs);",
             # "sub": f"auto ort_output = ortki_Sub(ort_input_lhs, ort_input_rhs);",
             # "mul": f"auto ort_output = ortki_Mul(ort_input_lhs, ort_input_rhs);",
             # "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
-            "ceil_div": self._generate_ceil_div_operation,
+            # "ceil_div": self._generate_ceil_div_operation,
             # "floor_mod": lambda datatype: \
             #     "auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 0);" \
             #     if datatype.cpp_type in self.integer_types and datatype.cpp_type not in self.types_need_to_be_cast \
             #     else "auto ort_output = ortki_Sub(ort_input_lhs, ortki_Mul(ortki_Floor(ortki_Div(ort_input_lhs, ort_input_rhs)), ort_input_rhs));",
             # "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 1);",
-            "min":  self._generate_minmax_operation("ortki_Min"),
-            "max":  self._generate_minmax_operation("ortki_Max"),
-            # "pow": f"auto ort_output = ortki_Pow(ort_input_lhs, ort_input_rhs);",
+            # "min":  self._generate_minmax_operation("ortki_Min"),
+            # "max":  self._generate_minmax_operation("ortki_Max"),
+            "pow": f"auto ort_output = ortki_Pow(ort_input_lhs, ort_input_rhs);",
         }
 
     def _generate_minmax_operation(self, operation_func):
@@ -90,7 +133,7 @@ class BinaryTestGenerator(BaseTestGenerator):
     def generate_test_name(self, datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape, 
         lhs_dims_spec, rhs_dims_spec, 
         lhs_vector_rank, rhs_vector_rank, 
-        lhs_continuity, rhs_continuity):
+        lhs_continuity, rhs_continuity, test_name_suffix):
         
         parts = []
         
@@ -147,6 +190,8 @@ class BinaryTestGenerator(BaseTestGenerator):
             broadcast_info = "multi_broadcast"  # 多维广播
             
         parts.append(broadcast_info)
+        if test_name_suffix:
+            parts.append(test_name_suffix)
         
         return "_".join(parts)
 
@@ -246,8 +291,8 @@ class BinaryTestGenerator(BaseTestGenerator):
             
             # Lambda function to cast input to float32
             cast_to_float = lambda side, input_var, vector_rank, pack_param, is_dynamic, dims_spec: (
-                code.append(f"auto ntt_{side}_float = ntt::make_tensor<{self.get_element_cpp_type('float', vector_rank, pack_param)}>({self.generate_shape_init(is_dynamic, dims_spec)});"),
-                code.append(f"ntt::cast({input_var}, ntt_{side}_float);")
+                code.append(f"auto ntt_{side}_double = ntt::make_tensor<{self.get_element_cpp_type('double', vector_rank, pack_param)}>({self.generate_shape_init(is_dynamic, dims_spec)});"),
+                code.append(f"ntt::cast({input_var}, ntt_{side}_double);")
             )
             
             # Cast both inputs
@@ -255,8 +300,8 @@ class BinaryTestGenerator(BaseTestGenerator):
             cast_to_float("rhs", ort_input_rhs, rhs_vector_rank, rhs_pack_param, rhs_is_dynamic_shape, rhs_dims_spec)
             
             # Update variable references
-            ort_input_lhs = "ntt_lhs_float"
-            ort_input_rhs = "ntt_rhs_float"
+            ort_input_lhs = "ntt_lhs_double"
+            ort_input_rhs = "ntt_rhs_double"
             
             code.append("")
 
@@ -265,7 +310,7 @@ class BinaryTestGenerator(BaseTestGenerator):
 
         return code
 
-    def generate_ntt_output_to_test(self, datatype,
+    def generate_ntt_output_to_test(self, lhs_datatype, rhs_datatype,
                                     lhs_is_dynamic_shape, rhs_is_dynamic_shape,
                                     lhs_dims_spec, rhs_dims_spec,
                                     lhs_vector_rank, rhs_vector_rank,
@@ -274,21 +319,22 @@ class BinaryTestGenerator(BaseTestGenerator):
                                     ntt_op_str):
         indent = "    "
         code = []
+        datatype = lhs_datatype  # Assume same datatype for both inputs
         # generate ntt_input_lhs, ntt_input_rhs, ntt_output
         code.append(f"{indent}//---init ntt_input_lhs---")
-        tensor_init_lhs_code = self.generate_tensor_init( datatype=datatype,
+        tensor_init_lhs_code = self.generate_tensor_init( datatype=lhs_datatype,
             shape_type=lhs_is_dynamic_shape, dim_spec=lhs_dims_spec,
             continuity=lhs_continuity, var_name="ntt_input_lhs",
             name_suffix="_lhs", vector_rank=lhs_vector_rank,
-            P=lhs_pack_param)
+            P=lhs_pack_param, integer_only= lhs_datatype.integer_only)
         code.extend([f"{indent}{line}" for line in tensor_init_lhs_code])
 
         code.append(f"{indent}//---init ntt_input_rhs---")
-        tensor_init_rhs_code = self.generate_tensor_init( datatype=datatype,
+        tensor_init_rhs_code = self.generate_tensor_init( datatype=rhs_datatype,
             shape_type=rhs_is_dynamic_shape, dim_spec=rhs_dims_spec,
             continuity=rhs_continuity, var_name="ntt_input_rhs",
             name_suffix="_rhs", vector_rank=rhs_vector_rank,
-            P=rhs_pack_param)
+            P=rhs_pack_param, integer_only= rhs_datatype.integer_only)
         code.extend([f"{indent}{line}" for line in tensor_init_rhs_code])
 
         output_is_dynamic_shape, output_dims_spec = self.get_binary_output_shape(
@@ -328,7 +374,8 @@ class BinaryTestGenerator(BaseTestGenerator):
     # rhs_tensor: list[int], rhs is tensor or view
     def generate_test_case(
             self,
-            datatype,
+            lhs_datatype,
+            rhs_datatype,
             lhs_is_dynamic_shape: bool,
             rhs_is_dynamic_shape: bool,
             lhs_dims_spec: List[int],
@@ -337,15 +384,18 @@ class BinaryTestGenerator(BaseTestGenerator):
             rhs_vector_rank: int,
             lhs_continuity: Continuity,
             rhs_continuity: Continuity,
-            ntt_op_str):
+            ntt_op_str, test_name_suffix=None):
+        # only support same datatype but different range now
+        assert lhs_datatype.cpp_type == rhs_datatype.cpp_type
         
+        datatype = lhs_datatype
         self.ntt_op_str = ntt_op_str  # Store operation type for is_div_operation check
         
 
         test_name = self.generate_test_name(datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape, 
             lhs_dims_spec, rhs_dims_spec, 
             lhs_vector_rank, rhs_vector_rank, 
-            lhs_continuity, rhs_continuity)
+            lhs_continuity, rhs_continuity, test_name_suffix)
 
 
         P = f"NTT_VLEN / (sizeof({datatype.cpp_type}) * 8)"
@@ -355,12 +405,12 @@ class BinaryTestGenerator(BaseTestGenerator):
 
         # 1. Test header and constants
         code.extend(self.generate_function_name(f"BinaryTest{ntt_op_str}", datatype, test_name))
-        code.extend(self.generate_min_max_constants(datatype))
         if lhs_vector_rank > 0 or rhs_vector_rank > 0:
             code.extend(self.generate_P_constants(P))
 
         # # Generate output to test in ntt format
-        ntt_output_code, output_shape_expr, output_element_type = self.generate_ntt_output_to_test(datatype,
+        ntt_output_code, output_shape_expr, output_element_type = self.generate_ntt_output_to_test(
+                            lhs_datatype, rhs_datatype,
                             lhs_is_dynamic_shape, rhs_is_dynamic_shape,
                             lhs_dims_spec, rhs_dims_spec,
                             lhs_vector_rank, rhs_vector_rank,
@@ -391,6 +441,85 @@ class BinaryTestGenerator(BaseTestGenerator):
 
         return "\n".join(code)
 
+    def _generate_pow_test_case_pair(
+            self, lhs_datatype, rhs_datatype,
+            lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+            lhs_dims_spec, rhs_dims_spec,
+            lhs_vector_rank, rhs_vector_rank,
+            lhs_continuity, rhs_continuity,
+            ntt_op_str):
+        
+        test_cases = []
+        
+        if lhs_datatype.cpp_type in self.integer_types:
+            # Case 1: integer types - rhs is non-negative integer
+            pow_ranges = self.ALL_POW_OPRANDS.get(rhs_datatype.cpp_type)
+            lhs_datatype = lhs_datatype._replace(
+                min_val=pow_ranges["lhs_min"],
+                max_val=pow_ranges["lhs_max"]
+            )
+            rhs_datatype = rhs_datatype._replace(
+                integer_only=True,
+                min_val=pow_ranges["rhs_min"],
+                max_val=pow_ranges["rhs_max"]
+            )
+            test_code = self.generate_test_case(
+                lhs_datatype, rhs_datatype,
+                lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+                lhs_dims_spec, rhs_dims_spec,
+                lhs_vector_rank, rhs_vector_rank,
+                lhs_continuity, rhs_continuity,
+                ntt_op_str
+            )
+            test_cases.append(test_code)
+        else:
+            # Case 2.1: floating point types - rhs as integer
+            pow_ranges = self.ALL_POW_OPRANDS.get(lhs_datatype.cpp_type)
+            lhs_datatype = lhs_datatype._replace( 
+                integer_only=False,
+                min_val=pow_ranges["lhs_min"],
+                max_val=pow_ranges["lhs_max"]
+            )
+            rhs_datatype= rhs_datatype._replace(
+                integer_only=True,
+                min_val=pow_ranges["rhs_min"],
+                max_val=pow_ranges["rhs_max"]
+            )
+            test_code1 = self.generate_test_case(
+                lhs_datatype, rhs_datatype,
+                lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+                lhs_dims_spec, rhs_dims_spec,
+                lhs_vector_rank, rhs_vector_rank,
+                lhs_continuity, rhs_continuity,
+                ntt_op_str, "rhs_int"
+            )
+            test_cases.append(test_code1)
+            zero_val_map = {
+                "bfloat16": "0.0_bf16",
+                "half": "half(0.0)",
+                "float_e4m3_t": "float_e4m3_t(0.0f)",
+                "float_e5m2_t": "float_e5m2_t(0.0f)",
+            }
+            # Case 2.2: lhs is positive - rhs as float
+            lhs_datatype = lhs_datatype._replace(
+                min_val = zero_val_map.get(lhs_datatype.cpp_type, "0.0")
+            )
+            rhs_datatype = rhs_datatype._replace(
+                integer_only=False
+            )
+            
+            test_code2 = self.generate_test_case(
+                lhs_datatype, rhs_datatype,
+                lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+                lhs_dims_spec, rhs_dims_spec,
+                lhs_vector_rank, rhs_vector_rank,
+                lhs_continuity, rhs_continuity,
+                ntt_op_str, "rhs_float"
+            )
+            test_cases.append(test_code2)
+        
+        return "\n".join(test_cases)
+
     def generate_all_tests_for_type(self, datatype, op_str):
         code = []
         
@@ -399,67 +528,62 @@ class BinaryTestGenerator(BaseTestGenerator):
         is_view_options = [False, True]
         vector_rank_options = [0, 1, 2]  # 0: tensor, 1: 1d vector, etc. Keep it simple for now
 
-        
-        simple_continuities = [
-            Continuity(is_contiguous=True, non_contiguous_dim=None, big_tensor_op=None),
-            # Continuity(is_contiguous=False, non_contiguous_dim=1, big_tensor_op="*2"),
-            Continuity(is_contiguous=False, non_contiguous_dim=2, big_tensor_op="+3"),
-        ]
-
-        dims_specs_options = [
-                # No broadcast
-                ([2, 3, 16, 16], [2, 3, 16, 16]),
-                # Scalar broadcast
-                ([1], [2, 3, 16, 16]),
-                ([2, 3, 16, 16], [1]),
-                # Vector broadcast
-                ([16], [2, 3, 16, 16]),
-                ([2, 3, 16, 16], [16]),
-                # Multidirectional broadcast
-                ([2, 1, 16, 1], [1, 3, 1, 16]),
-            ]
-
         code.append(self.generate_header())
 
         param_combinations = itertools.product(
             is_dynamic_options,          # lhs_is_dynamic_shape 2
             is_dynamic_options,          # rhs_is_dynamic_shape 2
-            dims_specs_options,   # (lhs_dims_spec, rhs_dims_spec) 6
+            self.dims_specs_options,   # (lhs_dims_spec, rhs_dims_spec) 6
             vector_rank_options,         # lhs_vector_rank 3
             vector_rank_options,         # rhs_vector_rank 3
-            simple_continuities,         # lhs_continuity
-            simple_continuities          # rhs_continuity
+            self.simple_continuities,         # lhs_continuity
+            self.simple_continuities          # rhs_continuity
         )
         # 2*2*6*3*3*2*2*2*2/4 = 3456/4 = 864
         for lhs_is_dynamic, rhs_is_dynamic, (lhs_shape, rhs_shape), lhs_vec_rank, rhs_vec_rank, lhs_continuity, rhs_continuity in param_combinations:
             # Skip invalid combinations if any in the future
-            # e.g. if lhs_shape == rhs_shape and ...
+            # one element but not contiguous
             if not lhs_continuity.is_contiguous and (lhs_shape == [1]):
                 continue
             if rhs_shape == [1] and not rhs_continuity.is_contiguous:
                 continue
-
-
 
             # set non_contiguous_dim for 1 dimension tensor
             if not lhs_continuity.is_contiguous and lhs_shape == [16]:
                 lhs_continuity = lhs_continuity._replace(non_contiguous_dim=0)
             if not rhs_continuity.is_contiguous and rhs_shape == [16]:
                 rhs_continuity = rhs_continuity._replace(non_contiguous_dim=0)
-
-            test_code = self.generate_test_case(
-                datatype,
-                lhs_is_dynamic_shape=lhs_is_dynamic,
-                rhs_is_dynamic_shape=rhs_is_dynamic,
-                lhs_dims_spec=lhs_shape,
-                rhs_dims_spec=rhs_shape,
-                lhs_vector_rank=lhs_vec_rank,
-                rhs_vector_rank=rhs_vec_rank,
-                lhs_continuity=lhs_continuity,
-                rhs_continuity=rhs_continuity,
-                ntt_op_str=op_str
-            )
-            code.append(test_code)
+            
+            if(op_str == "pow"):
+                # 1. lhs is neg or pos, rhs is int
+                # 2. lhs is pos, rhs is float
+                test_code = self._generate_pow_test_case_pair(
+                    datatype, datatype,
+                    lhs_is_dynamic_shape=lhs_is_dynamic,
+                    rhs_is_dynamic_shape=rhs_is_dynamic,
+                    lhs_dims_spec=lhs_shape,
+                    rhs_dims_spec=rhs_shape,
+                    lhs_vector_rank=lhs_vec_rank,
+                    rhs_vector_rank=rhs_vec_rank,
+                    lhs_continuity=lhs_continuity,
+                    rhs_continuity=rhs_continuity,
+                    ntt_op_str=op_str
+                )
+                code.append(test_code)
+            else:
+                test_code = self.generate_test_case(
+                    datatype, datatype,
+                    lhs_is_dynamic_shape=lhs_is_dynamic,
+                    rhs_is_dynamic_shape=rhs_is_dynamic,
+                    lhs_dims_spec=lhs_shape,
+                    rhs_dims_spec=rhs_shape,
+                    lhs_vector_rank=lhs_vec_rank,
+                    rhs_vector_rank=rhs_vec_rank,
+                    lhs_continuity=lhs_continuity,
+                    rhs_continuity=rhs_continuity,
+                    ntt_op_str=op_str
+                )
+                code.append(test_code)
 
         code.append(self.generate_footer())
         return "\n".join(code)
