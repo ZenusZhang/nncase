@@ -53,34 +53,42 @@
 
 TEST(BinaryTestAddint, fixed_fixed_fixed_broadcast_lhs_1D_vector_rhs_2D_vector) {
     // init
-    auto ntt_tensor_lhs =  make_tensor<ntt::vector<int, 8>>(ntt::fixed_shape_v<1>);
-    NttTest::init_tensor(ntt_tensor_lhs, -10, 10);
+    auto ntt_tensor_lhs =  make_tensor<ntt::vector<double, 8>>(ntt::fixed_shape_v<1>);
+    NttTest::init_tensor(ntt_tensor_lhs, 0, 100000);
 
-    auto ntt_tensor_rhs =  make_tensor<ntt::vector<int, 8>>(ntt::fixed_shape_v<1>);
-    NttTest::init_tensor(ntt_tensor_rhs, -10, 10);
+    auto ntt_tensor_rhs =  make_tensor<ntt::vector<double, 8>>(ntt::fixed_shape_v<1>);
+    NttTest::init_tensor(ntt_tensor_rhs, 0, 100000000);
 
     // ntt
-    auto ntt_output1 = make_tensor<ntt::vector<int, 8>>(ntt::fixed_shape_v<1>);
-    ntt::binary<ntt::ops::min>(ntt_tensor_lhs, ntt_tensor_rhs, ntt_output1);
+    auto ntt_output1 = make_tensor<ntt::vector<double, 8>>(ntt::fixed_shape_v<1>);
+    ntt::binary<ntt::ops::pow>(ntt_tensor_lhs, ntt_tensor_rhs, ntt_output1);
 
     // // if mxn tensor-of-vector<v> op mxn tensor-of-scalar, 
     // //broadcast the ntt mxn tensor-of-scalar to ort mxnxv tensor-of-scalar
 
     // // ort
+
     auto [ort_input_lhs, ort_input_rhs] = NttTest::convert_and_align_to_ort(ntt_tensor_lhs, ntt_tensor_rhs);
-    // auto ntt_neg1 = make_tensor<int>(ntt::fixed_shape_v<1>);
-    // ntt_neg1(0) = -1;
-    // auto ort_neg1 = NttTest::ntt2ort(ntt_neg1);
+    // auto ntt_max = make_tensor<float>(ntt::fixed_shape_v<1>);
+    // ntt_max(0) = 2.40614e+38;
+    // auto ort_max = NttTest::ntt2ort(ntt_max);
+
+
+    // auto ntt_zero = make_tensor<float>(ntt::fixed_shape_v<1>);
+    // ntt_zero(0) = 0.0f;
+    // auto ort_zero = NttTest::ntt2ort(ntt_zero);
 
     // auto ort_output = ortki_Div(ortki_Add(ortki_Add(ort_input_rhs,ort_neg1), ort_input_lhs), ort_input_rhs);
-    const size_t num_inputs = 2;
-    ortki::OrtKITensor* input_tensors[num_inputs];
-    input_tensors[0] = ort_input_lhs;
-    input_tensors[1] = ort_input_rhs;
-    auto ort_output = ortki_Min(input_tensors, num_inputs);
+    // const size_t num_inputs = 2;
+    // ortki::OrtKITensor* input_tensors[num_inputs];
+    // input_tensors[0] = ort_input_lhs;
+    // input_tensors[1] = ort_input_rhs;
+    // auto ort_output = ortki_Min(input_tensors, num_inputs);
+    // auto ort_output = ortki_Clip(ortki_Pow(ort_input_lhs, ort_input_rhs), ort_zero, ort_max);
+    auto ort_output = ortki_Pow(ort_input_lhs, ort_input_rhs);
 
     // // compare
-    auto ntt_output2 = make_tensor<ntt::vector<int, 8>>(ntt::fixed_shape_v<1>);
+    auto ntt_output2 = make_tensor<ntt::vector<double, 8>>(ntt::fixed_shape_v<1>);
     NttTest::ort2ntt(ort_output, ntt_output2);
     EXPECT_TRUE(NttTest::compare_tensor(ntt_output1, ntt_output2));
 

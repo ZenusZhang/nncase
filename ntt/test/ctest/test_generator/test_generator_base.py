@@ -13,7 +13,7 @@ from enum import Enum
 # non_contiguous_dim: int or None
 # big_tensor_op: str or None - How to build the big tensor at given non_contiguous_dim
 Continuity = namedtuple('Continuity', ['is_contiguous', 'non_contiguous_dim', 'big_tensor_op'])
-DataType = namedtuple('DataType', ['cpp_type', 'name_suffix', 'min_val', 'max_val'])
+DataType = namedtuple('DataType', ['cpp_type', 'name_suffix', 'min_val', 'max_val', 'integer_only'])
 
 class ShapeType(Enum):
     FIXED = "fixed"
@@ -43,21 +43,21 @@ class ShapeType(Enum):
         return self == ShapeType.FIXED
 
 ALL_DATATYPES = [
-    DataType('bool', 'Bool', 'false', 'true'),
-    DataType('uint8_t', 'Uint8', '0', '16'),
-    DataType('uint16_t', 'Uint16', '0', '256'),
-    DataType('uint32_t', 'Uint32', '0', '65536'),
-    DataType('uint64_t', 'Uint64', '0', '1000000'),
-    DataType('int8_t', 'Int8', '-11', '11'),
-    DataType('int16_t', 'Int16', '-181', '181'),
-    DataType('int32_t', 'Int32', '-32761', '32761'),
-    DataType('int64_t', 'Int64', '-1000000', '1000000'),
-    DataType('half', 'Float16', 'half(-3550.0f)', 'half(3550.0f)'),
-    DataType('float', 'Float32', '-3.4e30', '3.4e30'),
-    DataType('double', 'Float64', '-1.7e150', '1.7e150'),
-    DataType('bfloat16', 'Bfloat16', '-1.0e10_bf16', '1.0e10_bf16'),
-    DataType('float_e4m3_t', 'Float8e4m3', 'float_e4m3_t(-448.0f)', 'float_e4m3_t(448.0f)'),
-    DataType('float_e5m2_t', 'Float8e5m2', 'float_e5m2_t(-57344.0f)', 'float_e5m2_t(57344.0f)'),
+    DataType('bool', 'Bool', 'false', 'true', False),
+    DataType('uint8_t', 'Uint8', '0', '16', True),
+    DataType('uint16_t', 'Uint16', '0', '256', True),
+    DataType('uint32_t', 'Uint32', '0', '65536', True),
+    DataType('uint64_t', 'Uint64', '0', '1000000', True),
+    DataType('int8_t', 'Int8', '-11', '11', True),
+    DataType('int16_t', 'Int16', '-181', '181', True),
+    DataType('int32_t', 'Int32', '-32761', '32761', True),
+    DataType('int64_t', 'Int64', '-1000000', '1000000', True),
+    DataType('half', 'Float16', 'half(-3550.0f)', 'half(3550.0f)', False),
+    DataType('float', 'Float32', '-3.4e30', '3.4e30', False),
+    DataType('double', 'Float64', '-1.7e150', '1.7e150', False),
+    DataType('bfloat16', 'Bfloat16', '-1.0e10_bf16', '1.0e10_bf16', False),
+    DataType('float_e4m3_t', 'Float8e4m3', 'float_e4m3_t(-448.0f)', 'float_e4m3_t(448.0f)', False),
+    DataType('float_e5m2_t', 'Float8e5m2', 'float_e5m2_t(-57344.0f)', 'float_e5m2_t(57344.0f)', False),
 ]
 
 class BaseTestGenerator:
@@ -110,7 +110,7 @@ class BaseTestGenerator:
 #dim_spec: dim_names(list[str]) or dim_spec(list[int])
     def generate_tensor_init(self, datatype, shape_type,
                              dim_spec, continuity,
-                             vector_rank, var_name, name_suffix, P=None):
+                             vector_rank, var_name, name_suffix, P=None, integer_only=False):
         code = []
         shape_expr = self.generate_shape_init(shape_type, dim_spec)
         element_cpp_type = self.get_element_cpp_type(datatype.cpp_type, vector_rank, P)
@@ -118,7 +118,8 @@ class BaseTestGenerator:
         if continuity.is_contiguous:
             code.append(f"auto {var_name} = ntt::make_tensor<{element_cpp_type}>({shape_expr});")
             allow_zr = "false" if self.is_div_operation() and "rhs" in var_name else "true"
-            code.append(f"NttTest::init_tensor({var_name}, min_input, max_input, {allow_zr});")
+            integer_only_str = "true" if integer_only else "false"
+            code.append(f"NttTest::init_tensor({var_name}, {datatype.min_val}, {datatype.max_val}, {allow_zr}, {integer_only_str});")
         else:  # non-contiguous
             big_dims = dim_spec.copy()
             dim_to_change = continuity.non_contiguous_dim
@@ -132,7 +133,8 @@ class BaseTestGenerator:
             code.append(f"// Create non-contiguous tensor (on dimension {dim_to_change})")
             code.append(f"auto big_tensor{name_suffix} = ntt::make_tensor<{element_cpp_type}>({big_shape_expr});")
             allow_zr = "false" if self.is_div_operation() else "true"
-            code.append(f"NttTest::init_tensor(big_tensor{name_suffix}, min_input, max_input, {allow_zr});")
+            integer_only_str = "true" if integer_only else "false"
+            code.append(f"NttTest::init_tensor(big_tensor{name_suffix}, {datatype.min_val}, {datatype.max_val}, {allow_zr}, {integer_only_str});")
             code.append(f"")
             code.append(f"auto {var_name} = ntt::make_tensor_view_from_address<{element_cpp_type}>(")
             code.append(f"    big_tensor{name_suffix}.elements().data(),")
@@ -170,15 +172,15 @@ class BaseTestGenerator:
             else:
                 code.append(f"    constexpr size_t {name} = {size};")
 
-        code.extend([f"    {datatype.cpp_type} min_input = {datatype.min_val};",
-                     f"    {datatype.cpp_type} max_input = {datatype.max_val};", ""])
+        # code.extend([f"    {datatype.cpp_type} min_input = {datatype.min_val};",
+        #              f"    {datatype.cpp_type} max_input = {datatype.max_val};", ""])
         return code
 
-    def generate_min_max_constants(self, datatype):
-        code = []
-        code.append(f"    {datatype.cpp_type} min_input = {datatype.min_val};")
-        code.append(f"    {datatype.cpp_type} max_input = {datatype.max_val};")
-        return code
+    # def generate_min_max_constants(self, datatype):
+    #     code = []
+    #     # code.append(f"    {datatype.cpp_type} min_input = {datatype.min_val};")
+    #     # code.append(f"    {datatype.cpp_type} max_input = {datatype.max_val};")
+    #     return code
 
 
     def generate_copy_to_contiguous_code(self, input_element_type, shape_type, dim_names, input_var_name="ntt_input", output_var_name="continuous_input"):
@@ -457,7 +459,7 @@ using namespace ortki;
                                                   cast_mode: int,
                                                   ntt_output_var_name: str = "ntt_output1",
                                                   ort_output_var_name: str = "ort_output",
-                                                  ort_type: str = "float") -> list[str]:
+                                                  ort_type: str = "double") -> list[str]:
         """Generate code to convert ORT output back to NTT tensor (golden) and
         compare with tested NTT output."""
         lines = ["// ------------------------------------------------------------------",
