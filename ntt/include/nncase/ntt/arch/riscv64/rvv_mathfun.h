@@ -382,12 +382,102 @@ _RVV_FLOAT_TANH_OP(2, 16, 32)
 _RVV_FLOAT_TANH_OP(4, 8, 32)
 _RVV_FLOAT_TANH_OP(8, 4, 32)
 
-#define _RVV_FLOAT_POW_OP(LMUL, MLEN, TLEN)                                    \
-    static inline vfloat##TLEN##m##LMUL##_t pow_ps(                            \
+#define _RVV_FLOAT_FLOOR_OP(LMUL, MLEN, TLEN)                                \
+    static inline vfloat##TLEN##m##LMUL##_t vfloor_v_f##TLEN##m##LMUL(        \
+        vfloat##TLEN##m##LMUL##_t val, size_t vl) {                          \
+        /* 1. Cast float to int(Round Towards Zero) */   \
+        vint##TLEN##m##LMUL##_t i_val =                                      \
+            __riscv_vfcvt_rtz_x_f_v_i##TLEN##m##LMUL(val, vl);               \
+        /* 2. Cast int back to float*/                 \
+        return __riscv_vfcvt_f_x_v_f##TLEN##m##LMUL(i_val, vl);              \
+    }
+_RVV_FLOAT_FLOOR_OP(1, 32, 32)
+_RVV_FLOAT_FLOOR_OP(2, 16, 32)
+
+const float fp32_inf = std::numeric_limits<float>::infinity();
+//To Reuse this blopck, following should be done:
+// 1. replace {i/f}32 to {i/f}TLEN
+// 2. using anthor macro to get the "twoPow24" or we say threshold for different float len
+#define __RVV_FLOAT32_IS_INTEGER(LMUL, MLEN)                           \
+    static inline vbool##MLEN##_t __vfloat32_is_integer_##LMUL(         \
+        vfloat32m##LMUL##_t v, size_t vl) {                               \
+        const float twoPow24 = 16777216.0f;                       \
+        /* huge float must have integer value */  \
+        auto v_abs = __riscv_vfabs_v_f32m##LMUL(v, vl);                 \
+        auto huge_float_flag = __riscv_vmfgt_vf_f32m##LMUL##_b##MLEN(v_abs, twoPow24, vl); \
+        auto v_is_not_inf_flag = __riscv_vmfne_vf_f32m##LMUL##_b##MLEN(v, fp32_inf, vl); \
+        huge_float_flag = __riscv_vmand_mm_b##MLEN(huge_float_flag, v_is_not_inf_flag, vl); \
+        auto v_to_int = __riscv_vfcvt_rtz_x_f_v_i32m##LMUL(v, vl);             \
+        auto back_to_float = __riscv_vfcvt_f_x_v_f32m##LMUL(v_to_int, vl);       \
+        auto is_int_flag = __riscv_vmfeq_vv_f32m##LMUL##_b##MLEN(v, back_to_float, vl); \
+        return __riscv_vmor_mm_b##MLEN(huge_float_flag, is_int_flag, vl);       \
+    }
+
+__RVV_FLOAT32_IS_INTEGER(1, 32)
+__RVV_FLOAT32_IS_INTEGER(2, 16)
+__RVV_FLOAT32_IS_INTEGER(4, 8)
+__RVV_FLOAT32_IS_INTEGER(8, 4)
+
+#define __RVV_FLOAT32_IS_EVEN(LMUL, MLEN)                       \
+    static inline vbool##MLEN##_t __vfloat32_is_even_##LMUL(                \
+        vfloat32m##LMUL##_t v, size_t vl) {                                   \
+        const float twoPow24 = 16777216.0f;                       \
+        auto v_abs = __riscv_vfabs_v_f32m##LMUL(v, vl);                 \
+        auto huge_float_flag = __riscv_vmfgt_vf_f32m##LMUL##_b##MLEN(v_abs, twoPow24, vl); \
+        auto v_is_not_inf_flag = __riscv_vmfne_vf_f32m##LMUL##_b##MLEN(v, fp32_inf, vl); \
+        huge_float_flag = __riscv_vmand_mm_b##MLEN(huge_float_flag, v_is_not_inf_flag, vl); \
+        /* test if v == ((int)v /2 * 2) */                                                                        \
+        auto v_to_int = __riscv_vfcvt_rtz_x_f_v_i32m##LMUL(v, vl);             \
+        auto v_to_int_div2 = __riscv_vsra_vx_i32m##LMUL(v_to_int, 1, vl);     \
+        auto v_div_mul_2 = __riscv_vsll_vx_i32m##LMUL(v_to_int_div2, 1, vl);   \
+        auto is_even_flag = __riscv_vmsne_vv_i32m##LMUL##_b##MLEN(v_to_int, v_div_mul_2, vl); \
+        return __riscv_vmor_mm_b##MLEN(huge_float_flag, is_even_flag, vl);                                                  \
+    }
+
+__RVV_FLOAT32_IS_EVEN(1, 32)
+__RVV_FLOAT32_IS_EVEN(2, 16)
+__RVV_FLOAT32_IS_EVEN(4, 8)
+__RVV_FLOAT32_IS_EVEN(8, 4)
+
+
+#define _RVV_FLOAT_POW_OP(LMUL, MLEN, TLEN)                                   \
+    static inline vfloat##TLEN##m##LMUL##_t pow_ps(                          \
         vfloat##TLEN##m##LMUL##_t a, vfloat##TLEN##m##LMUL##_t b, size_t vl) { \
-        /* pow(x, m) = exp(m * log(x)) */                                      \
-        return exp_ps(__riscv_vfmul_vv_f##TLEN##m##LMUL(b, log_ps(a, vl), vl), \
-                      vl);                                                     \
+        /* --- constants --- */                                              \
+        auto zero = __riscv_vfmv_v_f_f##TLEN##m##LMUL(0.0f, vl);            \
+                                                                             \
+        /* --- input a  --- */                                               \
+        auto neg_a_mask = __riscv_vmflt_vf_f##TLEN##m##LMUL##_b##MLEN(a, 0.f, vl); \
+        auto abs_a = __riscv_vfabs_v_f##TLEN##m##LMUL(a, vl);               \
+                                                                             \
+        /* ---  |a|^b --- */                                                 \
+        auto result = exp_ps(__riscv_vfmul_vv_f##TLEN##m##LMUL(b, log_ps(abs_a, vl), vl), vl); \
+                                                                             \
+        /* --- handle a < 0 --- */                                           \
+        if(__riscv_vcpop_m_b##MLEN(neg_a_mask, vl) != 0) {                  \
+            auto b_int_mask = __vfloat32_is_integer_##LMUL(b, vl); \
+                                                                             \
+            auto b_even_mask = __vfloat32_is_even_##LMUL(b, vl);          \
+            auto b_not_even_mask = __riscv_vmnot_m_b##MLEN(b_even_mask, vl); \
+                                                                             \
+            /*  set to neg, a < 0 AND b is int AND b is not  even*/                           \
+            auto flip_sign_mask = __riscv_vmand_mm_b##MLEN(neg_a_mask, b_int_mask, vl); \
+            flip_sign_mask = __riscv_vmand_mm_b##MLEN(flip_sign_mask, b_not_even_mask, vl); \
+                                                                             \
+            /* set to NaN, a < 0 AND b is not an integer */                 \
+            auto is_not_int_mask = __riscv_vmnot_m_b##MLEN(b_int_mask, vl); \
+            auto set_nan_mask = __riscv_vmand_mm_b##MLEN(neg_a_mask, is_not_int_mask, vl); \
+                                                                             \
+            /* --- use the masks to adjust the result --- */                \
+            /* a. set to neg */                                              \
+            result = __riscv_vfneg_v_f##TLEN##m##LMUL##_m(flip_sign_mask, result, vl); \
+                                                                             \
+            /* b. set to NaN */                                              \
+            auto nan_val = __riscv_vfdiv_vv_f##TLEN##m##LMUL(zero, zero, vl); /* generate NaN */ \
+            result = __riscv_vmerge_vvm_f##TLEN##m##LMUL(result, nan_val, set_nan_mask, vl); \
+        }                                                                    \
+                                                                             \
+        return result;                                                       \
     }
 
 _RVV_FLOAT_POW_OP(1, 32, 32)

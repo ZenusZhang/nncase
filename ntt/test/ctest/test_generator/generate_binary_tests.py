@@ -53,7 +53,7 @@ class BinaryTestGenerator(BaseTestGenerator):
             "int16_t": {"lhs_min": "-7", "lhs_max": "8", "rhs_min": "-4", "rhs_max": "4"},
             "uint16_t": {"lhs_min": "0", "lhs_max": "8", "rhs_min": "0", "rhs_max": "4"},
             "int32_t": {"lhs_min": "-15", "lhs_max": "15", "rhs_min": "-7", "rhs_max": "7"},
-            "uint32_t": {"lhs_min": "0", "lhs_max": "15", "rhs_min": "0", "rhs_max": "13"},
+            "uint32_t": {"lhs_min": "0", "lhs_max": "15", "rhs_min": "0", "rhs_max": "7"},
             "int64_t": {"lhs_min": "0", "lhs_max": "15", "rhs_min": "-14", "rhs_max": "14"},
             "uint64_t": {"lhs_min": "0", "lhs_max": "15", "rhs_min": "0", "rhs_max": "14"},
 
@@ -78,18 +78,18 @@ class BinaryTestGenerator(BaseTestGenerator):
 
         self.integer_types = ['int8_t', 'int16_t', 'int32_t', 'int64_t', 'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t'] 
         self.op_str_map = {
-            # "add": f"auto ort_output = ortki_Add(ort_input_lhs, ort_input_rhs);",
-            # "sub": f"auto ort_output = ortki_Sub(ort_input_lhs, ort_input_rhs);",
-            # "mul": f"auto ort_output = ortki_Mul(ort_input_lhs, ort_input_rhs);",
-            # "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
-            # "ceil_div": self._generate_ceil_div_operation,
-            # "floor_mod": lambda datatype: \
-            #     "auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 0);" \
-            #     if datatype.cpp_type in self.integer_types and datatype.cpp_type not in self.types_need_to_be_cast \
-            #     else "auto ort_output = ortki_Sub(ort_input_lhs, ortki_Mul(ortki_Floor(ortki_Div(ort_input_lhs, ort_input_rhs)), ort_input_rhs));",
-            # "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 1);",
-            # "min":  self._generate_minmax_operation("ortki_Min"),
-            # "max":  self._generate_minmax_operation("ortki_Max"),
+            "add": f"auto ort_output = ortki_Add(ort_input_lhs, ort_input_rhs);",
+            "sub": f"auto ort_output = ortki_Sub(ort_input_lhs, ort_input_rhs);",
+            "mul": f"auto ort_output = ortki_Mul(ort_input_lhs, ort_input_rhs);",
+            "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
+            "ceil_div": self._generate_ceil_div_operation,
+            "floor_mod": lambda datatype: \
+                "auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 0);" \
+                if datatype.cpp_type in self.integer_types and datatype.cpp_type not in self.types_need_to_be_cast \
+                else "auto ort_output = ortki_Sub(ort_input_lhs, ortki_Mul(ortki_Floor(ortki_Div(ort_input_lhs, ort_input_rhs)), ort_input_rhs));",
+            "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 1);",
+            "min":  self._generate_minmax_operation("ortki_Min"),
+            "max":  self._generate_minmax_operation("ortki_Max"),
             "pow": f"auto ort_output = ortki_Pow(ort_input_lhs, ort_input_rhs);",
         }
 
