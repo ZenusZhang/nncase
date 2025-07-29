@@ -74,6 +74,7 @@ endmacro()
 file(GLOB HANDWRITTEN_TESTS CONFIGURE_DEPENDS
     # generated/test_ntt_binary_generated_add_Uint16.cpp
     test_ntt_binary_add.cpp
+    # generated/test_ntt_binary_float32_pow_generated.cpp
     # generated/test_ntt_binary_float32_floor_mod_generated.cpp
     # generated/test_ntt_binary_float16_floor_mod_generated.cpp
     # generated/test_ntt_binary_float64_floor_mod_generated.cpp
@@ -107,9 +108,9 @@ file(GLOB HANDWRITTEN_TESTS CONFIGURE_DEPENDS
 )
 
 # Combine handwritten and generated tests
-list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} ${GENERATED_TEST_SOURCES})
+# list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} ${GENERATED_TEST_SOURCES})
 # list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} )
-# list(APPEND TEST_NAMES ${GENERATED_TEST_SOURCES} )
+list(APPEND TEST_NAMES ${GENERATED_TEST_SOURCES} )
 
 foreach(test_file ${TEST_NAMES})
     add_test_exec(${test_file})
