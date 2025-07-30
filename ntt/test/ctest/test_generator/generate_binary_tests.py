@@ -57,7 +57,6 @@ class BinaryTestGenerator(BaseTestGenerator):
             "int64_t": {"lhs_min": "0", "lhs_max": "15", "rhs_min": "-14", "rhs_max": "14"},
             "uint64_t": {"lhs_min": "0", "lhs_max": "15", "rhs_min": "0", "rhs_max": "14"},
 
-#     DataType('bfloat16', 'Bfloat16', '-1.0e10_bf16', '1.0e10_bf16', False),
 
             "float_e4m3_t": {"lhs_min": "float_e4m3_t(-3.0)", "lhs_max": "float_e4m3_t(2.0)", "rhs_min": "float_e4m3_t(-2.0f)", "rhs_max": "float_e4m3_t(3.0f)"},
             "float_e5m2_t": {"lhs_min": "float_e5m2_t(-3.0)", "lhs_max": "float_e5m2_t(3.0)", "rhs_min": "float_e5m2_t(-3.0f)", "rhs_max": "float_e5m2_t(3.0f)"},

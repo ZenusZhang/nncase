@@ -15,9 +15,77 @@
 
 #pragma once
 #include <cmath>
+#define COMPILER_BARRIER() __asm__ volatile("" ::: "memory")
+
 
 #if __riscv_vector
 #include <riscv_vector.h>
+
+#ifdef DE_BUG
+#include <iostream>
+
+#define __RVV_PRINT_VECTOR_INT(LMUL, MLEN, TLEN) \
+    void print_rvv_vector_i##TLEN(const vint##TLEN##m##LMUL##_t &vec, const char *label, const size_t print_vl){ \
+        int##TLEN##_t temp[(LMUL*NTT_VLEN)/TLEN]; \
+        __riscv_vse##TLEN##_v_i##TLEN##m##LMUL(temp, vec, print_vl); \
+        std::cout << label << ": "; \
+        for (size_t i = 0; i < print_vl; ++i) { \
+            std::cout << temp[i] << " "; \
+        } \
+        std::cout << std::endl; \
+    }
+
+__RVV_PRINT_VECTOR_INT(1, 32, 32)
+__RVV_PRINT_VECTOR_INT(2, 16, 32)
+__RVV_PRINT_VECTOR_INT(4, 8, 32)
+__RVV_PRINT_VECTOR_INT(8, 4, 32)
+
+#define __RVV_PRINT_VECTOR_FLOAT(LMUL, MLEN, TLEN) \
+    void print_rvv_vector_f##TLEN(const vfloat##TLEN##m##LMUL##_t &vec, const char *label, const size_t print_vl){ \
+        float temp[(LMUL*NTT_VLEN/TLEN)]; \
+        __riscv_vse##TLEN##_v_f##TLEN##m##LMUL(temp, vec, print_vl); \
+        std::cout << label << ": "; \
+        for (size_t i = 0; i < print_vl; ++i) { \
+            std::cout << temp[i] << " "; \
+        } \
+        std::cout << std::endl; \
+    }
+
+__RVV_PRINT_VECTOR_FLOAT(1, 32, 32)
+__RVV_PRINT_VECTOR_FLOAT(2, 16, 32)
+__RVV_PRINT_VECTOR_FLOAT(4, 8, 32)
+__RVV_PRINT_VECTOR_FLOAT(8, 4, 32)
+
+
+// template <size_t vl>
+// void print_rvv_vector_i32(const vint32m1_t &vec, const char *label, const size_t print_vl) {
+//     int32_t temp[vl];
+//     __riscv_vse32_v_i32m1(temp, vec, print_vl);
+//     std::cout << label << ": ";
+//     for (size_t i = 0; i < print_vl; ++i) {
+//         std::cout << temp[i] << " ";
+//     }
+//     std::cout << std::endl;
+// }
+
+
+#define __RVV_PRINT_MASK(BTYPE, MLEN) \
+    void print_rvv_mask_##MLEN(const vbool##MLEN##_t &mask, const char *label, const size_t print_vl) { \
+        uint8_t temp[MLEN]; \
+        __riscv_vsm_v_b##MLEN(temp, mask, print_vl); \
+        std::cout << label << ": "; \
+        for (size_t i = 0; i < print_vl; ++i) { \
+            std::cout << static_cast<int>(temp[i]) << " "; \
+        } \
+        std::cout << std::endl; \
+    }
+
+__RVV_PRINT_MASK(32, 32)
+__RVV_PRINT_MASK(16, 16)
+__RVV_PRINT_MASK(8, 8)
+__RVV_PRINT_MASK(4, 4)
+
+#endif
 
 #define c_inv_mant_mask ~0x7f800000u
 #define c_cephes_SQRTHF 0.707106781186547524
@@ -95,8 +163,8 @@ _RVV_FLOAT32_LOG_OP(2, 16)
 _RVV_FLOAT32_LOG_OP(4, 8)
 _RVV_FLOAT32_LOG_OP(8, 4)
 
-#define c_exp_hi 88.3762626647949f
-#define c_exp_lo -88.3762626647949f
+#define c_exp_hi 88.0f
+#define c_exp_lo -88.0f
 
 #define c_cephes_LOG2EF 1.44269504088896341
 #define c_cephes_exp_C1 0.693359375
@@ -430,7 +498,7 @@ __RVV_FLOAT32_IS_INTEGER(8, 4)
         auto v_to_int = __riscv_vfcvt_rtz_x_f_v_i32m##LMUL(v, vl);             \
         auto v_to_int_div2 = __riscv_vsra_vx_i32m##LMUL(v_to_int, 1, vl);     \
         auto v_div_mul_2 = __riscv_vsll_vx_i32m##LMUL(v_to_int_div2, 1, vl);   \
-        auto is_even_flag = __riscv_vmsne_vv_i32m##LMUL##_b##MLEN(v_to_int, v_div_mul_2, vl); \
+        auto is_even_flag = __riscv_vmseq_vv_i32m##LMUL##_b##MLEN(v_to_int, v_div_mul_2, vl); \
         return __riscv_vmor_mm_b##MLEN(huge_float_flag, is_even_flag, vl);                                                  \
     }
 
@@ -439,19 +507,20 @@ __RVV_FLOAT32_IS_EVEN(2, 16)
 __RVV_FLOAT32_IS_EVEN(4, 8)
 __RVV_FLOAT32_IS_EVEN(8, 4)
 
-
 #define _RVV_FLOAT_POW_OP(LMUL, MLEN, TLEN)                                   \
     static inline vfloat##TLEN##m##LMUL##_t pow_ps(                          \
         vfloat##TLEN##m##LMUL##_t a, vfloat##TLEN##m##LMUL##_t b, size_t vl) { \
         /* --- constants --- */                                              \
-        auto zero = __riscv_vfmv_v_f_f##TLEN##m##LMUL(0.0f, vl);            \
-                                                                             \
+        float scalar_nan = nanf("");   \
+        auto nan_vector = __riscv_vfmv_v_f_f##TLEN##m##LMUL(scalar_nan, vl); \
+        COMPILER_BARRIER();                                                         \
         /* --- input a  --- */                                               \
         auto neg_a_mask = __riscv_vmflt_vf_f##TLEN##m##LMUL##_b##MLEN(a, 0.f, vl); \
         auto abs_a = __riscv_vfabs_v_f##TLEN##m##LMUL(a, vl);               \
                                                                              \
         /* ---  |a|^b --- */                                                 \
         auto result = exp_ps(__riscv_vfmul_vv_f##TLEN##m##LMUL(b, log_ps(abs_a, vl), vl), vl); \
+        COMPILER_BARRIER(); \
                                                                              \
         /* --- handle a < 0 --- */                                           \
         if(__riscv_vcpop_m_b##MLEN(neg_a_mask, vl) != 0) {                  \
@@ -462,19 +531,23 @@ __RVV_FLOAT32_IS_EVEN(8, 4)
                                                                              \
             /*  set to neg, a < 0 AND b is int AND b is not  even*/                           \
             auto flip_sign_mask = __riscv_vmand_mm_b##MLEN(neg_a_mask, b_int_mask, vl); \
+                \
             flip_sign_mask = __riscv_vmand_mm_b##MLEN(flip_sign_mask, b_not_even_mask, vl); \
                                                                              \
+            COMPILER_BARRIER();                     \
             /* set to NaN, a < 0 AND b is not an integer */                 \
             auto is_not_int_mask = __riscv_vmnot_m_b##MLEN(b_int_mask, vl); \
             auto set_nan_mask = __riscv_vmand_mm_b##MLEN(neg_a_mask, is_not_int_mask, vl); \
                                                                              \
+            COMPILER_BARRIER(); \
             /* --- use the masks to adjust the result --- */                \
             /* a. set to neg */                                              \
-            result = __riscv_vfneg_v_f##TLEN##m##LMUL##_m(flip_sign_mask, result, vl); \
+            auto neg_result = __riscv_vfneg_v_f##TLEN##m##LMUL##_m(flip_sign_mask, result, vl);  \
                                                                              \
+            auto signed_result = __riscv_vmerge_vvm_f##TLEN##m##LMUL(result, neg_result, flip_sign_mask, vl); \
             /* b. set to NaN */                                              \
-            auto nan_val = __riscv_vfdiv_vv_f##TLEN##m##LMUL(zero, zero, vl); /* generate NaN */ \
-            result = __riscv_vmerge_vvm_f##TLEN##m##LMUL(result, nan_val, set_nan_mask, vl); \
+            result = __riscv_vmerge_vvm_f##TLEN##m##LMUL(signed_result, nan_vector, set_nan_mask, vl); \
+                        \
         }                                                                    \
                                                                              \
         return result;                                                       \

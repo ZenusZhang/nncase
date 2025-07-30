@@ -23,90 +23,6 @@
 #include <riscv_vector.h>
 #endif
 
-// Print RVV vector helper function
-#ifdef __riscv_vector
-template <size_t vl>
-void print_rvv_vector_i32(const vint32m1_t &vec, const char *label, const size_t print_vl) {
-    int32_t temp[vl];
-    __riscv_vse32_v_i32m1(temp, vec, print_vl);
-    std::cout << label << ": ";
-    for (size_t i = 0; i < print_vl; ++i) {
-        std::cout << temp[i] << " ";
-    }
-    std::cout << std::endl;
-}
-
-template <size_t vl>
-void print_rvv_vector_i32(const vint32m2_t &vec, const char *label, const size_t print_vl) {
-    int32_t temp[vl];
-    __riscv_vse32_v_i32m2(temp, vec, print_vl);
-    std::cout << label << ": ";
-    for (size_t i = 0; i < print_vl; ++i) {
-        std::cout << temp[i] << " ";
-    }
-    std::cout << std::endl;
-}
-
-template <size_t vl>
-void print_rvv_vector_i32(const vint32m4_t &vec, const char *label, const size_t print_vl) {
-    int32_t temp[vl];
-    __riscv_vse32_v_i32m4(temp, vec, print_vl);
-    std::cout << label << ": ";
-    for (size_t i = 0; i < print_vl; ++i) {
-        std::cout << temp[i] << " ";
-    }
-    std::cout << std::endl;
-}
-
-template <size_t vl>
-void print_rvv_vector_i32(const vint32m8_t &vec, const char *label, const size_t print_vl) {
-    int32_t temp[vl];
-    __riscv_vse32_v_i32m8(temp, vec, print_vl);
-    std::cout << label << ": ";
-    for (size_t i = 0; i < print_vl; ++i) {
-        std::cout << temp[i] << " ";
-    }
-    std::cout << std::endl;
-}
-
-// Print RVV mask helper functions
-void print_rvv_mask(const vbool32_t &mask, const char *label, const size_t print_vl) {
-    uint8_t temp[32];
-    __riscv_vsm_v_b32(temp, mask, print_vl);
-    std::cout << label << ": ";
-    for (size_t i = 0; i < print_vl; ++i) {
-        std::cout << static_cast<int>(temp[i]) << " ";
-    }
-    std::cout << std::endl;
-}
-void print_rvv_mask(const vbool16_t &mask, const char *label, const size_t print_vl) {
-    uint8_t temp[16];
-    __riscv_vsm_v_b16(temp, mask, print_vl);
-    std::cout << label << ": ";
-    for (size_t i = 0; i < print_vl; ++i) {
-        std::cout << static_cast<int>(temp[i]) << " ";
-    }
-    std::cout << std::endl;
-}
-void print_rvv_mask(const vbool8_t &mask, const char *label, const size_t print_vl) {
-    uint8_t temp[8];
-    __riscv_vsm_v_b8(temp, mask, print_vl);
-    std::cout << label << ": ";
-    for (size_t i = 0; i < print_vl; ++i) {
-        std::cout << static_cast<int>(temp[i]) << " ";
-    }
-    std::cout << std::endl;
-}
-void print_rvv_mask(const vbool4_t &mask, const char *label, const size_t print_vl) {
-    uint8_t temp[4];
-    __riscv_vsm_v_b4(temp, mask, print_vl);
-    std::cout << label << ": ";
-    for (size_t i = 0; i < print_vl; ++i) {
-        std::cout << static_cast<int>(temp[i]) << " ";
-    }
-    std::cout << std::endl;
-}
-#endif
 
 namespace nncase::ntt::ops {
 
@@ -945,17 +861,20 @@ REGISTER_RVV_BINARY_OP(max, float, max_float32)
     inline vfloat32m##lmul##_t pow_float32(const vfloat32m##lmul##_t &v1,      \
                                            const vfloat32m##lmul##_t &v2,      \
                                            const size_t vl) {                  \
+        COMPILER_BARRIER();                     \
         return pow_ps(v1, v2, vl);                                             \
     }                                                                          \
                                                                                \
     inline vfloat32m##lmul##_t pow_float32(const vfloat32m##lmul##_t &v1,      \
                                            const float &s, const size_t vl) {  \
+        COMPILER_BARRIER();                     \
         auto v2 = __riscv_vfmv_v_f_f32m##lmul(s, vl);                          \
         return pow_ps(v1, v2, vl);                                             \
     }                                                                          \
                                                                                \
     inline vfloat32m##lmul##_t pow_float32(                                    \
         const float &s, const vfloat32m##lmul##_t &v2, const size_t vl) {      \
+        COMPILER_BARRIER();                     \
         auto v1 = __riscv_vfmv_v_f_f32m##lmul(s, vl);                          \
         return pow_ps(v1, v2, vl);                                             \
     }
