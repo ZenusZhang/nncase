@@ -23,6 +23,7 @@
 #include <random>
 #include <string>
 #include <type_traits>
+#include <stdio.h>
 
 #ifdef __AVX2__
 #ifdef _WIN32
@@ -351,7 +352,7 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
 
 template <ntt::TensorOrVector TTensor>
 void print_tensor(TTensor &tensor, std::string name) {
-    std::cout << name << std::endl;
+    printf("%s\n", name.c_str() );
     using element_type = typename TTensor::element_type;
     if constexpr (ntt::Vector<element_type>) {
         nncase::ntt::apply(tensor.shape(), [&](auto index) {
@@ -364,14 +365,14 @@ void print_tensor(TTensor &tensor, std::string name) {
             auto value = tensor(index);
             using value_type = decltype(value);
             if constexpr (std::is_integral_v<value_type> && !std::is_same_v<value_type, bool>) {
-                std::cout << static_cast<int64_t>(value) << " ";
+                printf("%ld ", static_cast<int64_t>(value));
             } else {
-                std::cout << static_cast<double>(float(value)) << " ";
+                printf("%lf ",static_cast<double>(float(value)));
             }
         });
     }
 
-    std::cout << std::endl;
+    printf("\n");
 }
 
 template <ntt::TensorOrVector TTensor_src, ntt::TensorOrVector TTensor_dst>
