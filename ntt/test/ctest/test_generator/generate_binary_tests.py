@@ -19,27 +19,20 @@ class BinaryTestGenerator(BaseTestGenerator):
         super().__init__()
         
         # ORT binary operations do not support these data types, need to cast to float32
-        self.types_need_to_be_cast = [
-            'bool',
-            'uint8_t', 
-            'uint16_t',
-            'uint32_t',
-            'uint64_t',
-            'int8_t',
-            'int16_t', 
-            'bfloat16',
-            'half',
-            'float_e4m3_t',
-            'float_e5m2_t'
-        ]
+        self.types_need_to_be_cast = {
+            "swishb": [ 'bool', 'uint8_t', 'uint16_t', 'uint32_t',
+                'uint64_t', 'int8_t', 'int16_t', 'bfloat16', 'half',
+                'float_e4m3_t', 'float_e5m2_t', "int32_t", "int64_t"],
+
+            "default": [ 'bool', 'uint8_t', 'uint16_t', 'uint32_t',
+                'uint64_t', 'int8_t', 'int16_t', 'bfloat16', 'half',
+                'float_e4m3_t', 'float_e5m2_t' ]
+        }
 
         self.dims_specs_options = {
             "swishb":   [
                 # Scalar broadcast
-                ([1], [1]),
-                ([2, 3, 16, 16], [1]),
-                # Vector broadcast
-                ([16], [1]),
+                ([2, 3, 16, 16], [1])
             ],
             
             "default": [
@@ -89,23 +82,23 @@ class BinaryTestGenerator(BaseTestGenerator):
         
         self.ort_custom_function = {
             "ceil_div": self._generate_ort_ceil_div_function,
-            "swish_b": self._generate_ort_SwishB
+            "swishb": self._generate_ort_SwishB
         }
         
         self.op_str_map = {
-            "add": f"auto ort_output = ortki_Add(ort_input_lhs, ort_input_rhs);",
-            "sub": f"auto ort_output = ortki_Sub(ort_input_lhs, ort_input_rhs);",
-            "mul": f"auto ort_output = ortki_Mul(ort_input_lhs, ort_input_rhs);",
-            "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
-            "ceil_div": "auto ort_output = ort_ceil_div(ort_input_lhs, ort_input_rhs);",
-            "floor_mod": lambda datatype: \
-                "auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 0);" \
-                if datatype.cpp_type in self.integer_types and datatype.cpp_type not in self.types_need_to_be_cast \
-                else "auto ort_output = ortki_Sub(ort_input_lhs, ortki_Mul(ortki_Floor(ortki_Div(ort_input_lhs, ort_input_rhs)), ort_input_rhs));",
-            "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 1);",
-            "min":  self._generate_minmax_operation("ortki_Min"),
-            "max":  self._generate_minmax_operation("ortki_Max"),
-            "pow": f"auto ort_output = ortki_Pow(ort_input_lhs, ort_input_rhs);",
+            # "add": f"auto ort_output = ortki_Add(ort_input_lhs, ort_input_rhs);",
+            # "sub": f"auto ort_output = ortki_Sub(ort_input_lhs, ort_input_rhs);",
+            # "mul": f"auto ort_output = ortki_Mul(ort_input_lhs, ort_input_rhs);",
+            # "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
+            # "ceil_div": "auto ort_output = ort_ceil_div(ort_input_lhs, ort_input_rhs);",
+            # "floor_mod": lambda datatype: \
+            #     "auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 0);" \
+            #     if datatype.cpp_type in self.integer_types and datatype.cpp_type not in self.types_need_to_be_cast \
+            #     else "auto ort_output = ortki_Sub(ort_input_lhs, ortki_Mul(ortki_Floor(ortki_Div(ort_input_lhs, ort_input_rhs)), ort_input_rhs));",
+            # "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 1);",
+            # "min":  self._generate_minmax_operation("ortki_Min"),
+            # "max":  self._generate_minmax_operation("ortki_Max"),
+            # "pow": f"auto ort_output = ortki_Pow(ort_input_lhs, ort_input_rhs);",
             "swishb": lambda datatype: f"auto ort_output = ortki_SwishB(ort_input_lhs, ort_input_rhs);",
         }
 
@@ -122,10 +115,11 @@ class BinaryTestGenerator(BaseTestGenerator):
     def _generate_ceil_div_operation(self, datatype):
         """Generate code for ceil_div operation with reduced duplication"""
         # Determine the appropriate type and value for neg1
+        types_to_cast = self.types_need_to_be_cast.get(op_str, self.types_need_to_be_cast["default"])
         if datatype.cpp_type == "int64_t":
             var_type = "int64_t"
             value_str = "-1"
-        elif datatype.cpp_type not in self.types_need_to_be_cast: 
+        elif datatype.cpp_type not in types_to_cast: 
             # Now only int32_t in this case
             var_type = "int32_t"
             value_str = "-1"
@@ -141,16 +135,18 @@ class BinaryTestGenerator(BaseTestGenerator):
             "    auto ort_output = ortki_Div(ortki_Add(ort_input_lhs, ortki_Add(ort_input_rhs, ort_neg1)), ort_input_rhs);"
         )
 
-    def _generate_ort_const_var_info(self, datatype, const_value):
+    def _generate_ort_const_var_info(self, datatype, const_value, op_str):
         """Generate variable type and value string for ORT constants"""
-        if datatype.cpp_type == "int64_t":
-            var_type = "int64_t"
-            value_str = str(const_value)
-        elif datatype.cpp_type not in self.types_need_to_be_cast: 
-            # Now only int32_t in this case
-            var_type = "int32_t"
-            value_str = str(const_value)
+        types_to_cast = self.types_need_to_be_cast.get(op_str, self.types_need_to_be_cast["default"])
+        if not "int" in datatype.cpp_type:
+            if datatype.cpp_type in types_to_cast:
+                var_type = "double"
+                value_str = f"{const_value}.0f"
+            else:
+                var_type = datatype.cpp_type
+                value_str = f"static_cast<{datatype.cpp_type}>({const_value})"
         else:
+            # Ortki can not take int as exp input
             var_type = "double"
             value_str = f"{const_value}.0f"
         
@@ -158,7 +154,7 @@ class BinaryTestGenerator(BaseTestGenerator):
 
     def _generate_ort_ceil_div_function(self, datatype):
         """Generate the ort_ceil_div function definition"""
-        const_var_type, const_value_str = self._generate_ort_const_var_info(datatype, -1)
+        const_var_type, const_value_str = self._generate_ort_const_var_info(datatype, -1, "ceil_div")
         
         return (
             f"static ortki::OrtKITensor* ort_ceil_div(ortki::OrtKITensor* ort_input_lhs, ortki::OrtKITensor* ort_input_rhs) {{\n"
@@ -171,7 +167,7 @@ class BinaryTestGenerator(BaseTestGenerator):
     
     def _generate_ort_SwishB(self, datatype):
         """Generate the ortki_SwishB function definition"""
-        const_var_type, const_value_str = self._generate_ort_const_var_info(datatype, 1)
+        const_var_type, const_value_str = self._generate_ort_const_var_info(datatype, 1, "swishb")
         
         return (
             f"static ortki::OrtKITensor* ortki_SwishB(ortki::OrtKITensor* ort_input, ortki::OrtKITensor* beta_tensor) {{\n"
@@ -336,7 +332,8 @@ class BinaryTestGenerator(BaseTestGenerator):
         code = []
         
         # Check if datatype needs to be cast to float32
-        need_cast = datatype.cpp_type in self.types_need_to_be_cast
+        types_to_cast = self.types_need_to_be_cast.get(op_str, self.types_need_to_be_cast["default"])
+        need_cast = datatype.cpp_type in types_to_cast
             
         lhs_continuity_var_name, lhs_copy_code = self._prepare_contiguous_input(
             "ntt_input_lhs", datatype, lhs_vector_rank, lhs_pack_param,
@@ -495,7 +492,8 @@ class BinaryTestGenerator(BaseTestGenerator):
             lhs_pack_param, rhs_pack_param,
             ntt_op_str, output_shape_expr)
         code.extend([f"    {line}" for line in golden_output_code])
-        cast_mode = 2 if datatype.cpp_type in self.types_need_to_be_cast else 0
+        types_to_cast = self.types_need_to_be_cast.get(ntt_op_str, self.types_need_to_be_cast["default"])
+        cast_mode = 2 if datatype.cpp_type in types_to_cast else 0
         # Compare outputs
         compare_code = self.generate_ort_back2ntt_and_compare_section(
             datatype,
@@ -603,7 +601,7 @@ class BinaryTestGenerator(BaseTestGenerator):
             code.append(custom_op_code)
 
         # Choose appropriate dims_specs based on op_str
-        dims_specs_to_use = self.dims_specs_options.get("swishb") if op_str == "swishb" else self.dims_specs_options.get("default")
+        dims_specs_to_use = self.dims_specs_options.get(op_str, self.dims_specs_options["default"])
         
         param_combinations = itertools.product(
             is_dynamic_options,          # lhs_is_dynamic_shape 2
