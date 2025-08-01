@@ -17,6 +17,7 @@
 #include "tensor_traits.h"
 #include <cmath>
 #include <type_traits>
+#include <stdio.h>
 // #include <iostream>
 
 namespace nncase::ntt {
@@ -583,7 +584,8 @@ template <class T> constexpr T swish<T>::operator()(const T &v) const noexcept {
 // swishb(v) = v / (exp(-v*beta) + 1)
 template <class T, class B>
 constexpr T swishb<T, B>::operator()(const T &v, const B &beta) const noexcept {
-    return static_cast<T>(double(v) / ((double)ntt::exp(-v * beta) + (double)1));
+    //-(double)v is for uint type.
+    return static_cast<T>(double(v) / (ntt::exp((-(double)v) *beta) + (double)1));
 }
 
 template <class T1, class T2, class TResult>
