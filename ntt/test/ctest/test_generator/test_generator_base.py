@@ -304,17 +304,34 @@ using namespace ortki;
     def get_element_cpp_type(self, base_cpp_type: str, vector_rank: int, P: Optional[str]) -> str:
         """Utility: given primitive cpp type, return the full `ntt::vector<..., ...>` expression.
         When ``vector_rank == 0`` it just returns the primitive type.
-        When ``vector_rank > 0`` the caller **must** provide ``P`` – the compile-time vectorize number – and, if ``vector_rank > 1``, also ``axes_count`` (how many axes are vectorized).
+        When ``vector_rank > 0`` the caller **must** provide ``P`` – the compile-time pack number.
+        P can be a single value or a tuple/list for multi-dimensional vectors.
         """
 
         if vector_rank == 0:
             return base_cpp_type
         if P is None:
             raise ValueError("P must be provided when vector_rank > 0")
-        if vector_rank == 1:
-            ps = ", ".join([f"P"] * vector_rank)
-        if vector_rank > 1:
-            ps = ", ".join([f"4"] * (vector_rank-1)) + ", P"
+        
+        # Handle tuple/list case for multi-dimensional vectors
+        if isinstance(P, (tuple, list)):
+            if len(P) != vector_rank:
+                raise ValueError("Length of P tuple/list must match vector_rank")
+            # Convert each element to string, using "P" for the last element
+            ps_list = []
+            for i, p in enumerate(P):
+                if i == len(P) - 1:
+                    ps_list.append("P" if p is None else str(p))
+                else:
+                    ps_list.append("4" if p is None else str(p))
+            ps = ", ".join(ps_list)
+        else:
+            # Original behavior for single P value
+            if vector_rank == 1:
+                ps = "P"
+            elif vector_rank > 1:
+                ps = ", ".join([f"4"] * (vector_rank-1)) + ", P"
+        
         return f"ntt::vector<{base_cpp_type}, {ps}>"
 
     # -------------------------------------------------------------------------
