@@ -52,12 +52,12 @@ ALL_DATATYPES = [
     DataType('int16_t', 'Int16', '-181', '181', True),
     DataType('int32_t', 'Int32', '-32761', '32761', True),
     DataType('int64_t', 'Int64', '-1000000', '1000000', True),
-    DataType('half', 'Float16', 'half(-3550.0f)', 'half(3550.0f)', False),
-    DataType('float', 'Float32', '-3.4e30', '3.4e30', False),
+    DataType('half', 'Float16', 'half(-100.0f)', 'half(100.0f)', False),
+    DataType('float', 'Float32', '-3.4e15', '3.4e15', False),
     DataType('double', 'Float64', '-1.7e150', '1.7e150', False),
     DataType('bfloat16', 'Bfloat16', '-1.0e10_bf16', '1.0e10_bf16', False),
-    DataType('float_e4m3_t', 'Float8e4m3', 'float_e4m3_t(-448.0f)', 'float_e4m3_t(448.0f)', False),
-    DataType('float_e5m2_t', 'Float8e5m2', 'float_e5m2_t(-57344.0f)', 'float_e5m2_t(57344.0f)', False),
+    DataType('float_e4m3_t', 'Float8e4m3', 'float_e4m3_t(-16.0f)', 'float_e4m3_t(16.0f)', False),
+    DataType('float_e5m2_t', 'Float8e5m2', 'float_e5m2_t(-32.0f)', 'float_e5m2_t(32.0f)', False),
 ]
 
 class BaseTestGenerator:

@@ -49,7 +49,12 @@ class BinaryTestGenerator(BaseTestGenerator):
             ]
         }
         
-        # Define pow operand ranges as dictionary for easy access
+        self.output_vector_rank_options = {
+            "inner_product": 0,
+            "outer_product": 2
+        }
+        
+        # Define power operand ranges
         self.ALL_POW_OPRANDS = {
             "uint8_t": {"lhs_min": "0", "lhs_max": "3", "rhs_min": "0", "rhs_max": "3"},
             "int8_t": {"lhs_min": "-2", "lhs_max": "2", "rhs_min": "-3", "rhs_max": "3"},
@@ -82,7 +87,8 @@ class BinaryTestGenerator(BaseTestGenerator):
         
         self.ort_custom_function = {
             "ceil_div": self._generate_ort_ceil_div_function,
-            "swishb": self._generate_ort_SwishB
+            "swishb": self._generate_ort_SwishB,
+            "inner_product": self._generate_inner_product_operation
         }
         
         self.op_str_map = {
@@ -99,7 +105,10 @@ class BinaryTestGenerator(BaseTestGenerator):
             # "min":  self._generate_minmax_operation("ortki_Min"),
             # "max":  self._generate_minmax_operation("ortki_Max"),
             # "pow": f"auto ort_output = ortki_Pow(ort_input_lhs, ort_input_rhs);",
-            "swishb": lambda datatype: f"auto ort_output = ortki_SwishB(ort_input_lhs, ort_input_rhs);",
+            # "swishb":  f"auto ort_output = ortki_SwishB(ort_input_lhs, ort_input_rhs);",
+            "inner_product":  \
+                            "static bool element_is_vec = ntt::Vector<typename decltype(ntt_input_lhs)::element_type>;\n" \
+                            "   auto ort_output = ortki_inner_product(ort_input_lhs, ort_input_rhs, element_is_vec); " 
         }
 
     def _generate_minmax_operation(self, operation_func):
@@ -165,6 +174,37 @@ class BinaryTestGenerator(BaseTestGenerator):
             "}\n\n"
         )
     
+    def _generate_inner_product_operation(self, datatype):
+        """Generate the ortki_inner_product function definition"""
+        return (
+    "static ortki::OrtKITensor* ortki_inner_product(ortki::OrtKITensor* ort_input_lhs, ortki::OrtKITensor* ort_input_rhs, bool  element_is_vec) {\n"
+    "   ortki::OrtKITensor* product_tensor = ortki_Mul(ort_input_lhs, ort_input_rhs);\n"
+    "   if (!element_is_vec)\n"
+    "       return product_tensor;\n"
+    "   int64_t axis_data[] = {-1};                         \n"
+    "   const int64_t axis_shape[] = {1};                   \n"
+    "   size_t axis_rank = 1;                               \n"
+    "   auto ort_type = nncase::NttTest::primitive_type2ort_type<int64_t>();\n"
+    "   ortki::OrtKITensor* axes_tensor = make_tensor(\n"
+    "       axis_data,                                       // void* buffer\n"
+    "       ort_type,\n"
+    "       axis_shape,                                      // const int64_t* shape\n"
+    "       axis_rank                                        // rank\n"
+    "   );\n"
+    "   if (axes_tensor == nullptr) {\n"
+    "       return nullptr;\n"
+    "   }\n"
+    "   int64_t keepdims = 0;\n"
+    "   int64_t noop_with_empty_axes = 0;\n"
+    "   ortki::OrtKITensor* result_tensor = ortki_ReduceSum(\n"
+    "       product_tensor,\n"
+    "       axes_tensor,\n"
+    "       keepdims,\n"
+    "       noop_with_empty_axes);\n"
+    "   return result_tensor;\n"
+    "}"
+        )
+
     def _generate_ort_SwishB(self, datatype):
         """Generate the ortki_SwishB function definition"""
         const_var_type, const_value_str = self._generate_ort_const_var_info(datatype, 1, "swishb")
@@ -294,7 +334,7 @@ class BinaryTestGenerator(BaseTestGenerator):
         ort_type = self.ort_datatype_map.get(datatype.cpp_type, 'DataType_FLOAT')
         op_str = self.op_str_map[ntt_op_str]
         if callable(op_str):
-            op_str = op_str(datatype)
+         op_str = op_str(datatype)
         return [
             "// Execute binary operation",
             f"{op_str}",
@@ -328,7 +368,7 @@ class BinaryTestGenerator(BaseTestGenerator):
                                     lhs_vector_rank, rhs_vector_rank,
                                     lhs_continuity, rhs_continuity,
                                     lhs_pack_param, rhs_pack_param,
-                                    ntt_op_str, output_shape_expr):
+                                    ntt_op_str):
         code = []
         
         # Check if datatype needs to be cast to float32
@@ -370,6 +410,12 @@ class BinaryTestGenerator(BaseTestGenerator):
             code.append("")
 
         code.extend([f"auto [ort_input_lhs, ort_input_rhs] = NttTest::convert_and_align_to_ort({ort_input_lhs}, {ort_input_rhs});"])
+
+        output_vector_rank = 0
+        if ntt_op_str in self.output_vector_rank_options:
+            output_vector_rank = self.output_vector_rank_options[ntt_op_str]
+        else:
+            output_vector_rank = max(lhs_vector_rank, rhs_vector_rank)
         code.extend(self.generate_ort_output(datatype, ntt_op_str))
 
         return code
@@ -404,7 +450,11 @@ class BinaryTestGenerator(BaseTestGenerator):
         output_is_dynamic_shape, output_dims_spec = self.get_binary_output_shape(
             lhs_is_dynamic_shape, rhs_is_dynamic_shape,
             lhs_dims_spec, rhs_dims_spec)
-        output_vector_rank = max(lhs_vector_rank, rhs_vector_rank)
+        
+        if ntt_op_str in self.output_vector_rank_options:
+            output_vector_rank = self.output_vector_rank_options[ntt_op_str]
+        else:
+            output_vector_rank = max(lhs_vector_rank, rhs_vector_rank)
         code.append(f"{indent}//---generate output tensor---")
 
         output_shape_expr = self.generate_shape_init(output_is_dynamic_shape, output_dims_spec)
@@ -490,7 +540,7 @@ class BinaryTestGenerator(BaseTestGenerator):
             lhs_vector_rank, rhs_vector_rank,
             lhs_continuity, rhs_continuity,
             lhs_pack_param, rhs_pack_param,
-            ntt_op_str, output_shape_expr)
+            ntt_op_str)
         code.extend([f"    {line}" for line in golden_output_code])
         types_to_cast = self.types_need_to_be_cast.get(ntt_op_str, self.types_need_to_be_cast["default"])
         cast_mode = 2 if datatype.cpp_type in types_to_cast else 0
@@ -626,6 +676,12 @@ class BinaryTestGenerator(BaseTestGenerator):
                 lhs_continuity = lhs_continuity._replace(non_contiguous_dim=0)
             if not rhs_continuity.is_contiguous and rhs_shape == [16]:
                 rhs_continuity = rhs_continuity._replace(non_contiguous_dim=0)
+            
+            # Filter vector rank combinations for inner_product
+            if op_str == "inner_product":
+                # Only allow: scalar x scalar, or 1D vector x 1D vector
+                if not ((lhs_vec_rank == 0 and rhs_vec_rank == 0) or (lhs_vec_rank == 1 and rhs_vec_rank == 1)):
+                    continue
             
             if(op_str == "pow"):
                 # 1. lhs is neg or pos, rhs is int

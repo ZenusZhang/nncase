@@ -314,11 +314,13 @@ NTT_DEFINE_TENSOR_COMPARE_IMPL(greater_or_equal);
 NTT_DEFINE_TENSOR_COMPARE_IMPL(less);
 NTT_DEFINE_TENSOR_COMPARE_IMPL(less_or_equal);
 
+//assert TVec1 == TVec2 == 1D vector
 template <Vector TVector> struct inner_product<TVector, TVector> {
     using element_type = typename TVector::element_type;
 
     constexpr auto operator()(const TVector &v1,
                               const TVector &v2) const noexcept {
+        //datatype infer: op_<vector, vector> delegate to op_<scalar, scalar>
         using result_type = decltype(op_(std::declval<element_type>(),
                                          std::declval<element_type>()));
         result_type value{};
@@ -329,6 +331,29 @@ template <Vector TVector> struct inner_product<TVector, TVector> {
 
   private:
     ops::inner_product<element_type, element_type> op_;
+};
+
+template <Vector TVector> 
+requires (std::is_same_v<typename TVector::element_type, float_e4m3_t> || std::is_same_v<typename TVector::element_type, float_e5m2_t>)
+struct inner_product<TVector, TVector> {
+    //ulp is too large for fp8
+    //intermediate result should be float
+
+    using element_type = typename TVector::element_type;
+
+    constexpr auto operator()(const TVector &v1,
+                              const TVector &v2) const noexcept {
+        //datatype infer: op_<vector, vector> delegate to op_<scalar, scalar>
+        using result_type = float;
+        result_type value{};
+        ntt::apply(v1.shape(),
+                   [&](auto index) { value += op_float_(float(v1(index)), float(v2(index))); });
+        return element_type(value);
+    }
+
+  private:
+    ops::inner_product<element_type, element_type> op_;
+    ops::inner_product<float, float> op_float_ = ops::inner_product<float, float>();
 };
 
 template <Vector TVector1, Vector TVector2>
