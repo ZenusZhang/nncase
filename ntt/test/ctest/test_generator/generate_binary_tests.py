@@ -49,10 +49,6 @@ class BinaryTestGenerator(BaseTestGenerator):
             ]
         }
         
-        self.output_vector_rank_options = {
-            "inner_product": 0,
-            "outer_product": 2
-        }
         
         # Define power operand ranges
         self.ALL_POW_OPRANDS = {
@@ -88,7 +84,7 @@ class BinaryTestGenerator(BaseTestGenerator):
         self.ort_custom_function = {
             "ceil_div": self._generate_ort_ceil_div_function,
             "swishb": self._generate_ort_SwishB,
-            "inner_product": self._generate_inner_product_operation
+            "inner_product": self._generate_inner_product_operation,
         }
         
         self.op_str_map = {
@@ -106,9 +102,11 @@ class BinaryTestGenerator(BaseTestGenerator):
             # "max":  self._generate_minmax_operation("ortki_Max"),
             # "pow": f"auto ort_output = ortki_Pow(ort_input_lhs, ort_input_rhs);",
             # "swishb":  f"auto ort_output = ortki_SwishB(ort_input_lhs, ort_input_rhs);",
-            "inner_product":  \
-                            "static bool element_is_vec = ntt::Vector<typename decltype(ntt_input_lhs)::element_type>;\n" \
-                            "   auto ort_output = ortki_inner_product(ort_input_lhs, ort_input_rhs, element_is_vec); " 
+            # "inner_product":  \
+            #                 "static bool element_is_vec = ntt::Vector<typename decltype(ntt_input_lhs)::element_type>;\n" \
+            #                 "   auto ort_output = ortki_inner_product(ort_input_lhs, ort_input_rhs, element_is_vec); " 
+            "outer_product":  \
+                            "   auto ort_output =ortki_Mul(ort_input_lhs, ort_input_rhs); " 
         }
 
     def _generate_minmax_operation(self, operation_func):
@@ -173,7 +171,6 @@ class BinaryTestGenerator(BaseTestGenerator):
             "    return ortki_Div(ortki_Add(ort_input_lhs, ortki_Add(ort_input_rhs, ort_neg1)), ort_input_rhs);\n"
             "}\n\n"
         )
-    
     def _generate_inner_product_operation(self, datatype):
         """Generate the ortki_inner_product function definition"""
         return (
@@ -362,6 +359,26 @@ class BinaryTestGenerator(BaseTestGenerator):
         
         return continuity_var_name, code
 
+
+    def _get_output_vector_rank(self, ntt_op_str, lhs_vector_rank, rhs_vector_rank):
+        """Determine the output vector rank based on the operation type and input ranks."""
+        if ntt_op_str == "inner_product":
+            return 0
+        elif ntt_op_str == "outer_product":
+            if lhs_vector_rank == 0 and rhs_vector_rank == 0:
+                return 0
+            elif lhs_vector_rank == 1 or rhs_vector_rank == 1:
+                return 2
+        else:
+            return max(lhs_vector_rank, rhs_vector_rank)
+        
+    def _get_output_pack_param(self, ntt_op_str, lhs_pack_param, rhs_pack_param):
+        """Determine the output pack parameter based on the operation type and input pack parameters."""
+        if ntt_op_str == "outer_product":
+            # For outer_product, return a tuple of both pack parameters
+            return (lhs_pack_param, rhs_pack_param)
+        else:
+            return lhs_pack_param if lhs_pack_param else rhs_pack_param
     def generate_ort_golden_output(self, datatype, 
                                     lhs_is_dynamic_shape, rhs_is_dynamic_shape,
                                     lhs_dims_spec, rhs_dims_spec,
@@ -409,13 +426,9 @@ class BinaryTestGenerator(BaseTestGenerator):
             
             code.append("")
 
-        code.extend([f"auto [ort_input_lhs, ort_input_rhs] = NttTest::convert_and_align_to_ort({ort_input_lhs}, {ort_input_rhs});"])
+        is_outer_product = "true" if ntt_op_str == "outer_product" else "false"
+        code.extend([f"auto [ort_input_lhs, ort_input_rhs] = NttTest::convert_and_align_to_ort({ort_input_lhs}, {ort_input_rhs}, {is_outer_product});"])
 
-        output_vector_rank = 0
-        if ntt_op_str in self.output_vector_rank_options:
-            output_vector_rank = self.output_vector_rank_options[ntt_op_str]
-        else:
-            output_vector_rank = max(lhs_vector_rank, rhs_vector_rank)
         code.extend(self.generate_ort_output(datatype, ntt_op_str))
 
         return code
@@ -451,15 +464,16 @@ class BinaryTestGenerator(BaseTestGenerator):
             lhs_is_dynamic_shape, rhs_is_dynamic_shape,
             lhs_dims_spec, rhs_dims_spec)
         
-        if ntt_op_str in self.output_vector_rank_options:
-            output_vector_rank = self.output_vector_rank_options[ntt_op_str]
-        else:
-            output_vector_rank = max(lhs_vector_rank, rhs_vector_rank)
+        # if ntt_op_str in self.output_vector_rank_options:
+        #     output_vector_rank = self.output_vector_rank_options[ntt_op_str]
+        # else:
+        #     output_vector_rank = max(lhs_vector_rank, rhs_vector_rank)
+        output_vector_rank = self._get_output_vector_rank( ntt_op_str, lhs_vector_rank, rhs_vector_rank)
         code.append(f"{indent}//---generate output tensor---")
 
         output_shape_expr = self.generate_shape_init(output_is_dynamic_shape, output_dims_spec)
         # For binary ops, output vector rank matches inputs. Assume lhs.
-        output_pack_param = lhs_pack_param if lhs_pack_param else rhs_pack_param
+        output_pack_param =  self._get_output_pack_param(ntt_op_str, lhs_pack_param, rhs_pack_param)
         output_element_type = self.get_element_cpp_type(datatype.cpp_type, output_vector_rank, output_pack_param)
 
         output_op_call_lines = self.get_op_call_lines(ntt_op_str)
@@ -514,8 +528,8 @@ class BinaryTestGenerator(BaseTestGenerator):
 
         P = f"NTT_VLEN / (sizeof({datatype.cpp_type}) * 8)"
         code: List[str] = []
-        lhs_pack_param = P if lhs_vector_rank > 0 else None
-        rhs_pack_param = P if rhs_vector_rank > 0 else None
+        lhs_pack_param = "P" if lhs_vector_rank > 0 else None
+        rhs_pack_param = "P" if rhs_vector_rank > 0 else None
 
         # 1. Test header and constants
         code.extend(self.generate_function_name(f"BinaryTest{ntt_op_str}", datatype, test_name))
@@ -678,7 +692,7 @@ class BinaryTestGenerator(BaseTestGenerator):
                 rhs_continuity = rhs_continuity._replace(non_contiguous_dim=0)
             
             # Filter vector rank combinations for inner_product
-            if op_str == "inner_product":
+            if op_str == "inner_product" or op_str == "outer_product":
                 # Only allow: scalar x scalar, or 1D vector x 1D vector
                 if not ((lhs_vec_rank == 0 and rhs_vec_rank == 0) or (lhs_vec_rank == 1 and rhs_vec_rank == 1)):
                     continue

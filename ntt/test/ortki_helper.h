@@ -156,7 +156,7 @@ void print_ort_shape(ortki::OrtKITensor *ort_tensor) {
 
 //reshape means append dimension 1 at proper position
 template <ntt::TensorOrVector TLhs, ntt::TensorOrVector TRhs>
-auto convert_and_align_to_ort(TLhs &lhs, TRhs &rhs) {
+auto convert_and_align_to_ort(TLhs &lhs, TRhs &rhs, bool for_outer_product = false) {
     auto ort_lhs = NttTest::ntt2ort(lhs);
     auto ort_rhs = NttTest::ntt2ort(rhs);
 
@@ -174,7 +174,6 @@ auto convert_and_align_to_ort(TLhs &lhs, TRhs &rhs) {
     
     constexpr size_t rhs_vector_rank = get_element_rank(rhs);
     
-    // TODO: deal with the case that 2D vector and 1D vector
     auto reshape_op = [&](auto &ort_tensor,
                          const auto &ntt_tensor, const auto &ntt_higher_dim_tensor) {
         using higher_element_type = typename std::decay_t<decltype(ntt_higher_dim_tensor)>::element_type;
@@ -220,8 +219,55 @@ auto convert_and_align_to_ort(TLhs &lhs, TRhs &rhs) {
     } else if constexpr (lhs_vector_rank < rhs_vector_rank) {
         reshape_op(ort_lhs, lhs, rhs);
     }
-
+    if (for_outer_product) {
+        // For outer product, we need to reshape tensors for broadcasting
+        // lhs should be reshaped to [..., lhs_vlen, 1]
+        // rhs should be reshaped to [..., 1, rhs_vlen]
+        
+        auto outer_product_reshape = [&](auto &ort_tensor, const auto &ntt_tensor, bool is_lhs) {
+            auto rank = ntt_tensor.shape().rank();
+            std::vector<int64_t> new_shape_data;
+            
+            // Get vector length based on whether it's lhs or rhs
+            auto get_vlen = [&]() {
+                if constexpr (get_element_rank(ntt_tensor) > 0) {
+                    using tensor_element_type = typename std::decay_t<decltype(ntt_tensor)>::element_type;
+                    return tensor_element_type::size();
+                }
+                return 1ul;
+            };
+            
+            int64_t vlen = get_vlen();
+            
+            // Copy existing tensor shape
+            for (size_t i = 0; i < rank; ++i) {
+                new_shape_data.push_back(ntt_tensor.shape()[i]);
+            }
+            
+            // Add outer product dimensions
+            if (is_lhs) {
+                // lhs: [..., lhs_vlen, 1]
+                new_shape_data.push_back(vlen);
+                new_shape_data.push_back(1);
+            } else {
+                // rhs: [..., 1, rhs_vlen]
+                new_shape_data.push_back(1);
+                new_shape_data.push_back(vlen);
+            }
+            int64_t reshape_shape[] = {static_cast<int64_t>(new_shape_data.size())};
+            auto ort_type = NttTest::primitive_type2ort_type<int64_t>();
+            auto shape_tensor =
+                make_tensor(reinterpret_cast<void *>(new_shape_data.data()),
+                            ort_type, reshape_shape, std::size(reshape_shape));
+            ort_tensor =
+                ortki_Reshape(ort_tensor, shape_tensor, 0);
+        };
+        outer_product_reshape(ort_lhs, lhs, true);
+        outer_product_reshape(ort_rhs, rhs, false);
+    }
+    
     return std::make_pair(ort_lhs, ort_rhs);
 }
+
 } // namespace NttTest
 } // namespace nncase
