@@ -17,8 +17,6 @@
 #include "tensor_traits.h"
 #include <cmath>
 #include <type_traits>
-#include <stdio.h>
-// #include <iostream>
 
 namespace nncase::ntt {
 enum class reduce_op {

@@ -61,32 +61,6 @@ struct tensor_unary_impl<Op, TVector> {
 template <template <class OpTLhs, class OpTRhs> class Op, class T1, class T2>
 struct tensor_binary_impl;
 
-// template <template <class T1, class T2> class Op, Vector TVector, class T2>
-// struct tensor_binary_impl<Op, TVector, T2> {
-//     using element_type1 = typename TVector::element_type;
-//     using element_type2 = element_or_scalar_t<T2>;
-
-//     constexpr TVector operator()(const TVector &v1,
-//                                  const T2 &v2) const noexcept {
-//         TVector value;
-//         if constexpr (Vector<T2>) {
-//             if constexpr (TVector::rank() == 2 && T2::rank() == 1) {
-//                 apply(v1.shape(), [&](auto index) {
-//                     value(index) = op_(v1(index), v2(*index.rbegin()));
-//                 });
-//             } else {
-//                 apply(v1.shape(), [&](auto index) {
-//                     value(index) = op_(v1(index), v2(index));
-//                 });
-//             }
-//         } else {
-//             apply(v1.shape(),
-//                   [&](auto index) { value(index) = op_(v1(index), v2); });
-//         }
-
-//         return value;
-//     }
-
 //here, T1 and T2 can be scalar or vector
 //T1 1D vector, T2 scalar or 1D vector
 //T1 2D vector, T2 scalar or 1D vector
