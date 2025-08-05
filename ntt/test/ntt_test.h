@@ -138,6 +138,15 @@ void generate_random_tensor(TTensor &tensor, std::mt19937 &gen, T start = static
     }
 }
 
+template <typename T> T ulp(T x) {
+    x = std::fabs(x);
+    if (std::isfinite(x)) {
+        T lower = std::nextafter(x, static_cast<T>(-1.0));
+        return x - lower;
+    }
+    return x;
+}
+
 template <typename T>
 bool are_close(T a, T b, double abs_tol = 1e-9, double rel_tol = 1e-5) {
     // The short-circuit for equality is important for performance and to handle infinities.
@@ -151,8 +160,12 @@ bool are_close(T a, T b, double abs_tol = 1e-9, double rel_tol = 1e-5) {
         // Using relative tolerance for floating-point comparison to handle precision issues
         if (std::abs(a - float_max_from_exp) <= std::max(abs_tol, rel_tol * std::max(std::abs(a), std::abs(float_max_from_exp))) && b > float_max_from_exp) {
             return true;
+        } 
+        if (std::abs(a - b) <= ulp(b)){
+            return true;
         }
     }
+
     
     return std::abs(a - b) <= std::max(abs_tol, rel_tol * std::max(std::abs(a), std::abs(b)));
 }
@@ -425,14 +438,6 @@ void reinterpret_cast_fp8_to_uint8(const TTensor_src &tensor_src,
 //     std::cout << std::endl;
 // }
 
-template <typename T> T ulp(T x) {
-    x = std::fabs(x);
-    if (std::isfinite(x)) {
-        T lower = std::nextafter(x, static_cast<T>(-1.0));
-        return x - lower;
-    }
-    return x;
-}
 
 template <typename T, typename Shape, typename Stride>
 bool compare_ulp(ntt::tensor<T, Shape, Stride> &lhs,
