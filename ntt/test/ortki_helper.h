@@ -223,7 +223,8 @@ auto convert_and_align_to_ort(TLhs &lhs, TRhs &rhs, bool for_outer_product = fal
         // For outer product, we need to reshape tensors for broadcasting
         // lhs should be reshaped to [..., lhs_vlen, 1]
         // rhs should be reshaped to [..., 1, rhs_vlen]
-        
+        // if element type is scalar, the *hs_vlen will be 1
+
         auto outer_product_reshape = [&](auto &ort_tensor, const auto &ntt_tensor, bool is_lhs) {
             auto rank = ntt_tensor.shape().rank();
             std::vector<int64_t> new_shape_data;

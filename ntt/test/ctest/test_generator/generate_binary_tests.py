@@ -88,23 +88,23 @@ class BinaryTestGenerator(BaseTestGenerator):
         }
         
         self.op_str_map = {
-            # "add": f"auto ort_output = ortki_Add(ort_input_lhs, ort_input_rhs);",
-            # "sub": f"auto ort_output = ortki_Sub(ort_input_lhs, ort_input_rhs);",
-            # "mul": f"auto ort_output = ortki_Mul(ort_input_lhs, ort_input_rhs);",
-            # "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
-            # "ceil_div": "auto ort_output = ort_ceil_div(ort_input_lhs, ort_input_rhs);",
-            # "floor_mod": lambda datatype: \
-            #     "auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 0);" \
-            #     if datatype.cpp_type in self.integer_types and datatype.cpp_type not in self.types_need_to_be_cast \
-            #     else "auto ort_output = ortki_Sub(ort_input_lhs, ortki_Mul(ortki_Floor(ortki_Div(ort_input_lhs, ort_input_rhs)), ort_input_rhs));",
-            # "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 1);",
-            # "min":  self._generate_minmax_operation("ortki_Min"),
-            # "max":  self._generate_minmax_operation("ortki_Max"),
-            # "pow": f"auto ort_output = ortki_Pow(ort_input_lhs, ort_input_rhs);",
-            # "swishb":  f"auto ort_output = ortki_SwishB(ort_input_lhs, ort_input_rhs);",
-            # "inner_product":  \
-            #                 "static bool element_is_vec = ntt::Vector<typename decltype(ntt_input_lhs)::element_type>;\n" \
-            #                 "   auto ort_output = ortki_inner_product(ort_input_lhs, ort_input_rhs, element_is_vec); " 
+            "add": f"auto ort_output = ortki_Add(ort_input_lhs, ort_input_rhs);",
+            "sub": f"auto ort_output = ortki_Sub(ort_input_lhs, ort_input_rhs);",
+            "mul": f"auto ort_output = ortki_Mul(ort_input_lhs, ort_input_rhs);",
+            "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
+            "ceil_div": "auto ort_output = ort_ceil_div(ort_input_lhs, ort_input_rhs);",
+            "floor_mod": lambda datatype: \
+                "auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 0);" \
+                if datatype.cpp_type in self.integer_types and datatype.cpp_type not in self.types_need_to_be_cast["default"] \
+                else "auto ort_output = ortki_Sub(ort_input_lhs, ortki_Mul(ortki_Floor(ortki_Div(ort_input_lhs, ort_input_rhs)), ort_input_rhs));",
+            "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 1);",
+            "min":  self._generate_minmax_operation("ortki_Min"),
+            "max":  self._generate_minmax_operation("ortki_Max"),
+            "pow": f"auto ort_output = ortki_Pow(ort_input_lhs, ort_input_rhs);",
+            "swishb":  f"auto ort_output = ortki_SwishB(ort_input_lhs, ort_input_rhs);",
+            "inner_product":  \
+                            "static bool element_is_vec = ntt::Vector<typename decltype(ntt_input_lhs)::element_type>;\n" \
+                            "   auto ort_output = ortki_inner_product(ort_input_lhs, ort_input_rhs, element_is_vec); " ,
             "outer_product":  \
                             "   auto ort_output =ortki_Mul(ort_input_lhs, ort_input_rhs); " 
         }
@@ -144,19 +144,27 @@ class BinaryTestGenerator(BaseTestGenerator):
 
     def _generate_ort_const_var_info(self, datatype, const_value, op_str):
         """Generate variable type and value string for ORT constants"""
+        # !!! Very ugly, must be refactored later
         types_to_cast = self.types_need_to_be_cast.get(op_str, self.types_need_to_be_cast["default"])
-        if not "int" in datatype.cpp_type:
+        if not "int" in datatype.cpp_type: # float
             if datatype.cpp_type in types_to_cast:
                 var_type = "double"
                 value_str = f"{const_value}.0f"
             else:
                 var_type = datatype.cpp_type
                 value_str = f"static_cast<{datatype.cpp_type}>({const_value})"
-        else:
+        else: # uintx, intx
+            if(op_str == "pow"):
             # Ortki can not take int as exp input
-            var_type = "double"
-            value_str = f"{const_value}.0f"
-        
+                var_type = "double"
+                value_str = f"{const_value}.0f"
+            else:
+                if( datatype.cpp_type in types_to_cast):
+                    var_type = "double"
+                    value_str = f"{const_value}.0f"
+                else:
+                    var_type = datatype.cpp_type
+                    value_str = f"static_cast<{datatype.cpp_type}>({const_value})"
         return var_type, value_str
 
     def _generate_ort_ceil_div_function(self, datatype):
@@ -237,45 +245,44 @@ class BinaryTestGenerator(BaseTestGenerator):
         
         parts = []
         
-        # 1. 数据类型
+        #1. datatype
         parts.append(f"{datatype.name_suffix}")
         
-        # 2. 左操作数信息
+        # 2.  lhs dynamic
         lhs_shape_type = "dynamic" if lhs_is_dynamic_shape else "fixed"
         parts.append(f"lhs_{lhs_shape_type}")
         
-        # 左操作数向量维度
+        # lhs vector rank
         if lhs_vector_rank == 0:
             parts.append("scalar")
         else:
             parts.append(f"{lhs_vector_rank}D_vector")
         
-        # 左操作数连续性 - contiguous改成view，non_contiguous改成raw_tensor
+        #  contiguous->view, non_contiguous->raw_tensor
         if lhs_continuity.is_contiguous:
             parts.append("raw_tensor")
         else:
             op_str = "mul2" if lhs_continuity.big_tensor_op == "*2" else "add3" if lhs_continuity.big_tensor_op == "+3" else "add7"
             parts.append(f"view_{lhs_continuity.non_contiguous_dim}_{op_str}")
         
-        # 3. 右操作数信息
+        # 3. rhs
         rhs_shape_type = "dynamic" if rhs_is_dynamic_shape else "fixed"
         parts.append(f"rhs_{rhs_shape_type}")
         
-        # 右操作数向量维度
+        # rhs vector rank
         if rhs_vector_rank == 0:
             parts.append("scalar")
         else:
             parts.append(f"{rhs_vector_rank}D_vector")
         
-        # 右操作数连续性 - contiguous改成view，non_contiguous改成raw_tensor
+        #  continuity
         if rhs_continuity.is_contiguous:
             parts.append("raw_tensor")
         else:
             op_str = "mul2" if rhs_continuity.big_tensor_op == "*2" else "add3" if rhs_continuity.big_tensor_op == "+3" else "add7"
             parts.append(f"view_dim{rhs_continuity.non_contiguous_dim}_{op_str}")
         
-        # 4. 广播信息 - 重新设计命名避免与元素类型的scalar/vector混淆
-        # 检测广播类型，使用更清晰的命名
+        # 4. braodcast type
         if lhs_dims_spec == rhs_dims_spec:
             broadcast_info = "no_broadcast"
         elif lhs_dims_spec == [1]:
