@@ -69,8 +69,6 @@ class BinaryTestGenerator(BaseTestGenerator):
             "float": {"lhs_min": "-256.0", "lhs_max": "256.0", "rhs_min": "-15.0", "rhs_max": "15.0"},
             "double": {"lhs_min": "-1000.0", "lhs_max": "1000.0", "rhs_min": "-50.0", "rhs_max": "50.0"},
 
-    # DataType('float_e4m3_t', 'Float8e4m3', 'float_e4m3_t(-448.0f)', 'float_e4m3_t(448.0f)', False),
-    # DataType('float_e5m2_t', 'Float8e5m2', 'float_e5m2_t(-57344.0f)', 'float_e5m2_t(57344.0f)', False),
         }
 
         self.simple_continuities = [
@@ -182,32 +180,32 @@ class BinaryTestGenerator(BaseTestGenerator):
     def _generate_inner_product_operation(self, datatype):
         """Generate the ortki_inner_product function definition"""
         return (
-    "static ortki::OrtKITensor* ortki_inner_product(ortki::OrtKITensor* ort_input_lhs, ortki::OrtKITensor* ort_input_rhs, bool  element_is_vec) {\n"
-    "   ortki::OrtKITensor* product_tensor = ortki_Mul(ort_input_lhs, ort_input_rhs);\n"
-    "   if (!element_is_vec)\n"
-    "       return product_tensor;\n"
-    "   int64_t axis_data[] = {-1};                         \n"
-    "   const int64_t axis_shape[] = {1};                   \n"
-    "   size_t axis_rank = 1;                               \n"
-    "   auto ort_type = nncase::NttTest::primitive_type2ort_type<int64_t>();\n"
-    "   ortki::OrtKITensor* axes_tensor = make_tensor(\n"
-    "       axis_data,                                       // void* buffer\n"
-    "       ort_type,\n"
-    "       axis_shape,                                      // const int64_t* shape\n"
-    "       axis_rank                                        // rank\n"
-    "   );\n"
-    "   if (axes_tensor == nullptr) {\n"
-    "       return nullptr;\n"
-    "   }\n"
-    "   int64_t keepdims = 0;\n"
-    "   int64_t noop_with_empty_axes = 0;\n"
-    "   ortki::OrtKITensor* result_tensor = ortki_ReduceSum(\n"
-    "       product_tensor,\n"
-    "       axes_tensor,\n"
-    "       keepdims,\n"
-    "       noop_with_empty_axes);\n"
-    "   return result_tensor;\n"
-    "}"
+        "static ortki::OrtKITensor* ortki_inner_product(ortki::OrtKITensor* ort_input_lhs, ortki::OrtKITensor* ort_input_rhs, bool  element_is_vec) {\n"
+        "   ortki::OrtKITensor* product_tensor = ortki_Mul(ort_input_lhs, ort_input_rhs);\n"
+        "   if (!element_is_vec)\n"
+        "       return product_tensor;\n"
+        "   int64_t axis_data[] = {-1};                         \n"
+        "   const int64_t axis_shape[] = {1};                   \n"
+        "   size_t axis_rank = 1;                               \n"
+        "   auto ort_type = nncase::NttTest::primitive_type2ort_type<int64_t>();\n"
+        "   ortki::OrtKITensor* axes_tensor = make_tensor(\n"
+        "       axis_data,                                       // void* buffer\n"
+        "       ort_type,\n"
+        "       axis_shape,                                      // const int64_t* shape\n"
+        "       axis_rank                                        // rank\n"
+        "   );\n"
+        "   if (axes_tensor == nullptr) {\n"
+        "       return nullptr;\n"
+        "   }\n"
+        "   int64_t keepdims = 0;\n"
+        "   int64_t noop_with_empty_axes = 0;\n"
+        "   ortki::OrtKITensor* result_tensor = ortki_ReduceSum(\n"
+        "       product_tensor,\n"
+        "       axes_tensor,\n"
+        "       keepdims,\n"
+        "       noop_with_empty_axes);\n"
+        "   return result_tensor;\n"
+        "}"
         )
 
     def _generate_ort_SwishB(self, datatype):
