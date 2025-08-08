@@ -18,7 +18,7 @@ include_directories(${CMAKE_CURRENT_LIST_DIR}/..)
 # set(KERNEL_NAMES binary pack unpack cast)
 # set(KERNEL_NAMES binary pack unpack)
 # set(KERNEL_NAMES  pack unpack)
-set(KERNEL_NAMES binary)
+set(KERNEL_NAMES binary cast)
 
 # Set directories
 set(TEST_GENERATOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test_generator)
@@ -86,7 +86,8 @@ file(GLOB HANDWRITTEN_TESTS CONFIGURE_DEPENDS
     # test_ntt_pack_generated_Uint64
     # test_ntt_binary_mul.cpp
     # test_ntt_binary_sub.cpp
-    # test_ntt_cast.cpp
+    test_ntt_cast.cpp
+    test_ntt_unary_abs.cpp
     # test_ntt_clamp.cpp
     # test_ntt_compare_equal.cpp
     # test_ntt_compare_greater_or_equal.cpp
@@ -109,9 +110,9 @@ file(GLOB HANDWRITTEN_TESTS CONFIGURE_DEPENDS
 )
 
 # Combine handwritten and generated tests
-# list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} ${GENERATED_TEST_SOURCES})
+list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} ${GENERATED_TEST_SOURCES})
 # list(APPEND TEST_NAMES ${HANDWRITTEN_TESTS} )
-list(APPEND TEST_NAMES ${GENERATED_TEST_SOURCES} )
+# list(APPEND TEST_NAMES ${GENERATED_TEST_SOURCES} )
 
 foreach(test_file ${TEST_NAMES})
     add_test_exec(${test_file})

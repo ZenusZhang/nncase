@@ -328,10 +328,10 @@ using namespace ortki;
         else:
             # Original behavior for single P value
             if vector_rank == 1:
-                ps = "P"
+                ps = P
             elif vector_rank > 1:
-                ps = ", ".join([f"4"] * (vector_rank-1)) + ", P"
-        
+                ps = ", ".join([f"4"] * (vector_rank-1)) + ", " + P
+
         return f"ntt::vector<{base_cpp_type}, {ps}>"
 
     # -------------------------------------------------------------------------
@@ -404,6 +404,27 @@ using namespace ortki;
 
         return self.generate_ntt_operation_section(op_section)
 
+    def prepare_contiguous_input(self, input_name, datatype, vector_rank, pack_param, 
+                                  is_dynamic_shape, dims_spec, continuity):
+        
+        continuity_var_name = input_name
+        element_type = self.get_element_cpp_type(datatype.cpp_type, vector_rank, pack_param)
+        code = []
+        
+        if not continuity.is_contiguous:
+            continuity_var_name = f"{input_name}_contiguous"
+            copy_code, _ = self.generate_copy_to_contiguous_code(
+                element_type,
+                is_dynamic_shape,
+                dims_spec,
+                input_name,
+                continuity_var_name
+            )
+            continuity_var_name = f"*{continuity_var_name}"
+            code.extend(copy_code)
+        
+        return continuity_var_name, code
+
     def generate_ort_input_section(self,
                                    datatype: DataType,
                                    shape_type,
@@ -424,7 +445,7 @@ using namespace ortki;
         # Decide which NTT tensor will be fed to ortki
         ort_src_tensor = ntt_input_var_name
         if cast_mode == 1:
-            # 1.3: if ntt input is fp8, first cast to uint8 tensor.
+            # For cast, if ntt input is fp8, first cast to uint8 tensor.
             # The resulting uint8 tensor is always contiguous.
             input_shape_expr = self.generate_shape_init(shape_type, dims_spec)
             uint8_cpp_type = self.get_element_cpp_type("uint8_t", vector_rank, P)

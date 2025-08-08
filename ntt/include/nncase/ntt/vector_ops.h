@@ -549,7 +549,6 @@ template <Vector TVector1, Vector TVector2> struct cast<TVector1, TVector2> {
         requires(sizeof...(tensors) > 1)
     {
         static_assert((... && (std::decay_t<TVectors>::rank() == 1)));
-
         TVector2 value;
         size_t count = 0;
 
@@ -565,6 +564,8 @@ template <Vector TVector1, Vector TVector2> struct cast<TVector1, TVector2> {
     }
 
     constexpr auto operator()(const TVector1 &v) const noexcept
+    //size means the number of elements
+    //assert(TVector1::size() = n * TVector2::size())
         requires(Vector<TVector1> && (TVector1::size() != TVector2::size()))
     {
 
