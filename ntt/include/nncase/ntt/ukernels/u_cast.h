@@ -16,7 +16,6 @@
 #include "../post_ops.h"
 #include "../primitive_ops.h"
 #include "../vector.h"
-#include "../apply.h"
 
 namespace nncase::ntt {
 namespace ukernels {
@@ -83,30 +82,29 @@ struct u_cast {
 
             while (count / unroll) {
                 for (size_t i = 0; i < unroll; i++) {
-                    auto temp = ntt::ops::cast<T1, T2>()(*input);
-                    std::memcpy(output, &temp, sizeof(temp));
+                    auto tmp_output = ntt::ops::cast<T1, T2>()(*input);
+                    for (auto s = 0; s < out_offset_scale; s++) {
+                        *output = *((T2 *)(&tmp_output(s)));
+                        output += output_stride;
+                    }
                     input += input_stride * in_offset_scale;
                     count--;
                 }
             }
 
             for (size_t i = 0; i < count; i++) {
-                auto temp = ntt::ops::cast<T1, T2>()(*input);
-                std::memcpy(output, &temp, sizeof(temp));
+                auto tmp_output = ntt::ops::cast<T1, T2>()(*input);
+                for (auto s = 0; s < out_offset_scale; s++) {
+                    *output = *((T2 *)(&tmp_output(s)));
+                    output += output_stride;
+                }
                 input += input_stride * in_offset_scale;
             }
 
         } else {
             while (count / unroll) {
                 for (size_t i = 0; i < unroll; i++) {
-                    if constexpr (!Vector<T2>) {
-                        *output = ntt::ops::cast<T1, T2>()(*input);
-                    } else {
-                        auto temp = ntt::ops::cast<T1, T2>()(*input);
-                        ntt::apply(temp.shape(), [&](auto index) {
-                            (*output)(index) = temp(index);
-                        });
-                    }
+                    *output = ntt::ops::cast<T1, T2>()(*input);
                     input += input_stride * in_offset_scale;
                     output += output_stride * out_offset_scale;
                     count--;
@@ -114,16 +112,7 @@ struct u_cast {
             }
 
             for (size_t i = 0; i < count; i++) {
-                // auto temp = ntt::ops::cast<T1, T2>()(*input);
-                // std::memcpy(output, &temp, sizeof(temp));
-                if constexpr (!Vector<T2>) {
-                    *output = ntt::ops::cast<T1, T2>()(*input);
-                } else {
-                    auto temp = ntt::ops::cast<T1, T2>()(*input);
-                    ntt::apply(temp.shape(), [&](auto index) {
-                        (*output)(index) = temp(index);
-                    });
-                }
+                *output = ntt::ops::cast<T1, T2>()(*input);
                 input += input_stride * in_offset_scale;
                 output += output_stride * out_offset_scale;
             }

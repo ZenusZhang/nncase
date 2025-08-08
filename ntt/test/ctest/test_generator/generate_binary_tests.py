@@ -343,26 +343,7 @@ class BinaryTestGenerator(BaseTestGenerator):
             ""
         ]
 
-    def _prepare_contiguous_input(self, input_name, datatype, vector_rank, pack_param, 
-                                  is_dynamic_shape, dims_spec, continuity):
-        
-        continuity_var_name = input_name
-        element_type = self.get_element_cpp_type(datatype.cpp_type, vector_rank, pack_param)
-        code = []
-        
-        if not continuity.is_contiguous:
-            continuity_var_name = f"{input_name}_contiguous"
-            copy_code, _ = self.generate_copy_to_contiguous_code(
-                element_type,
-                is_dynamic_shape,
-                dims_spec,
-                input_name,
-                continuity_var_name
-            )
-            continuity_var_name = f"*{continuity_var_name}"
-            code.extend(copy_code)
-        
-        return continuity_var_name, code
+
 
 
     def _get_output_vector_rank(self, ntt_op_str, lhs_vector_rank, rhs_vector_rank):
@@ -397,14 +378,14 @@ class BinaryTestGenerator(BaseTestGenerator):
         types_to_cast = self.types_need_to_be_cast.get(op_str, self.types_need_to_be_cast["default"])
         need_cast = datatype.cpp_type in types_to_cast
             
-        lhs_continuity_var_name, lhs_copy_code = self._prepare_contiguous_input(
+        lhs_continuity_var_name, lhs_copy_code = self.prepare_contiguous_input(
             "ntt_input_lhs", datatype, lhs_vector_rank, lhs_pack_param,
             lhs_is_dynamic_shape, lhs_dims_spec, lhs_continuity
         )
         code.extend(lhs_copy_code)
         ort_input_lhs = lhs_continuity_var_name
 
-        rhs_continuity_var_name, rhs_copy_code = self._prepare_contiguous_input(
+        rhs_continuity_var_name, rhs_copy_code = self.prepare_contiguous_input(
             "ntt_input_rhs", datatype, rhs_vector_rank, rhs_pack_param,
             rhs_is_dynamic_shape, rhs_dims_spec, rhs_continuity
         )
@@ -469,10 +450,6 @@ class BinaryTestGenerator(BaseTestGenerator):
             lhs_is_dynamic_shape, rhs_is_dynamic_shape,
             lhs_dims_spec, rhs_dims_spec)
         
-        # if ntt_op_str in self.output_vector_rank_options:
-        #     output_vector_rank = self.output_vector_rank_options[ntt_op_str]
-        # else:
-        #     output_vector_rank = max(lhs_vector_rank, rhs_vector_rank)
         output_vector_rank = self._get_output_vector_rank( ntt_op_str, lhs_vector_rank, rhs_vector_rank)
         code.append(f"{indent}//---generate output tensor---")
 
