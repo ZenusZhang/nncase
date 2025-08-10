@@ -42,7 +42,8 @@ constexpr ukernels::matmul_vectorize_kind get_matmul_vectorize_kind() noexcept {
 
     constexpr LhsVectorizedAxes lhs_vectorized_axes;
     constexpr RhsVectorizedAxes rhs_vectorized_axes;
-    if constexpr (LhsVectorizedAxes::rank() == 0 && RhsVectorizedAxes::rank() == 0) {
+    if constexpr (LhsVectorizedAxes::rank() == 0 &&
+                  RhsVectorizedAxes::rank() == 0) {
         return ukernels::matmul_vectorize_kind::no_vectorize;
     } else if constexpr (LhsVectorizedAxes::rank() == 1 &&
                          lhs_vectorized_axes.at(0) == lm &&
@@ -71,8 +72,10 @@ constexpr ukernels::matmul_vectorize_kind get_matmul_vectorize_kind() noexcept {
     } else if constexpr (LhsVectorizedAxes::rank() == 1 &&
                          lhs_vectorized_axes.at(0) == lk &&
                          RhsVectorizedAxes::rank() == 2 &&
-                         rhs_vectorized_axes.at(0) == rk &&
-                         rhs_vectorized_axes.at(1) == rn) {
+                         ((rhs_vectorized_axes.at(0) == rk &&
+                           rhs_vectorized_axes.at(1) == rn) ||
+                          (rhs_vectorized_axes.at(0) == rn &&
+                           rhs_vectorized_axes.at(1) == rk))) {
         return ukernels::matmul_vectorize_kind::vectorize_kn;
     } else if constexpr (LhsVectorizedAxes::rank() == 2 &&
                          lhs_vectorized_axes.at(0) == lm &&
@@ -90,8 +93,9 @@ constexpr ukernels::matmul_vectorize_kind get_matmul_vectorize_kind() noexcept {
 }
 
 template <bool AccumulateC, bool TransposedA, bool TransposedB, class TLhs,
-          class TRhs, class TOut, typename LhsVectorizedAxes, typename LhsPadedNums,
-          typename RhsVectorizedAxes, typename RhsPadedNums>
+          class TRhs, class TOut, typename LhsVectorizedAxes,
+          typename LhsPadedNums, typename RhsVectorizedAxes,
+          typename RhsPadedNums>
 class matmul_impl;
 
 /**
@@ -100,25 +104,24 @@ class matmul_impl;
  */
 template <bool AccumulateC, bool TransposedB, ValidMatmulTensor TLhs,
           ValidMatmulTensor TRhs, ValidMatmulTensor TOut,
-          typename LhsVectorizedAxes, typename LhsPadedNums, typename RhsVectorizedAxes,
-          typename RhsPadedNums>
+          typename LhsVectorizedAxes, typename LhsPadedNums,
+          typename RhsVectorizedAxes, typename RhsPadedNums>
 class matmul_impl<AccumulateC, false, TransposedB, TLhs, TRhs, TOut,
-                  LhsVectorizedAxes, LhsPadedNums, RhsVectorizedAxes, RhsPadedNums> {
+                  LhsVectorizedAxes, LhsPadedNums, RhsVectorizedAxes,
+                  RhsPadedNums> {
     using TOutElem = typename TOut::element_type;
 
     static constexpr auto vectorize_kind =
-        get_matmul_vectorize_kind<TLhs, TRhs, LhsVectorizedAxes, RhsVectorizedAxes, false,
-                             TransposedB>();
-    using policy_t =
-        ntt::ukernels::u_matmul_policy<vectorize_kind, typename TLhs::value_type,
-                                       typename TRhs::value_type, TOutElem,
-                                       true>;
+        get_matmul_vectorize_kind<TLhs, TRhs, LhsVectorizedAxes,
+                                  RhsVectorizedAxes, false, TransposedB>();
+    using policy_t = ntt::ukernels::u_matmul_policy<
+        vectorize_kind, typename TLhs::value_type, typename TRhs::value_type,
+        TOutElem, true>;
     static constexpr auto m0_subtile = policy_t::m0_subtile;
 
-    using m1_policy_t =
-        ntt::ukernels::u_matmul_m1_policy<vectorize_kind, typename TLhs::value_type,
-                                          typename TRhs::value_type, TOutElem,
-                                          true>;
+    using m1_policy_t = ntt::ukernels::u_matmul_m1_policy<
+        vectorize_kind, typename TLhs::value_type, typename TRhs::value_type,
+        TOutElem, true>;
 
   public:
     void operator()(const TLhs &lhs, const TRhs &rhs, TOut &output) {
@@ -249,17 +252,21 @@ template <bool AccumulateC = false, bool TransposedA = false,
 void matmul(
     [[maybe_unused]] const TLhs &lhs, [[maybe_unused]] const TRhs &rhs,
     [[maybe_unused]] TOut &&output,
-    [[maybe_unused]] const LhsVectorizedAxes &lhsVectorizedAxes = fixed_shape_v<>,
+    [[maybe_unused]] const LhsVectorizedAxes &lhsVectorizedAxes =
+        fixed_shape_v<>,
     [[maybe_unused]] const LhsPadedNums &lhsPadedNums = fixed_shape_v<>,
-    [[maybe_unused]] const RhsVectorizedAxes &rhsVectorizedAxes = fixed_shape_v<>,
+    [[maybe_unused]] const RhsVectorizedAxes &rhsVectorizedAxes =
+        fixed_shape_v<>,
     [[maybe_unused]] const RhsPadedNums &rhsPadedNums = fixed_shape_v<>) {
 
     constexpr LhsPadedNums lhsPadedNumsType;
     constexpr RhsPadedNums rhsPadedNumsType;
-    static_assert(LhsVectorizedAxes::rank() == 0 || LhsVectorizedAxes::rank() == 1 ||
+    static_assert(LhsVectorizedAxes::rank() == 0 ||
+                      LhsVectorizedAxes::rank() == 1 ||
                       LhsVectorizedAxes::rank() == 2,
                   "currently only support 0~2d vectorize!");
-    static_assert(RhsVectorizedAxes::rank() == 0 || RhsVectorizedAxes::rank() == 1 ||
+    static_assert(RhsVectorizedAxes::rank() == 0 ||
+                      RhsVectorizedAxes::rank() == 1 ||
                       RhsVectorizedAxes::rank() == 2,
                   "currently only support 0~2d vectorize!");
     static_assert(LhsPadedNums::rank() == 0 || lhsPadedNumsType.length() == 0,

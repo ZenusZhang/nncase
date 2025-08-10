@@ -81,11 +81,13 @@ public sealed partial class VectorizeReshapePropagation : RewriteRule<Pattern>
             }
 
             // 2. [8, 128] -> pack([1024], [0], [8]): <8>[8, 16] -> <8>[128]
+            // [1, 384, 32, 128] -> pack([1, 384, 4096], [1, 3], [64, 32]): <64, 32>[1, 6, 32, 4] -> <64, 32>[1, 384, 128]
             if (backwardDict.TryGetValue(axis, out var inAxes))
             {
                 // Find appropriate input axis to vectorize
                 bool found = false;
-                foreach (var inAxis in Enumerable.Reverse(inAxes))
+                var reversedInAxes = Enumerable.Reverse(inAxes).ToArray();
+                foreach (var inAxis in reversedInAxes)
                 {
                     if (vectorizeAxes.Contains(inAxis))
                     {
@@ -101,7 +103,7 @@ public sealed partial class VectorizeReshapePropagation : RewriteRule<Pattern>
                             // found a valid axis
                             vectorizeAxes.Add(inAxis);
                             vectorizeLanes.Add(lanes);
-                            rewritedNewShape[axis] = newDim;
+                            rewritedNewShape[axis] = newDim * reversedInAxes.Skip(reversedInAxes.IndexOf(inAxis) + 1).Select(a => inShape[a]).Aggregate((a, b) => a * b);
                             found = true;
                             break;
                         }
