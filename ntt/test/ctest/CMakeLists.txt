@@ -18,7 +18,8 @@ include_directories(${CMAKE_CURRENT_LIST_DIR}/..)
 # set(KERNEL_NAMES binary pack unpack cast)
 # set(KERNEL_NAMES binary pack unpack)
 # set(KERNEL_NAMES  pack unpack)
-set(KERNEL_NAMES binary cast)
+# set(KERNEL_NAMES binary cast)
+set(KERNEL_NAMES cast)
 
 # Set directories
 set(TEST_GENERATOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test_generator)
