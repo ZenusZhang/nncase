@@ -126,8 +126,8 @@ struct u_cast {
             }
 
         } else {
+
             while (count / unroll) {
-                __asm__ volatile("":::"memory");
                 for (size_t i = 0; i < unroll; i++) {
                     *output = ntt::ops::cast<T1, T2>()(*input);
                     input += input_stride * in_offset_scale;
@@ -137,7 +137,6 @@ struct u_cast {
             }
 
             for (size_t i = 0; i < count; i++) {
-                __asm__ volatile("":::"memory");
                 *output = ntt::ops::cast<T1, T2>()(*input);
                 input += input_stride * in_offset_scale;
                 output += output_stride * out_offset_scale;

@@ -154,9 +154,16 @@ void print_ort_shape(ortki::OrtKITensor *ort_tensor) {
     }
 }
 
-//reshape means append dimension 1 at proper position
+//reshape means 
+// 1. append dimension 1 at the last dimension which shoule be vector dimensions of ntt dimension
+//    intput :lhs: (2 * 3 * 4) tensor of vector<2 * 4> rhs: (2 * 1 * 4) tensor of vector <4>
+//    output :lhs  (2 * 3 * 4 * 2 * 4), rhs: (2 * 1 * 4 * "1" * 4)
+// 2. for outer_product
+//   input: lhs: 3 * 4 tensor of vector <8>  rhs: 3*4 tensor of vector <4>
+//   output: lhs: 3 * 4 * 8 * 1, rhs: 3*4 * 1 * 4
+//3. if need cast, cast the ort tensor into double
 template <ntt::TensorOrVector TLhs, ntt::TensorOrVector TRhs>
-auto convert_and_align_to_ort(TLhs &lhs, TRhs &rhs, bool for_outer_product = false) {
+auto convert_and_align_to_ort(TLhs &lhs, TRhs &rhs, bool need_cast = false,  bool for_outer_product = false) {
     auto ort_lhs = NttTest::ntt2ort(lhs);
     auto ort_rhs = NttTest::ntt2ort(rhs);
 
@@ -175,23 +182,21 @@ auto convert_and_align_to_ort(TLhs &lhs, TRhs &rhs, bool for_outer_product = fal
     constexpr size_t rhs_vector_rank = get_element_rank(rhs);
     
     auto reshape_op = [&](auto &ort_tensor,
-                         const auto &ntt_tensor, const auto &ntt_higher_dim_tensor) {
-        using higher_element_type = typename std::decay_t<decltype(ntt_higher_dim_tensor)>::element_type;
-        static_assert(ntt::Vector<higher_element_type> && higher_element_type::rank() > 0, "element of ntt_higher_dim_tensor must be a vector");
+                         const auto &ntt_tensor, const auto higher_vector_rank) {
+        assert( higher_vector_rank > 0);
         
         auto rank = ntt_tensor.shape().rank();
         std::vector<int64_t> new_shape_data;
-        constexpr auto higher_vector_rank = higher_element_type::rank();
         
         constexpr auto lower_vector_rank = get_element_rank(ntt_tensor);
         
         new_shape_data.reserve(rank + higher_vector_rank);
 
-        for (size_t i = 0; i < rank; ++i) {
+        for (size_t i = 0; i < rank; ++i) { 
             new_shape_data.push_back(ntt_tensor.shape()[i]);
         }
         for (size_t i = 0; i < higher_vector_rank; ++i) {
-            new_shape_data.push_back(1);
+            new_shape_data.push_back(1); 
         }
         if constexpr (lower_vector_rank > 0) {
             static_assert(lower_vector_rank == 1, "only support 1D vectors");
@@ -215,9 +220,9 @@ auto convert_and_align_to_ort(TLhs &lhs, TRhs &rhs, bool for_outer_product = fal
     // }
 
     if constexpr (lhs_vector_rank > rhs_vector_rank) {
-        reshape_op(ort_rhs, rhs, lhs);
+        reshape_op(ort_rhs, rhs, lhs_vector_rank);
     } else if constexpr (lhs_vector_rank < rhs_vector_rank) {
-        reshape_op(ort_lhs, lhs, rhs);
+        reshape_op(ort_lhs, lhs, rhs_vector_rank);
     }
     if (for_outer_product) {
         // For outer product, we need to reshape tensors for broadcasting
@@ -267,6 +272,12 @@ auto convert_and_align_to_ort(TLhs &lhs, TRhs &rhs, bool for_outer_product = fal
         outer_product_reshape(ort_rhs, rhs, false);
     }
     
+
+    if(need_cast){
+        ort_lhs = ortki_Cast(ort_lhs,1,  ortki::DataType_DOUBLE);
+        ort_rhs = ortki_Cast(ort_rhs,1,  ortki::DataType_DOUBLE);
+    }
+
     return std::make_pair(ort_lhs, ort_rhs);
 }
 

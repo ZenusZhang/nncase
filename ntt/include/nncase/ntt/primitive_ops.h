@@ -342,7 +342,7 @@ template <class T1, class T2> struct clamp {
 
 template <class T1, class T2> struct cast {
     constexpr T2 operator()(const T1 &v) const noexcept {
-        // printf("cast from %f to %f\n", (double)v, (double)static_cast<T2>(v));
+        // printf("cast from %f to %f\n", (double)(float)v, (double)static_cast<T2>(v));
         return static_cast<T2>(v);
         
     }
