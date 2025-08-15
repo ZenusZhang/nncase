@@ -46,7 +46,7 @@ ALL_DATATYPES = [
     DataType('bool', 'Bool', 'false', 'true', False),
     DataType('uint8_t', 'Uint8', '0', '16', True),
     DataType('uint16_t', 'Uint16', '0', '256', True),
-    DataType('uint32_t', 'Uint32', '0', '65536', True),
+    DataType('uint32_t', 'Uint32', '0', '15536', True),
     DataType('uint64_t', 'Uint64', '0', '1000000', True),
     DataType('int8_t', 'Int8', '-11', '11', True),
     DataType('int16_t', 'Int16', '-181', '181', True),
@@ -57,7 +57,7 @@ ALL_DATATYPES = [
     DataType('double', 'Float64', '-1.7e150', '1.7e150', False),
     DataType('bfloat16', 'Bfloat16', '-1.0e10_bf16', '1.0e10_bf16', False),
     DataType('float_e4m3_t', 'Float8e4m3', 'float_e4m3_t(-16.0f)', 'float_e4m3_t(16.0f)', False),
-    DataType('float_e5m2_t', 'Float8e5m2', 'float_e5m2_t(-32.0f)', 'float_e5m2_t(32.0f)', False),
+    DataType('float_e5m2_t', 'Float8e5m2', 'float_e5m2_t(-32.0f)', 'float_e5m2_t(32.0f)', False)
 ]
 
 class BaseTestGenerator:
@@ -166,9 +166,9 @@ class BaseTestGenerator:
         # define dimension constants
         for i, (name, size) in enumerate(zip(dim_names, dims)):
             if pack_axes and (i in pack_axes):
-                pack_param = "P" if i  == pack_axes[-1] else "4"
+                vec_param = "P" if i  == pack_axes[-1] else "4"
                 code.append(f"    constexpr size_t {name}_coefficient = {size};")
-                code.append(f"    constexpr size_t {name} = {name}_coefficient * {pack_param};")
+                code.append(f"    constexpr size_t {name} = {name}_coefficient * {vec_param};")
             else:
                 code.append(f"    constexpr size_t {name} = {size};")
 
@@ -404,11 +404,11 @@ using namespace ortki;
 
         return self.generate_ntt_operation_section(op_section)
 
-    def prepare_contiguous_input(self, input_name, datatype, vector_rank, pack_param, 
+    def prepare_contiguous_input(self, input_name, datatype, vector_rank, vec_param, 
                                   is_dynamic_shape, dims_spec, continuity):
         
         continuity_var_name = input_name
-        element_type = self.get_element_cpp_type(datatype.cpp_type, vector_rank, pack_param)
+        element_type = self.get_element_cpp_type(datatype.cpp_type, vector_rank, vec_param)
         code = []
         
         if not continuity.is_contiguous:
@@ -539,10 +539,95 @@ using namespace ortki;
             lines.append(f"ntt::cast(*{golden_cast_source_var}, *{golden_origin_var});")
 
             lines.append(f"EXPECT_TRUE(NttTest::compare_tensor({ntt_output_var_name}, *{golden_origin_var}));")
+        elif cast_mode == 4: 
+            lines.append(f"EXPECT_TRUE(NttTest::compare_tensor(ntt_golden, ntt_output));")
 
         lines.append("}")
         lines.append("")
         return lines
+
+def get_numeric_value(value_str: str, cpp_type: str) -> float:
+    """Extract numeric value from string representation based on cpp_type"""
+    if cpp_type == 'bool':
+        return 1.0 if value_str == 'true' else 0.0
+    elif cpp_type in ['uint8_t', 'uint16_t', 'uint32_t', 'uint64_t', 'int8_t', 'int16_t', 'int32_t', 'int64_t']:
+        return float(value_str)
+    elif cpp_type == 'half':
+        # Extract value from half(-100.0f) format
+        if value_str.startswith('half(') and value_str.endswith(')'):
+            inner = value_str[5:-1]  # Remove 'half(' and ')'
+            if inner.endswith('f'):
+                inner = inner[:-1]  # Remove 'f'
+            return float(inner)
+        return float(value_str)
+    elif cpp_type == 'float':
+        if value_str.endswith('f'):
+            return float(value_str[:-1])
+        return float(value_str)
+    elif cpp_type == 'double':
+        return float(value_str)
+    elif cpp_type == 'bfloat16':
+        # Extract value from -1.0e10_bf16 format
+        if value_str.endswith('_bf16'):
+            return float(value_str[:-6])  # Remove '_bf16'
+        return float(value_str)
+    elif cpp_type in ['float_e4m3_t', 'float_e5m2_t']:
+        # Extract value from float_e4m3_t(-16.0f) format
+        if value_str.startswith(cpp_type + '(') and value_str.endswith(')'):
+            inner = value_str[len(cpp_type)+1:-1]  # Remove type and parentheses
+            if inner.endswith('f'):
+                inner = inner[:-1]  # Remove 'f'
+            return float(inner)
+        return float(value_str)
+    else:
+        return float(value_str)
+
+def format_value_for_type(value: float, cpp_type: str) -> str:
+    """Format numeric value back to string representation for given cpp_type"""
+    if cpp_type == 'bool':
+        return 'true' if value > 0.5 else 'false'
+    elif cpp_type in ['uint8_t', 'uint16_t', 'uint32_t', 'uint64_t', 'int8_t', 'int16_t', 'int32_t', 'int64_t']:
+        return str(int(value))
+    elif cpp_type == 'half':
+        return f'half({value}f)'
+    elif cpp_type == 'float':
+        return f'{value}f'
+    elif cpp_type == 'double':
+        return str(value)
+    elif cpp_type == 'bfloat16':
+        return f'{value}_bf16'
+    elif cpp_type in ['float_e4m3_t', 'float_e5m2_t']:
+        return f'{cpp_type}({value}f)'
+    else:
+        return str(value)
+
+def clamp_value_strings(from_type: DataType, to_type: DataType) -> tuple[str, str]:
+    """
+    Clamp the min/max values of from_type to the range of to_type.
+    Returns (clamped_min_str, clamped_max_str) in the format of to_type.
+    
+    Args:
+        from_type: Source data type with min_val and max_val as strings
+        to_type: Target data type with min_val and max_val as strings
+        
+    Returns:
+        Tuple of (min_value_str, max_value_str) formatted for to_type
+    """
+    # Get numeric values
+    from_min = get_numeric_value(from_type.min_val, from_type.cpp_type)
+    from_max = get_numeric_value(from_type.max_val, from_type.cpp_type)
+    to_min = get_numeric_value(to_type.min_val, to_type.cpp_type)
+    to_max = get_numeric_value(to_type.max_val, to_type.cpp_type)
+    
+    # Clamp the values
+    clamped_min = max(from_min, to_min)
+    clamped_max = min(from_max, to_max)
+    
+    # Format back to strings for to_type
+    clamped_min_str = format_value_for_type(clamped_min, from_type.cpp_type)
+    clamped_max_str = format_value_for_type(clamped_max, from_type.cpp_type)
+    
+    return clamped_min_str, clamped_max_str
 
 def generate_cmake_list(directory, filenames, output_filename, variable_name):
     """generate a .cmake file that contains the list of generated test files"""

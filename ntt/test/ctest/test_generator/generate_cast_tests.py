@@ -81,11 +81,11 @@ class CastTestGenerator(BaseTestGenerator):
         """Generate the NTT output to be tested"""
         code = []
 
-        # cast_min_value = max(from_type.min_value, to_type.min_value)
-        # cast_max_value = min(from_type.max_value, to_type.max_value)
+        cast_min_value, cast_max_value = clamp_value_strings(from_type, to_type) 
+        cast_data_type = from_type._replace(min_val=cast_min_value, max_val=cast_max_value)
         # 1. NTT input creation
         code.extend(self.generate_tensor_init(
-            datatype=from_type,
+            datatype=cast_data_type,
             shape_type=shape_type,
             dim_spec=dims_spec,
             continuity=continuity,
@@ -210,6 +210,8 @@ class CastTestGenerator(BaseTestGenerator):
             from_ele_len = self.element_type_lengths.get(from_type.cpp_type, 4)
             to_ele_len = self.element_type_lengths.get(to_type.cpp_type, 4)
             scale = from_ele_len // to_ele_len if from_ele_len > to_ele_len else to_ele_len // from_ele_len
+            if("bool" == from_type.cpp_type or "bool" == to_type.cpp_type):
+                scale = 1
 
             if vector_rank == 1 and repackedAxes is not None and from_ele_len != to_ele_len:
                 # Calculate scale factor

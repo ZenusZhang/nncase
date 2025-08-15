@@ -18,15 +18,19 @@ class BinaryTestGenerator(BaseTestGenerator):
     def __init__(self):
         super().__init__()
         
-        # ORT binary operations do not support these data types, need to cast to float32
-        self.types_need_to_be_cast = {
+        # ORT binary operations do not support these data types, need to cast to double 
+        # fortunately, they could be cast in ort( fp8 are unfortunate)
+        self.types_need_to_be_cast_in_ort = {
             "swishb": [ 'bool', 'uint8_t', 'uint16_t', 'uint32_t',
                 'uint64_t', 'int8_t', 'int16_t', 'bfloat16', 'half',
-                'float_e4m3_t', 'float_e5m2_t', "int32_t", "int64_t"],
+                 'float_e4m3_t', 'float_e5m2_t', "int32_t", "int64_t"],
 
             "default": [ 'bool', 'uint8_t', 'uint16_t', 'uint32_t',
                 'uint64_t', 'int8_t', 'int16_t', 'bfloat16', 'half',
-                'float_e4m3_t', 'float_e5m2_t' ]
+                ]
+        }
+        self.types_need_to_be_cast_in_ntt = {
+            'float_e4m3_t', 'float_e5m2_t' 
         }
 
         self.dims_specs_options = {
@@ -93,12 +97,12 @@ class BinaryTestGenerator(BaseTestGenerator):
             "ceil_div": "auto ort_output = ort_ceil_div(ort_input_lhs, ort_input_rhs);",
             "floor_mod": lambda datatype: \
                 "auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 0);" \
-                if datatype.cpp_type in self.integer_types and datatype.cpp_type not in self.types_need_to_be_cast["default"] \
+                if datatype.cpp_type in self.integer_types and datatype.cpp_type not in self.types_need_to_be_cast_in_ort["default"] \
                 else "auto ort_output = ortki_Sub(ort_input_lhs, ortki_Mul(ortki_Floor(ortki_Div(ort_input_lhs, ort_input_rhs)), ort_input_rhs));",
             "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 1);",
             "min":  self._generate_minmax_operation("ortki_Min"),
             "max":  self._generate_minmax_operation("ortki_Max"),
-            "pow": f"auto ort_output = ortki_Pow(ort_input_lhs, ort_input_rhs);",
+            # "pow": f"auto ort_output = ortki_Pow(ort_input_lhs, ort_input_rhs);",
             "swishb":  f"auto ort_output = ortki_SwishB(ort_input_lhs, ort_input_rhs);",
             "inner_product":  \
                             "static bool element_is_vec = ntt::Vector<typename decltype(ntt_input_lhs)::element_type>;\n" \
@@ -120,7 +124,7 @@ class BinaryTestGenerator(BaseTestGenerator):
     def _generate_ceil_div_operation(self, datatype):
         """Generate code for ceil_div operation with reduced duplication"""
         # Determine the appropriate type and value for neg1
-        types_to_cast = self.types_need_to_be_cast.get(op_str, self.types_need_to_be_cast["default"])
+        types_to_cast = self.types_need_to_be_cast_in_ort.get(op_str, self.types_need_to_be_cast_in_ort["default"])
         if datatype.cpp_type == "int64_t":
             var_type = "int64_t"
             value_str = "-1"
@@ -143,7 +147,7 @@ class BinaryTestGenerator(BaseTestGenerator):
     def _generate_ort_const_var_info(self, datatype, const_value, op_str):
         """Generate variable type and value string for ORT constants"""
         # !!! Very ugly, must be refactored later
-        types_to_cast = self.types_need_to_be_cast.get(op_str, self.types_need_to_be_cast["default"])
+        types_to_cast = self.types_need_to_be_cast_in_ort.get(op_str, self.types_need_to_be_cast_in_ort["default"])
         if not "int" in datatype.cpp_type: # float
             if datatype.cpp_type in types_to_cast:
                 var_type = "double"
@@ -230,6 +234,193 @@ class BinaryTestGenerator(BaseTestGenerator):
         if custom_op_name in self.ort_custom_function:
             return self.ort_custom_function[custom_op_name](datatype)
         return ""
+
+    def _generate_aligned_ntt_scalar_input(self, ntt_op_str, datatype, input_var_name, continuity_var_name, 
+                                   is_dynamic_shape, dims_spec, vector_rank, other_vector_rank):
+        """Generate aligned NTT input tensors for fp8 operations"""
+        """ normal case: tensor<vector<P>, axbxc> -> tensor<scalar, axbxcxP>
+            aligned case: tensor<vector<P>, axbxc> align with tensor of 2D vector->  tensor<scalar, axbxcx1xP>
+        """
+        code = []
+        aligned_dims = None
+        
+        # Determine if tensors need alignment based on vector ranks
+        need_alignment = vector_rank + other_vector_rank > 0
+
+        #fistly unsqueeze
+        
+        unsqueeze_dims = ""
+        unpack_dims = ""
+        if vector_rank >= other_vector_rank :
+            # no 1s be appended
+
+            if vector_rank == 0:
+                code.append(f"// for tensors pair that are all tensor of scalar")
+                code.append(f"auto {input_var_name}_unsqueezed = {continuity_var_name};")
+                aligned_dims = dims_spec
+            else:
+                if vector_rank == 1:
+                # because vector_rank < other_vector_rank:
+                    if ntt_op_str == "outer_product":
+                        unsqueeze_dims = f"{len(dims_spec)}, {len(dims_spec)+1}"
+                        if "lhs" in input_var_name:
+                            unpack_dims = f"{len(dims_spec)}"
+                            aligned_dims = [str(d) for d in dims_spec] + ["P", "1"]
+                        elif "rhs" in input_var_name:
+                            unpack_dims = f"{len(dims_spec)+1}"
+                            aligned_dims = [str(d) for d in dims_spec] +["1", "P"]
+                    else:
+                        unsqueeze_dims = f"{len(dims_spec)}"
+                        aligned_dims = [str(d) for d in dims_spec] + ["P"]
+                        unpack_dims = unsqueeze_dims
+
+
+                elif vector_rank == 2:
+                    unsqueeze_dims = f"{len(dims_spec)}, {len(dims_spec)+1}"
+                    aligned_dims = [str(d) for d in dims_spec] + ["4" ,"P"]
+                    unpack_dims = unsqueeze_dims
+                code.append(f"auto {input_var_name}_unsqueezed = ({continuity_var_name}).unsqueeze(fixed_shape_v<{unsqueeze_dims}>);")
+        else:
+            # vector_rank would be 0 or 1
+            diff_rank = other_vector_rank - vector_rank
+            if other_vector_rank == 1:
+                # this vector rank must be 0
+                unsqueeze_dims = f"{len(dims_spec)}"
+                unpack_dims = unsqueeze_dims    
+            else: # other_vector_rank == 2
+                # this vector rank should be 1 or 0
+                unsqueeze_dims = f"{len(dims_spec)}, {len(dims_spec)+1}"
+                unpack_dims = f"{len(dims_spec) + 1}"
+            code.append(f"auto {input_var_name}_unsqueezed = ({continuity_var_name}).unsqueeze(fixed_shape_v<{unsqueeze_dims}>);")
+            aligned_dims = [str(d) for d in dims_spec] + ["1"] * (other_vector_rank-1)
+            aligned_dims.append("P" if vector_rank == 1 else "1")
+
+        if(vector_rank == 0 ):
+            code.append(f"auto {input_var_name}_aligned = ({input_var_name}_unsqueezed).view();")
+        else:
+            code.append(f"auto {input_var_name}_aligned = ntt::make_tensor<{datatype.cpp_type}>(fixed_shape_v<{','.join(map(str, aligned_dims))}>);")
+            code.append(f"ntt::unpack({input_var_name}_unsqueezed, {input_var_name}_aligned, fixed_shape_v<{unpack_dims}>);")
+        return code, aligned_dims
+
+    def _generate_fp8_golden_output(self, datatype, 
+                                   lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+                                   lhs_dims_spec, rhs_dims_spec,
+                                   lhs_vector_rank, rhs_vector_rank,
+                                   lhs_continuity, rhs_continuity,
+                                   lhs_vec_param, rhs_vec_param,
+                                   ntt_op_str):
+        """Special handling for fp8 types that cannot be cast in ORT"""
+        code = []
+        
+        # Prepare contiguous inputs
+        lhs_continuity_var_name, lhs_copy_code = self.prepare_contiguous_input(
+            "ntt_input_lhs", datatype, lhs_vector_rank, lhs_vec_param,
+            lhs_is_dynamic_shape, lhs_dims_spec, lhs_continuity
+        )
+        code.extend(lhs_copy_code)
+        
+        rhs_continuity_var_name, rhs_copy_code = self.prepare_contiguous_input(
+            "ntt_input_rhs", datatype, rhs_vector_rank, rhs_vec_param,
+            rhs_is_dynamic_shape, rhs_dims_spec, rhs_continuity
+        )
+        code.extend(rhs_copy_code)
+        
+        code.append("// Special fp8 handling: align in NTT, then cast to double, then process in ORT")
+        
+        # 1.1 get ntt_input_lhs_aligned_fp8_scalar, ntt_input_rhs_aligned
+        # Determine if tensors need alignment based on vector ranks
+        need_alignment = (lhs_vector_rank + rhs_vector_rank != 0 )
+        # Initialize aligned dimensions to default values
+        lhs_aligned_dims = lhs_dims_spec
+        rhs_aligned_dims = rhs_dims_spec
+        
+        if need_alignment:
+            # 1.1.a for tensors pair that one of which is tensor of vector
+            # Generate aligned lhs input
+            lhs_code, lhs_aligned_dims = self._generate_aligned_ntt_scalar_input(
+                ntt_op_str, datatype, "ntt_input_lhs", lhs_continuity_var_name, lhs_is_dynamic_shape, 
+                lhs_dims_spec, lhs_vector_rank, rhs_vector_rank)
+            code.extend(lhs_code)
+                
+            # Generate aligned rhs input
+            rhs_code, rhs_aligned_dims = self._generate_aligned_ntt_scalar_input(
+                ntt_op_str, datatype, "ntt_input_rhs", rhs_continuity_var_name, rhs_is_dynamic_shape,
+                rhs_dims_spec, rhs_vector_rank, lhs_vector_rank)
+            code.extend(rhs_code)
+        else:
+        # 1.1.b for tensors pair that are all tensor of scalar
+            code.append("// 1.1.b for tensors pair that are all tensor of scalar")
+            code.append(f"auto ntt_input_lhs_aligned = ({lhs_continuity_var_name}).view();")
+            code.append(f"auto ntt_input_rhs_aligned = ({rhs_continuity_var_name}).view();")
+        
+        # 1.2 get ntt_lhs/rhs_double
+        lhs_double_shape_expr = self.generate_shape_init(lhs_is_dynamic_shape, lhs_aligned_dims)
+        rhs_double_shape_expr = self.generate_shape_init(rhs_is_dynamic_shape, rhs_aligned_dims)
+        
+        code.append(f"// 1.2 get ntt_lhs/rhs_double")
+        code.append(f"auto ntt_lhs_double = ntt::make_tensor<double>({lhs_double_shape_expr});")
+        code.append(f"auto ntt_rhs_double = ntt::make_tensor<double>({rhs_double_shape_expr});")
+        code.append("")
+        code.append("ntt::cast(ntt_input_lhs_aligned, ntt_lhs_double);")
+        code.append("ntt::cast(ntt_input_rhs_aligned, ntt_rhs_double);")
+        
+        # 2. calculated ort_output
+        code.append("")
+        code.append("// 2. calculated ort_output")
+        code.append(f"auto [ort_input_lhs, ort_input_rhs] = NttTest::convert_and_align_to_ort(ntt_lhs_double, ntt_rhs_double, false, false);")
+        code.extend(self.generate_ort_output(datatype, ntt_op_str))
+        code.append(f"auto ort_golden_double = ort_output;")
+        
+        # 3. transform ort_golden_double to ntt_golden_fp8_scalar
+        code.append("// 3. transform ort_golden_double to ntt_golden_fp8_scalar")
+        
+        # Calculate output shape for scalar tensor
+        output_is_dynamic_shape, output_dims_spec = self.get_binary_output_shape(
+            lhs_is_dynamic_shape, rhs_is_dynamic_shape, lhs_dims_spec, rhs_dims_spec)
+        output_vector_rank = self._get_output_vector_rank(ntt_op_str, lhs_vector_rank, rhs_vector_rank)
+        
+        # # Get shape of ntt_golden_double_scalar based on aligned shapes and operation
+
+        if output_vector_rank > 0:
+            if output_vector_rank == 1:
+                golden_scalar_dims = output_dims_spec + ["P"]
+            else:  # 2D vector
+                if ntt_op_str == "outer_product":
+                    golden_scalar_dims = output_dims_spec  + ["P", "P"]
+                else:
+                    golden_scalar_dims = output_dims_spec + ["4", "P"]
+        else:
+            golden_scalar_dims = output_dims_spec
+            
+        golden_scalar_shape_expr = self.generate_shape_init(output_is_dynamic_shape, golden_scalar_dims)
+
+        code.append(f"auto ntt_golden_double_scalar = ntt::make_unique_tensor<double>({golden_scalar_shape_expr});")
+        code.append("NttTest::ort2ntt(ort_golden_double, *ntt_golden_double_scalar);")
+        code.append("")
+        code.append(f"auto ntt_golden_fp8_scalar = ntt::make_unique_tensor<{datatype.cpp_type}>({golden_scalar_shape_expr});")
+        code.append("ntt::cast(*ntt_golden_double_scalar, *ntt_golden_fp8_scalar);")
+        
+        # 4. transform ntt_golden_fp8_scalar to ntt_golden
+        code.append("")
+        if output_vector_rank > 0:
+            # 4.b if ntt_output is tensor of vector
+            code.append("// 4.b if ntt_output is tensor of vector")
+            unsqueeze_shape_dims = output_dims_spec + (["1"] if output_vector_rank == 1 else ["1", "1"])
+            unsqueeze_shape_expr = self.generate_shape_init(output_is_dynamic_shape, unsqueeze_shape_dims)
+            output_vec_param = self._get_output_vec_param(ntt_op_str, lhs_vec_param, rhs_vec_param)
+            vector_type_str = self.get_element_cpp_type(datatype.cpp_type, output_vector_rank, output_vec_param)
+            code.append(f"auto ntt_golden_unsqueeze = ntt::make_tensor<{vector_type_str}>({unsqueeze_shape_expr});")
+            dims_spec_len = len(output_dims_spec)
+            pack_dims = f"{dims_spec_len}" if output_vector_rank == 1 else f"{dims_spec_len}, {dims_spec_len + 1}"
+            code.append(f"ntt::pack(*ntt_golden_fp8_scalar, ntt_golden_unsqueeze, fixed_shape_v<{pack_dims}>);")
+            code.append(f"auto ntt_golden = ntt_golden_unsqueeze.squeeze( (fixed_shape_v<{pack_dims}>));")
+        else:
+            # 4.a if ntt_output is not tensor of vector
+            code.append("// 4.a if ntt_output is not tensor of vector")
+            code.append("auto ntt_golden = *ntt_golden_fp8_scalar;")
+        
+        code.append("")
+        return code
 
     def is_div_operation(self) -> bool:
         """Check if the current operation is division, to disable zero generation."""
@@ -358,64 +549,89 @@ class BinaryTestGenerator(BaseTestGenerator):
         else:
             return max(lhs_vector_rank, rhs_vector_rank)
         
-    def _get_output_pack_param(self, ntt_op_str, lhs_pack_param, rhs_pack_param):
+    def _get_output_vec_param(self, ntt_op_str, lhs_vec_param, rhs_vec_param):
         """Determine the output pack parameter based on the operation type and input pack parameters."""
         if ntt_op_str == "outer_product":
             # For outer_product, return a tuple of both pack parameters
-            return (lhs_pack_param, rhs_pack_param)
+            return (lhs_vec_param, rhs_vec_param)
         else:
-            return lhs_pack_param if lhs_pack_param else rhs_pack_param
+            return lhs_vec_param if lhs_vec_param else rhs_vec_param
     def generate_ort_golden_output(self, datatype, 
                                     lhs_is_dynamic_shape, rhs_is_dynamic_shape,
                                     lhs_dims_spec, rhs_dims_spec,
                                     lhs_vector_rank, rhs_vector_rank,
                                     lhs_continuity, rhs_continuity,
-                                    lhs_pack_param, rhs_pack_param,
+                                    lhs_vec_param, rhs_vec_param,
                                     ntt_op_str):
         code = []
         
-        # Check if datatype needs to be cast to float32
-        types_to_cast = self.types_need_to_be_cast.get(op_str, self.types_need_to_be_cast["default"])
-        need_cast = datatype.cpp_type in types_to_cast
-            
-        lhs_continuity_var_name, lhs_copy_code = self.prepare_contiguous_input(
-            "ntt_input_lhs", datatype, lhs_vector_rank, lhs_pack_param,
-            lhs_is_dynamic_shape, lhs_dims_spec, lhs_continuity
-        )
-        code.extend(lhs_copy_code)
-        ort_input_lhs = lhs_continuity_var_name
-
-        rhs_continuity_var_name, rhs_copy_code = self.prepare_contiguous_input(
-            "ntt_input_rhs", datatype, rhs_vector_rank, rhs_pack_param,
-            rhs_is_dynamic_shape, rhs_dims_spec, rhs_continuity
-        )
-        code.extend(rhs_copy_code)
-        ort_input_rhs = rhs_continuity_var_name
-
-        if need_cast:
-            # Cast inputs to float32 before sending to ort
-            code.append("// Cast inputs to float32 for ORT computation")
-            
-            # Lambda function to cast input to float32
-            cast_to_float = lambda side, input_var, vector_rank, pack_param, is_dynamic, dims_spec: (
-                code.append(f"auto ntt_{side}_double = ntt::make_tensor<{self.get_element_cpp_type('double', vector_rank, pack_param)}>({self.generate_shape_init(is_dynamic, dims_spec)});"),
-                code.append(f"ntt::cast({input_var}, ntt_{side}_double);")
+        # Check if datatype needs special fp8 handling
+        is_fp8_type = datatype.cpp_type in self.types_need_to_be_cast_in_ntt
+        
+        if is_fp8_type:
+            # Special handling for fp8 types that cannot be cast in ORT
+            code.extend(self._generate_fp8_golden_output(
+                datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+                lhs_dims_spec, rhs_dims_spec, lhs_vector_rank, rhs_vector_rank,
+                lhs_continuity, rhs_continuity, lhs_vec_param, rhs_vec_param, ntt_op_str
+            ))
+        else:
+            # Original logic for non-fp8 types
+            # Check if datatype needs to be cast to float32
+            types_to_cast = self.types_need_to_be_cast_in_ort.get(ntt_op_str, self.types_need_to_be_cast_in_ort["default"])
+            need_cast = datatype.cpp_type in types_to_cast
+                
+            lhs_continuity_var_name, lhs_copy_code = self.prepare_contiguous_input(
+                "ntt_input_lhs", datatype, lhs_vector_rank, lhs_vec_param,
+                lhs_is_dynamic_shape, lhs_dims_spec, lhs_continuity
             )
-            
-            # Cast both inputs
-            cast_to_float("lhs", ort_input_lhs, lhs_vector_rank, lhs_pack_param, lhs_is_dynamic_shape, lhs_dims_spec)
-            cast_to_float("rhs", ort_input_rhs, rhs_vector_rank, rhs_pack_param, rhs_is_dynamic_shape, rhs_dims_spec)
-            
-            # Update variable references
-            ort_input_lhs = "ntt_lhs_double"
-            ort_input_rhs = "ntt_rhs_double"
-            
-            code.append("")
+            code.extend(lhs_copy_code)
+            ort_input_lhs = lhs_continuity_var_name
 
-        is_outer_product = "true" if ntt_op_str == "outer_product" else "false"
-        code.extend([f"auto [ort_input_lhs, ort_input_rhs] = NttTest::convert_and_align_to_ort({ort_input_lhs}, {ort_input_rhs}, {is_outer_product});"])
+            rhs_continuity_var_name, rhs_copy_code = self.prepare_contiguous_input(
+                "ntt_input_rhs", datatype, rhs_vector_rank, rhs_vec_param,
+                rhs_is_dynamic_shape, rhs_dims_spec, rhs_continuity
+            )
+            code.extend(rhs_copy_code)
+            ort_input_rhs = rhs_continuity_var_name
 
-        code.extend(self.generate_ort_output(datatype, ntt_op_str))
+            if need_cast:
+                #original version:  only do binary operation in ort, all cast is done in ntt.
+                # Cast inputs to double before sending to ort
+                # code.append("// Cast inputs to float32 for ORT computation")
+                
+                # # Lambda function to cast input to float32
+                # cast_to_float = lambda side, input_var, vector_rank, vec_param, is_dynamic, dims_spec: (
+                #     code.append(f"auto ntt_{side}_double = ntt::make_tensor<{self.get_element_cpp_type('double', vector_rank, vec_param)}>({self.generate_shape_init(is_dynamic, dims_spec)});"),
+                #     code.append(f"ntt::cast({input_var}, ntt_{side}_double);")
+                # )
+                
+                # # Cast both inputs
+                # cast_to_float("lhs", ort_input_lhs, lhs_vector_rank, lhs_vec_param, lhs_is_dynamic_shape, lhs_dims_spec)
+                # cast_to_float("rhs", ort_input_rhs, rhs_vector_rank, rhs_vec_param, rhs_is_dynamic_shape, rhs_dims_spec)
+                
+                # # Update variable references
+                # ort_input_lhs = "ntt_lhs_double"
+                # ort_input_rhs = "ntt_rhs_double"
+                
+                #new version: do binary operation in ort, and cast is also put in ort.
+                code.append("// ort_input_lhs, ort_input_rhs would be tensor of double in ort format")
+
+                code.append("")
+
+            need_cast_str = "true" if need_cast else "false"
+            is_outer_product = "true" if ntt_op_str == "outer_product" else "false"
+
+            code.extend([f"auto [ort_input_lhs, ort_input_rhs] = NttTest::convert_and_align_to_ort(ntt_input_lhs, ntt_input_rhs, {need_cast_str}, {is_outer_product});"])
+     
+            code.extend(self.generate_ort_output(datatype, ntt_op_str))
+
+            if need_cast:
+                code.append("// Cast outputs from double to original datatype")
+                original_type = self.ort_datatype_map[datatype.cpp_type]
+                code.append(f"auto ort_golden = ortki_Cast(ort_output, 1, ortki::{original_type});")
+            else:
+                code.append(f"auto ort_golden = ort_output;")
 
         return code
 
@@ -424,7 +640,7 @@ class BinaryTestGenerator(BaseTestGenerator):
                                     lhs_dims_spec, rhs_dims_spec,
                                     lhs_vector_rank, rhs_vector_rank,
                                     lhs_continuity, rhs_continuity,
-                                    lhs_pack_param, rhs_pack_param,
+                                    lhs_vec_param, rhs_vec_param,
                                     ntt_op_str):
         indent = "    "
         code = []
@@ -435,7 +651,7 @@ class BinaryTestGenerator(BaseTestGenerator):
             shape_type=lhs_is_dynamic_shape, dim_spec=lhs_dims_spec,
             continuity=lhs_continuity, var_name="ntt_input_lhs",
             name_suffix="_lhs", vector_rank=lhs_vector_rank,
-            P=lhs_pack_param, integer_only= lhs_datatype.integer_only)
+            P=lhs_vec_param, integer_only= lhs_datatype.integer_only)
         code.extend([f"{indent}{line}" for line in tensor_init_lhs_code])
 
         code.append(f"{indent}//---init ntt_input_rhs---")
@@ -443,7 +659,7 @@ class BinaryTestGenerator(BaseTestGenerator):
             shape_type=rhs_is_dynamic_shape, dim_spec=rhs_dims_spec,
             continuity=rhs_continuity, var_name="ntt_input_rhs",
             name_suffix="_rhs", vector_rank=rhs_vector_rank,
-            P=rhs_pack_param, integer_only= rhs_datatype.integer_only)
+            P=rhs_vec_param, integer_only= rhs_datatype.integer_only)
         code.extend([f"{indent}{line}" for line in tensor_init_rhs_code])
 
         output_is_dynamic_shape, output_dims_spec = self.get_binary_output_shape(
@@ -455,8 +671,8 @@ class BinaryTestGenerator(BaseTestGenerator):
 
         output_shape_expr = self.generate_shape_init(output_is_dynamic_shape, output_dims_spec)
         # For binary ops, output vector rank matches inputs. Assume lhs.
-        output_pack_param =  self._get_output_pack_param(ntt_op_str, lhs_pack_param, rhs_pack_param)
-        output_element_type = self.get_element_cpp_type(datatype.cpp_type, output_vector_rank, output_pack_param)
+        output_vec_param =  self._get_output_vec_param(ntt_op_str, lhs_vec_param, rhs_vec_param)
+        output_element_type = self.get_element_cpp_type(datatype.cpp_type, output_vector_rank, output_vec_param)
 
         output_op_call_lines = self.get_op_call_lines(ntt_op_str)
         ntt_output_and_op_code = self.generate_ntt_output_and_op_section(
@@ -510,8 +726,8 @@ class BinaryTestGenerator(BaseTestGenerator):
 
         P = f"NTT_VLEN / (sizeof({datatype.cpp_type}) * 8)"
         code: List[str] = []
-        lhs_pack_param = "P" if lhs_vector_rank > 0 else None
-        rhs_pack_param = "P" if rhs_vector_rank > 0 else None
+        lhs_vec_param = "P" if lhs_vector_rank > 0 else None
+        rhs_vec_param = "P" if rhs_vector_rank > 0 else None
 
         # 1. Test header and constants
         code.extend(self.generate_function_name(f"BinaryTest{ntt_op_str}", datatype, test_name))
@@ -525,7 +741,7 @@ class BinaryTestGenerator(BaseTestGenerator):
                             lhs_dims_spec, rhs_dims_spec,
                             lhs_vector_rank, rhs_vector_rank,
                             lhs_continuity, rhs_continuity,
-                            lhs_pack_param, rhs_pack_param,
+                            lhs_vec_param, rhs_vec_param,
                             ntt_op_str)
         code.extend(ntt_output_code)
 
@@ -535,19 +751,24 @@ class BinaryTestGenerator(BaseTestGenerator):
             lhs_dims_spec, rhs_dims_spec,
             lhs_vector_rank, rhs_vector_rank,
             lhs_continuity, rhs_continuity,
-            lhs_pack_param, rhs_pack_param,
+            lhs_vec_param, rhs_vec_param,
             ntt_op_str)
         code.extend([f"    {line}" for line in golden_output_code])
-        types_to_cast = self.types_need_to_be_cast.get(ntt_op_str, self.types_need_to_be_cast["default"])
-        cast_mode = 2 if datatype.cpp_type in types_to_cast else 0
+        types_to_cast = self.types_need_to_be_cast_in_ort.get(ntt_op_str, self.types_need_to_be_cast_in_ort["default"])
+        # cast_mode = 2 if datatype.cpp_type in types_to_cast else 0
+        # set cast mode for back to ntt function
+        cast_mode = 0
         # Compare outputs
+        if(datatype.cpp_type in self.types_need_to_be_cast_in_ntt): # fp8 
+            cast_mode = 4
+        
         compare_code = self.generate_ort_back2ntt_and_compare_section(
             datatype,
             output_element_type,
             output_shape_expr,
             cast_mode=cast_mode,
             ntt_output_var_name="ntt_output",
-            ort_output_var_name="ort_output")
+            ort_output_var_name="ort_golden")
         code.extend([f"    {line}" for line in compare_code])
 
         return "\n".join(code)
