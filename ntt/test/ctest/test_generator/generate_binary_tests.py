@@ -578,8 +578,8 @@ class BinaryTestGenerator(BaseTestGenerator):
         else:
             # Original logic for non-fp8 types
             # Check if datatype needs to be cast to float32
-            types_to_cast = self.types_need_cast_in_ort.get(ntt_op_str, self.types_need_cast_in_ort["default"])
-            need_cast = datatype.cpp_type in types_to_cast
+            types_to_cast_in_ort = self.types_need_cast_in_ort.get(ntt_op_str, self.types_need_cast_in_ort["default"])
+            need_cast_in_ort = datatype.cpp_type in types_to_cast_in_ort
                 
             lhs_continuity_var_name, lhs_copy_code = self.prepare_contiguous_input(
                 "ntt_input_lhs", datatype, lhs_vector_rank, lhs_vec_param,
@@ -595,7 +595,7 @@ class BinaryTestGenerator(BaseTestGenerator):
             code.extend(rhs_copy_code)
             ort_input_rhs = rhs_continuity_var_name
 
-            if need_cast:
+            if need_cast_in_ort:
                 #original version:  only do binary operation in ort, all cast is done in ntt.
                 # Cast inputs to double before sending to ort
                 # code.append("// Cast inputs to float32 for ORT computation")
@@ -619,17 +619,21 @@ class BinaryTestGenerator(BaseTestGenerator):
 
                 code.append("")
 
-            need_cast_str = "true" if need_cast else "false"
+            need_cast_str = "true" if need_cast_in_ort else "false"
             is_outer_product = "true" if ntt_op_str == "outer_product" else "false"
 
             code.extend([f"auto [ort_input_lhs, ort_input_rhs] = NttTest::convert_and_align_to_ort(ntt_input_lhs, ntt_input_rhs, {need_cast_str}, {is_outer_product});"])
      
             code.extend(self.generate_ort_output(datatype, ntt_op_str))
 
-            if need_cast:
+            if need_cast_in_ort:
                 code.append("// Cast outputs from double to original datatype")
                 original_type = self.ort_datatype_map[datatype.cpp_type]
-                code.append(f"auto ort_golden = ortki_Cast(ort_output, 1, ortki::{original_type});")
+                var_name_cast_to_orig_type = "ort_output"
+                if("uint" in datatype.cpp_type):
+                    var_name_cast_to_orig_type = "ort_golden_int"
+                    code.append(f"auto {var_name_cast_to_orig_type} = ortki_Cast(ort_output, 1, ortki::DataType_INT64);")
+                code.append(f"auto ort_golden = ortki_Cast({var_name_cast_to_orig_type}, 1, ortki::{original_type});")
             else:
                 code.append(f"auto ort_golden = ort_output;")
 
