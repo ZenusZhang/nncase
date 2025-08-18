@@ -75,15 +75,15 @@ class cast_impl {
 #endif
         constexpr VectorizedAxes vectorizedAxes;
         if constexpr (scale >= 1.f) {
-            if constexpr (packedAxes.rank() == 1) {
+            if constexpr (VectorizedAxes::rank() == 1) {
                 assert(
-                    (dim_value(input.shape()[fixed_dim_v<packedAxes.at(0)>]) ==
-                     dim_value(output.shape()[fixed_dim_v<packedAxes.at(0)>]) * scale)
+                    (dim_value(input.shape()[fixed_dim_v<VectorizedAxes::at(0)>]) ==
+                     dim_value(output.shape()[fixed_dim_v<VectorizedAxes::at(0)>]) * scale)
                     );
             }
             ntt::apply(output.shape(), [&](auto index) {
                 auto in_index = index;
-                if constexpr (vectorizedAxes.rank() == 1)
+                if constexpr (VectorizedAxes::rank() == 1)
                     in_index[fixed_dim_v<vectorizedAxes.at(0)>] *=
                         in_offset_scale;
                 ntt::u_cast<in_offset_scale, out_offset_scale, TPostOp>(
@@ -94,10 +94,10 @@ class cast_impl {
                     &output(index), 1, 1);
             });
         } else {
-            if constexpr (packedAxes.rank() == 1) {
+            if constexpr (VectorizedAxes::rank() == 1) {
                 assert(
-                    (float)dim_value(input.shape()[fixed_dim_v<packedAxes.at(0)>]) ==
-                    (float)dim_value(output.shape()[fixed_dim_v<packedAxes.at(0)>]) * scale
+                    (float)dim_value(input.shape()[fixed_dim_v<VectorizedAxe::at(0)>]) ==
+                    (float)dim_value(output.shape()[fixed_dim_v<VectorizedAxes::at(0)>]) * scale
                 );
             }
             ntt::apply(input.shape(), [&](auto index) {
