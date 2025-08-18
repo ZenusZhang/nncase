@@ -17,12 +17,10 @@
 #include "../../vector.h"
 #include "arch_types.h"
 #include "rvv_mathfun.h"
-#include <iostream>
 
 #ifdef __riscv_vector
 #include <riscv_vector.h>
 #endif
-
 
 namespace nncase::ntt::ops {
 
@@ -954,10 +952,6 @@ REGISTER_RVV_BINARY_OP(pow, float, pow_float32)
         return remainder;                                                      \
     }
 //Compiler or qemu error on rvv int32 floor_mod kernel.
-//1D 2D binary, an error case is as following:
-// auto ntt_input_lhs = ntt::make_tensor<ntt::vector<int32_t, P>>(ntt::fixed_shape_v<2>);
-// auto ntt_input_rhs = ntt::make_tensor<ntt::vector<int32_t, 4, P>>(ntt::fixed_shape_v<2>);
-// auto ntt_output = ntt::make_tensor<ntt::vector<int32_t, 4, P>>(ntt::fixed_shape_v<2>);
 REGISTER_RVV_KERNEL(FLOOR_MOD_INT32)
 REGISTER_RVV_BINARY_OP(floor_mod, int32_t, floor_mod_int32)
 

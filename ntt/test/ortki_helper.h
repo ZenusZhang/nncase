@@ -154,6 +154,85 @@ void print_ort_shape(ortki::OrtKITensor *ort_tensor) {
     }
 }
 
+template<typename T>
+constexpr size_t get_element_rank() {
+    using element_type = typename std::decay_t<T>::element_type;
+    if constexpr (ntt::Vector<element_type>) {
+        return element_type::rank();
+    } else {
+        return 0;
+    }
+}
+
+template<typename T>
+void reshape_with_vector_alignment(ortki::OrtKITensor *&ort_tensor, const T &ntt_tensor, size_t higher_vector_rank) {
+    assert(higher_vector_rank > 0);
+    
+    auto rank = ntt_tensor.shape().rank();
+    std::vector<int64_t> new_shape_data;
+    
+    constexpr auto lower_vector_rank = get_element_rank<std::decay_t<T>>();
+    
+    new_shape_data.reserve(rank + higher_vector_rank);
+
+    for (size_t i = 0; i < rank; ++i) { 
+        new_shape_data.push_back(ntt_tensor.shape()[i]);
+    }
+    for (size_t i = 0; i < higher_vector_rank; ++i) {
+        new_shape_data.push_back(1); 
+    }
+    if constexpr (lower_vector_rank > 0) {
+        static_assert(lower_vector_rank == 1, "only support 1D vectors");
+        using tensor_element_type = typename std::decay_t<T>::element_type;
+        new_shape_data[rank+higher_vector_rank-1] = tensor_element_type::size();
+    }
+
+    int64_t reshape_shape[] = {static_cast<int64_t>(new_shape_data.size())};
+    auto ort_type = NttTest::primitive_type2ort_type<int64_t>();
+    auto shape_tensor = make_tensor(reinterpret_cast<void *>(new_shape_data.data()),
+                                   ort_type, reshape_shape, std::size(reshape_shape));
+    ort_tensor = ortki_Reshape(ort_tensor, shape_tensor, 0);
+}
+
+template<typename T>
+void reshape_for_outer_product(ortki::OrtKITensor *&ort_tensor, const T &ntt_tensor, bool is_lhs) {
+    auto rank = ntt_tensor.shape().rank();
+    std::vector<int64_t> new_shape_data;
+    
+    // Get vector length
+    auto get_vlen = [&]() {
+        if constexpr (get_element_rank<std::decay_t<T>>() > 0) {
+            using tensor_element_type = typename std::decay_t<T>::element_type;
+            return tensor_element_type::size();
+        }
+        return 1ul;
+    };
+    
+    int64_t vlen = get_vlen();
+    
+    // Copy existing tensor shape
+    for (size_t i = 0; i < rank; ++i) {
+        new_shape_data.push_back(ntt_tensor.shape()[i]);
+    }
+    
+    // Add outer product dimensions
+    if (is_lhs) {
+        // lhs: [..., lhs_vlen, 1]
+        new_shape_data.push_back(vlen);
+        new_shape_data.push_back(1);
+    } else {
+        // rhs: [..., 1, rhs_vlen]
+        new_shape_data.push_back(1);
+        new_shape_data.push_back(vlen);
+    }
+    
+    int64_t reshape_shape[] = {static_cast<int64_t>(new_shape_data.size())};
+    auto ort_type = NttTest::primitive_type2ort_type<int64_t>();
+    auto shape_tensor = make_tensor(reinterpret_cast<void *>(new_shape_data.data()),
+                                   ort_type, reshape_shape, std::size(reshape_shape));
+    ort_tensor = ortki_Reshape(ort_tensor, shape_tensor, 0);
+}
+
 //reshape means 
 // 1. append dimension 1 at the last dimension which shoule be vector dimensions of ntt dimension
 //    intput :lhs: (2 * 3 * 4) tensor of vector<2 * 4> rhs: (2 * 1 * 4) tensor of vector <4>
@@ -167,109 +246,21 @@ auto convert_and_align_to_ort(TLhs &lhs, TRhs &rhs, bool need_cast = false,  boo
     auto ort_lhs = NttTest::ntt2ort(lhs);
     auto ort_rhs = NttTest::ntt2ort(rhs);
 
-
-    auto get_element_rank = [](auto &tensor){
-        using tensor_element_type = typename std::decay_t<decltype(tensor)>::element_type;
-        if constexpr (ntt::Vector<tensor_element_type>) {
-            return tensor_element_type::rank();
-        } else {
-            return 0;
-        }
-    };
-
-    constexpr size_t lhs_vector_rank = get_element_rank(lhs);
+    constexpr size_t lhs_vector_rank = get_element_rank<TLhs>();
+    constexpr size_t rhs_vector_rank = get_element_rank<TRhs>();
     
-    constexpr size_t rhs_vector_rank = get_element_rank(rhs);
-    
-    auto reshape_op = [&](auto &ort_tensor,
-                         const auto &ntt_tensor, const auto higher_vector_rank) {
-        assert( higher_vector_rank > 0);
-        
-        auto rank = ntt_tensor.shape().rank();
-        std::vector<int64_t> new_shape_data;
-        
-        constexpr auto lower_vector_rank = get_element_rank(ntt_tensor);
-        
-        new_shape_data.reserve(rank + higher_vector_rank);
-
-        for (size_t i = 0; i < rank; ++i) { 
-            new_shape_data.push_back(ntt_tensor.shape()[i]);
-        }
-        for (size_t i = 0; i < higher_vector_rank; ++i) {
-            new_shape_data.push_back(1); 
-        }
-        if constexpr (lower_vector_rank > 0) {
-            static_assert(lower_vector_rank == 1, "only support 1D vectors");
-            using tensor_element_type = typename std::decay_t<decltype(ntt_tensor)>::element_type;
-            new_shape_data[rank+higher_vector_rank-1] = tensor_element_type::size();
-        }
-
-        int64_t reshape_shape[] = {static_cast<int64_t>(new_shape_data.size())};
-        auto ort_type = NttTest::primitive_type2ort_type<int64_t>();
-        auto shape_tensor =
-            make_tensor(reinterpret_cast<void *>(new_shape_data.data()),
-                        ort_type, reshape_shape, std::size(reshape_shape));
-        ort_tensor =
-            ortki_Reshape(ort_tensor, shape_tensor, 0);
-    };
-
-    // if constexpr (lhs_is_vec && !rhs_is_vec) {
-    //     reshape_op(ort_rhs, rhs);
-    // } else if constexpr (!lhs_is_vec && rhs_is_vec) {
-    //     reshape_op(ort_lhs, lhs);
-    // }
-
     if constexpr (lhs_vector_rank > rhs_vector_rank) {
-        reshape_op(ort_rhs, rhs, lhs_vector_rank);
+        reshape_with_vector_alignment(ort_rhs, rhs, lhs_vector_rank);
     } else if constexpr (lhs_vector_rank < rhs_vector_rank) {
-        reshape_op(ort_lhs, lhs, rhs_vector_rank);
+        reshape_with_vector_alignment(ort_lhs, lhs, rhs_vector_rank);
     }
     if (for_outer_product) {
         // For outer product, we need to reshape tensors for broadcasting
         // lhs should be reshaped to [..., lhs_vlen, 1]
         // rhs should be reshaped to [..., 1, rhs_vlen]
         // if element type is scalar, the *hs_vlen will be 1
-
-        auto outer_product_reshape = [&](auto &ort_tensor, const auto &ntt_tensor, bool is_lhs) {
-            auto rank = ntt_tensor.shape().rank();
-            std::vector<int64_t> new_shape_data;
-            
-            // Get vector length based on whether it's lhs or rhs
-            auto get_vlen = [&]() {
-                if constexpr (get_element_rank(ntt_tensor) > 0) {
-                    using tensor_element_type = typename std::decay_t<decltype(ntt_tensor)>::element_type;
-                    return tensor_element_type::size();
-                }
-                return 1ul;
-            };
-            
-            int64_t vlen = get_vlen();
-            
-            // Copy existing tensor shape
-            for (size_t i = 0; i < rank; ++i) {
-                new_shape_data.push_back(ntt_tensor.shape()[i]);
-            }
-            
-            // Add outer product dimensions
-            if (is_lhs) {
-                // lhs: [..., lhs_vlen, 1]
-                new_shape_data.push_back(vlen);
-                new_shape_data.push_back(1);
-            } else {
-                // rhs: [..., 1, rhs_vlen]
-                new_shape_data.push_back(1);
-                new_shape_data.push_back(vlen);
-            }
-            int64_t reshape_shape[] = {static_cast<int64_t>(new_shape_data.size())};
-            auto ort_type = NttTest::primitive_type2ort_type<int64_t>();
-            auto shape_tensor =
-                make_tensor(reinterpret_cast<void *>(new_shape_data.data()),
-                            ort_type, reshape_shape, std::size(reshape_shape));
-            ort_tensor =
-                ortki_Reshape(ort_tensor, shape_tensor, 0);
-        };
-        outer_product_reshape(ort_lhs, lhs, true);
-        outer_product_reshape(ort_rhs, rhs, false);
+        reshape_for_outer_product(ort_lhs, lhs, true);
+        reshape_for_outer_product(ort_rhs, rhs, false);
     }
     
 

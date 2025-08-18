@@ -15,10 +15,10 @@ include_directories(${CMAKE_CURRENT_LIST_DIR}/..)
 
 # --- Generate test source files ---
 # Define kernel names for automatic test generation. Add more kernels here.
-# set(KERNEL_NAMES binary pack unpack cast)
+set(KERNEL_NAMES binary pack unpack cast)
 # set(KERNEL_NAMES binary pack unpack)
 # set(KERNEL_NAMES  pack unpack)
-set(KERNEL_NAMES binary cast)
+# set(KERNEL_NAMES binary cast)
 # set(KERNEL_NAMES cast)
 
 # Set directories
@@ -87,8 +87,8 @@ file(GLOB HANDWRITTEN_TESTS CONFIGURE_DEPENDS
     # test_ntt_pack_generated_Uint64
     # test_ntt_binary_mul.cpp
     # test_ntt_binary_sub.cpp
-    test_ntt_cast.cpp
-    test_ntt_unary_abs.cpp
+    # test_ntt_cast.cpp
+    # test_ntt_unary_abs.cpp
     # test_ntt_clamp.cpp
     # test_ntt_compare_equal.cpp
     # test_ntt_compare_greater_or_equal.cpp

@@ -87,8 +87,8 @@ template <ntt::TensorOrVector TTensor>
 void print_tensor(TTensor &tensor, std::string name);
 
 template <typename T, TensorOrVector TTensor> 
-void generate_random_tensor(TTensor &tensor, std::mt19937 &gen, T start = static_cast<T>(0),
-                 T stop = static_cast<T>(1)) {
+void generate_random_tensor([[maybe_unused]] TTensor &tensor, [[maybe_unused]] std::mt19937 &gen, [[maybe_unused]] T start = static_cast<T>(0),
+                 [[maybe_unused]] T stop = static_cast<T>(1)) {
     std::cerr << __FUNCTION__ << ": unsupported data type" << std::endl;
     std::abort();
 }

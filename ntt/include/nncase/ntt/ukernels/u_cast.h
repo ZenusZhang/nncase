@@ -102,13 +102,13 @@ struct u_cast {
             }
         } else if constexpr (in_offset_scale == 1 && out_offset_scale > 1) {
             using value_type = typename T2::element_type;
-            constexpr auto lanes = T2::shape();
 
             while (count / unroll) {
                 for (size_t i = 0; i < unroll; i++) {
                     auto tmp_output = ntt::ops::cast<T1, T2>()(*input);
                     for (auto s = 0; s < out_offset_scale; s++) {
                         *output = *((T2 *)(&tmp_output(s)));
+                        (*output) = TPostOps<T2>()(*output);
                         output += output_stride;
                     }
                     input += input_stride * in_offset_scale;
@@ -120,6 +120,7 @@ struct u_cast {
                 auto tmp_output = ntt::ops::cast<T1, T2>()(*input);
                 for (auto s = 0; s < out_offset_scale; s++) {
                     *output = *((T2 *)(&tmp_output(s)));
+                    (*output) = TPostOps<T2>()(*output);
                     output += output_stride;
                 }
                 input += input_stride * in_offset_scale;
@@ -130,6 +131,7 @@ struct u_cast {
             while (count / unroll) {
                 for (size_t i = 0; i < unroll; i++) {
                     *output = ntt::ops::cast<T1, T2>()(*input);
+                    (*output) = TPostOps<T2>()(*output);
                     input += input_stride * in_offset_scale;
                     output += output_stride * out_offset_scale;
                     count--;
@@ -138,6 +140,7 @@ struct u_cast {
 
             for (size_t i = 0; i < count; i++) {
                 *output = ntt::ops::cast<T1, T2>()(*input);
+                (*output) = TPostOps<T2>()(*output);
                 input += input_stride * in_offset_scale;
                 output += output_stride * out_offset_scale;
             }
