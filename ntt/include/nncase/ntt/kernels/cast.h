@@ -86,6 +86,7 @@ class cast_impl {
                 if constexpr (VectorizedAxes::rank() == 1)
                     in_index[fixed_dim_v<vectorizedAxes.at(0)>] *=
                         in_offset_scale;
+                __asm__ volatile("" ::: "memory");
                 ntt::u_cast<in_offset_scale, out_offset_scale, TPostOp>(
                     &input(in_index),
                     vectorizedAxes.rank() == 1
@@ -105,6 +106,7 @@ class cast_impl {
                 if constexpr (vectorizedAxes.rank() == 1)
                     out_index[fixed_dim_v<vectorizedAxes.at(0)>] *=
                         out_offset_scale;
+                __asm__ volatile("" ::: "memory");
                 ntt::u_cast<in_offset_scale, out_offset_scale, TPostOp>(
                     &input(index), 1, &output(out_index),
                     vectorizedAxes.rank() == 1
