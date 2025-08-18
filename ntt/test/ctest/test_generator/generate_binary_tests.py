@@ -20,16 +20,16 @@ class BinaryTestGenerator(BaseTestGenerator):
         
         # ORT binary operations do not support these data types, need to cast to double 
         # fortunately, they could be cast in ort( fp8 are unfortunate)
-        self.types_need_to_be_cast_in_ort = {
+        self.types_need_cast_in_ort = {
             "swishb": [ 'bool', 'uint8_t', 'uint16_t', 'uint32_t',
                 'uint64_t', 'int8_t', 'int16_t', 'bfloat16', 'half',
                  'float_e4m3_t', 'float_e5m2_t', "int32_t", "int64_t"],
 
-            "default": [ 'bool', 'uint8_t', 'uint16_t', 'uint32_t',
-                'uint64_t', 'int8_t', 'int16_t', 'bfloat16', 'half',
+            "default": [ 'bool',  'int8_t', 'int16_t', 'bfloat16', 'half',
+                    'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t'
                 ]
         }
-        self.types_need_to_be_cast_in_ntt = {
+        self.types_need_cast_in_ntt = {
             'float_e4m3_t', 'float_e5m2_t' 
         }
 
@@ -97,7 +97,7 @@ class BinaryTestGenerator(BaseTestGenerator):
             "ceil_div": "auto ort_output = ort_ceil_div(ort_input_lhs, ort_input_rhs);",
             "floor_mod": lambda datatype: \
                 "auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 0);" \
-                if datatype.cpp_type in self.integer_types and datatype.cpp_type not in self.types_need_to_be_cast_in_ort["default"] \
+                if datatype.cpp_type in self.integer_types and datatype.cpp_type not in self.types_need_cast_in_ort["default"] \
                 else "auto ort_output = ortki_Sub(ort_input_lhs, ortki_Mul(ortki_Floor(ortki_Div(ort_input_lhs, ort_input_rhs)), ort_input_rhs));",
             "mod": f"auto ort_output = ortki_Mod(ort_input_lhs, ort_input_rhs, 1);",
             "min":  self._generate_minmax_operation("ortki_Min"),
@@ -124,7 +124,7 @@ class BinaryTestGenerator(BaseTestGenerator):
     def _generate_ceil_div_operation(self, datatype):
         """Generate code for ceil_div operation with reduced duplication"""
         # Determine the appropriate type and value for neg1
-        types_to_cast = self.types_need_to_be_cast_in_ort.get(op_str, self.types_need_to_be_cast_in_ort["default"])
+        types_to_cast = self.types_need_cast_in_ort.get(op_str, self.types_need_cast_in_ort["default"])
         if datatype.cpp_type == "int64_t":
             var_type = "int64_t"
             value_str = "-1"
@@ -147,7 +147,7 @@ class BinaryTestGenerator(BaseTestGenerator):
     def _generate_ort_const_var_info(self, datatype, const_value, op_str):
         """Generate variable type and value string for ORT constants"""
         # !!! Very ugly, must be refactored later
-        types_to_cast = self.types_need_to_be_cast_in_ort.get(op_str, self.types_need_to_be_cast_in_ort["default"])
+        types_to_cast = self.types_need_cast_in_ort.get(op_str, self.types_need_cast_in_ort["default"])
         if not "int" in datatype.cpp_type: # float
             if datatype.cpp_type in types_to_cast:
                 var_type = "double"
@@ -302,14 +302,14 @@ class BinaryTestGenerator(BaseTestGenerator):
             code.append(f"ntt::unpack({input_var_name}_unsqueezed, {input_var_name}_aligned, fixed_shape_v<{unpack_dims}>);")
         return code, aligned_dims
 
-    def _generate_fp8_golden_output(self, datatype, 
+    def _generate_cast_golden_output(self, datatype, 
                                    lhs_is_dynamic_shape, rhs_is_dynamic_shape,
                                    lhs_dims_spec, rhs_dims_spec,
                                    lhs_vector_rank, rhs_vector_rank,
                                    lhs_continuity, rhs_continuity,
                                    lhs_vec_param, rhs_vec_param,
                                    ntt_op_str):
-        """Special handling for fp8 types that cannot be cast in ORT"""
+        """Special handling for types that cannot be cast in ORT"""
         code = []
         
         # Prepare contiguous inputs
@@ -325,9 +325,9 @@ class BinaryTestGenerator(BaseTestGenerator):
         )
         code.extend(rhs_copy_code)
         
-        code.append("// Special fp8 handling: align in NTT, then cast to double, then process in ORT")
+        code.append("// align in NTT, then cast to double, then process in ORT")
         
-        # 1.1 get ntt_input_lhs_aligned_fp8_scalar, ntt_input_rhs_aligned
+        # 1.1 get ntt_input_lhs_aligned_{cpp.type}_scalar, ntt_input_rhs_aligned
         # Determine if tensors need alignment based on vector ranks
         need_alignment = (lhs_vector_rank + rhs_vector_rank != 0 )
         # Initialize aligned dimensions to default values
@@ -371,9 +371,9 @@ class BinaryTestGenerator(BaseTestGenerator):
         code.extend(self.generate_ort_output(datatype, ntt_op_str))
         code.append(f"auto ort_golden_double = ort_output;")
         
-        # 3. transform ort_golden_double to ntt_golden_fp8_scalar
-        code.append("// 3. transform ort_golden_double to ntt_golden_fp8_scalar")
-        
+        # 3. transform ort_golden_double to ntt_golden{cpp_type}_scalar
+        code.append(f"// 3. transform ort_golden_double to ntt_golden{datatype.cpp_type}_scalar")
+
         # Calculate output shape for scalar tensor
         output_is_dynamic_shape, output_dims_spec = self.get_binary_output_shape(
             lhs_is_dynamic_shape, rhs_is_dynamic_shape, lhs_dims_spec, rhs_dims_spec)
@@ -397,10 +397,10 @@ class BinaryTestGenerator(BaseTestGenerator):
         code.append(f"auto ntt_golden_double_scalar = ntt::make_unique_tensor<double>({golden_scalar_shape_expr});")
         code.append("NttTest::ort2ntt(ort_golden_double, *ntt_golden_double_scalar);")
         code.append("")
-        code.append(f"auto ntt_golden_fp8_scalar = ntt::make_unique_tensor<{datatype.cpp_type}>({golden_scalar_shape_expr});")
-        code.append("ntt::cast(*ntt_golden_double_scalar, *ntt_golden_fp8_scalar);")
-        
-        # 4. transform ntt_golden_fp8_scalar to ntt_golden
+        code.append(f"auto ntt_golden_{datatype.cpp_type}_scalar = ntt::make_unique_tensor<{datatype.cpp_type}>({golden_scalar_shape_expr});")
+        code.append(f"ntt::cast(*ntt_golden_double_scalar, *ntt_golden_{datatype.cpp_type}_scalar);")
+
+        # 4. transform ntt_golden_{datatype.cpp_type}_scalar to ntt_golden
         code.append("")
         if output_vector_rank > 0:
             # 4.b if ntt_output is tensor of vector
@@ -412,13 +412,13 @@ class BinaryTestGenerator(BaseTestGenerator):
             code.append(f"auto ntt_golden_unsqueeze = ntt::make_tensor<{vector_type_str}>({unsqueeze_shape_expr});")
             dims_spec_len = len(output_dims_spec)
             pack_dims = f"{dims_spec_len}" if output_vector_rank == 1 else f"{dims_spec_len}, {dims_spec_len + 1}"
-            code.append(f"ntt::pack(*ntt_golden_fp8_scalar, ntt_golden_unsqueeze, fixed_shape_v<{pack_dims}>);")
+            code.append(f"ntt::pack(*ntt_golden_{datatype.cpp_type}_scalar, ntt_golden_unsqueeze, fixed_shape_v<{pack_dims}>);")
             code.append(f"auto ntt_golden = ntt_golden_unsqueeze.squeeze( (fixed_shape_v<{pack_dims}>));")
         else:
             # 4.a if ntt_output is not tensor of vector
             code.append("// 4.a if ntt_output is not tensor of vector")
-            code.append("auto ntt_golden = *ntt_golden_fp8_scalar;")
-        
+            code.append(f"auto ntt_golden = *ntt_golden_{datatype.cpp_type}_scalar;")
+
         code.append("")
         return code
 
@@ -566,11 +566,11 @@ class BinaryTestGenerator(BaseTestGenerator):
         code = []
         
         # Check if datatype needs special fp8 handling
-        is_fp8_type = datatype.cpp_type in self.types_need_to_be_cast_in_ntt
+        need_cast_in_ntt = datatype.cpp_type in self.types_need_cast_in_ntt
         
-        if is_fp8_type:
+        if need_cast_in_ntt:
             # Special handling for fp8 types that cannot be cast in ORT
-            code.extend(self._generate_fp8_golden_output(
+            code.extend(self._generate_cast_golden_output(
                 datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape,
                 lhs_dims_spec, rhs_dims_spec, lhs_vector_rank, rhs_vector_rank,
                 lhs_continuity, rhs_continuity, lhs_vec_param, rhs_vec_param, ntt_op_str
@@ -578,7 +578,7 @@ class BinaryTestGenerator(BaseTestGenerator):
         else:
             # Original logic for non-fp8 types
             # Check if datatype needs to be cast to float32
-            types_to_cast = self.types_need_to_be_cast_in_ort.get(ntt_op_str, self.types_need_to_be_cast_in_ort["default"])
+            types_to_cast = self.types_need_cast_in_ort.get(ntt_op_str, self.types_need_cast_in_ort["default"])
             need_cast = datatype.cpp_type in types_to_cast
                 
             lhs_continuity_var_name, lhs_copy_code = self.prepare_contiguous_input(
@@ -754,12 +754,12 @@ class BinaryTestGenerator(BaseTestGenerator):
             lhs_vec_param, rhs_vec_param,
             ntt_op_str)
         code.extend([f"    {line}" for line in golden_output_code])
-        types_to_cast = self.types_need_to_be_cast_in_ort.get(ntt_op_str, self.types_need_to_be_cast_in_ort["default"])
+        types_to_cast = self.types_need_cast_in_ort.get(ntt_op_str, self.types_need_cast_in_ort["default"])
         # cast_mode = 2 if datatype.cpp_type in types_to_cast else 0
         # set cast mode for back to ntt function
         cast_mode = 0
         # Compare outputs
-        if(datatype.cpp_type in self.types_need_to_be_cast_in_ntt): # fp8 
+        if(datatype.cpp_type in self.types_need_cast_in_ntt): # fp8 
             cast_mode = 4
         
         compare_code = self.generate_ort_back2ntt_and_compare_section(
