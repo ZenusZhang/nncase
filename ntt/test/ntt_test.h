@@ -149,12 +149,25 @@ void generate_random_tensor(TTensor &tensor, std::mt19937 &gen, [[maybe_unused]]
 }
 
 template <typename T> T ulp(T x) {
-    x = std::fabs(x);
-    if (std::isfinite(x)) {
-        T lower = std::nextafter(x, static_cast<T>(-1.0));
-        return x - lower;
+    // For standard floating point types (float, double, long double)
+    if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double> || std::is_same_v<T, long double>) {
+        x = std::fabs(x);
+        if (std::isfinite(x)) {
+            T lower = std::nextafter(x, static_cast<T>(-1.0));
+            return x - lower;
+        }
+        return x;
+    } else {
+        // For custom floating point types (half, bfloat16, etc.)
+        // Convert to float for ULP computation
+        float x_f = static_cast<float>(x);
+        x_f = std::fabs(x_f);
+        if (std::isfinite(x_f)) {
+            float lower = std::nextafter(x_f, -1.0f);
+            return static_cast<T>(x_f - lower);
+        }
+        return static_cast<T>(x_f);
     }
-    return x;
 }
 
 template <typename T>
@@ -164,6 +177,13 @@ bool are_close(T a, T b, double abs_tol = 1e-9, double rel_tol = 1e-5) {
         return true;
     }
     
+    // ULP check for all non-integer types (including float, half, double, etc.)
+    if constexpr (!std::is_integral_v<T>) {
+        if (std::abs(a - b) <= ulp(b) || std::abs(a - b) <= ulp(a)) {
+            return true;
+        }
+    }
+    
     // Special handling for float type: if a is float_max_from_exp and b is greater than float_max_from_exp, return true
     if constexpr (std::is_same_v<T, float>) {
         const T float_max_from_exp = 1.65164e+38f;
@@ -171,9 +191,6 @@ bool are_close(T a, T b, double abs_tol = 1e-9, double rel_tol = 1e-5) {
         if (std::abs(a - float_max_from_exp) <= std::max(abs_tol, rel_tol * std::max(std::abs(a), std::abs(float_max_from_exp))) && b > float_max_from_exp) {
             return true;
         } 
-        if (std::abs(a - b) <= ulp(b)){
-            return true;
-        }
     }
 
     

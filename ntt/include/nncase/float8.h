@@ -508,14 +508,13 @@ struct alignas(1) float_e4m3_t : float8_base<FloatEncoding::E4M3> {
     explicit float_e4m3_t(int x) : float_e4m3_t(float(x)) {}
 
     CUTLASS_HOST_DEVICE
-    explicit float_e4m3_t(size_t x) : float_e4m3_t(float(x)) {}
+    explicit float_e4m3_t(int64_t x) : float_e4m3_t(float(x)) {}
 
     CUTLASS_HOST_DEVICE
     explicit float_e4m3_t(bfloat16 x) : float_e4m3_t(float(x)) {}
 
     CUTLASS_HOST_DEVICE
-    explicit float_e4m3_t(int64_t x) : float_e4m3_t(float(x)) {}    
-
+    explicit float_e4m3_t(uint64_t x) : float_e4m3_t(double(x)) {}    
 
     CUTLASS_HOST_DEVICE
     explicit float_e4m3_t(uint32_t x) : float_e4m3_t(float(x)) {}    
@@ -715,7 +714,7 @@ struct alignas(1) float_e5m2_t : float8_base<FloatEncoding::E5M2> {
     explicit float_e5m2_t(int x) : float_e5m2_t(float(x)) {}
 
     CUTLASS_HOST_DEVICE
-    explicit float_e5m2_t(size_t x) : float_e5m2_t(float(x)) {}
+    explicit float_e5m2_t(uint64_t x) : float_e5m2_t(float(x)) {}
 
     CUTLASS_HOST_DEVICE
     explicit float_e5m2_t(bfloat16 x) : float_e5m2_t(float(x)) {}

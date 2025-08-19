@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 #include "test_ntt_binary.h"
+#include <nncase/half.h>
 
 //test case combination:
 // 1. lhs/rhs
@@ -92,6 +93,120 @@ TEST(BinaryTestAddint, fixed_fixed_fixed_broadcast_lhs_1D_vector_rhs_2D_vector) 
     NttTest::ort2ntt(ort_output, ntt_output2);
     EXPECT_TRUE(NttTest::compare_tensor(ntt_output1, ntt_output2));
 
+}
+
+TEST(BinaryTestAddint, are_close_fp16_behavior) {
+    using namespace nncase;
+    
+    // Test specific fp16 cases that are returning false unexpectedly
+    std::cout << "Testing are_close behavior for fp16 (half) values:" << std::endl;
+    
+    // Test case 1: lhs = 922, rhs = 922.5
+    {
+        half lhs(922.0f);
+        half rhs(922.5f);
+        
+        // Test are_close directly on half types
+        bool result = NttTest::are_close(lhs, rhs);
+        
+        // Also test float conversion for comparison
+        float lhs_f = static_cast<float>(lhs);
+        float rhs_f = static_cast<float>(rhs);
+        std::cout << "Test 1 - lhs: " << lhs_f << " (fp16: 922), rhs: " << rhs_f << " (fp16: 922.5)" 
+                  << ", are_close result: " << (result ? "true" : "false")
+                  << ", diff: " << std::abs(lhs_f - rhs_f) << std::endl;
+    }
+    
+    // Test case 2: lhs = -59.1875, rhs = -59.2188
+    {
+        half lhs(-59.1875f);
+        half rhs(-59.2188f);
+        
+        bool result = NttTest::are_close(lhs, rhs);
+        
+        float lhs_f = static_cast<float>(lhs);
+        float rhs_f = static_cast<float>(rhs);
+        std::cout << "Test 2 - lhs: " << lhs_f << " (fp16: -59.1875), rhs: " << rhs_f << " (fp16: -59.2188)" 
+                  << ", are_close result: " << (result ? "true" : "false")
+                  << ", diff: " << std::abs(lhs_f - rhs_f) << std::endl;
+    }
+    
+    // Test case 3: lhs = -7192, rhs = -7196
+    {
+        half lhs(-7192.0f);
+        half rhs(-7196.0f);
+        
+        bool result = NttTest::are_close(lhs, rhs);
+        
+        float lhs_f = static_cast<float>(lhs);
+        float rhs_f = static_cast<float>(rhs);
+        std::cout << "Test 3 - lhs: " << lhs_f << " (fp16: -7192), rhs: " << rhs_f << " (fp16: -7196)" 
+                  << ", are_close result: " << (result ? "true" : "false")
+                  << ", diff: " << std::abs(lhs_f - rhs_f) << std::endl;
+    }
+    
+    // Test case 4: lhs = 6996, rhs = 6992
+    {
+        half lhs(6996.0f);
+        half rhs(6992.0f);
+        
+        bool result = NttTest::are_close(lhs, rhs);
+        
+        float lhs_f = static_cast<float>(lhs);
+        float rhs_f = static_cast<float>(rhs);
+        std::cout << "Test 4 - lhs: " << lhs_f << " (fp16: 6996), rhs: " << rhs_f << " (fp16: 6992)" 
+                  << ", are_close result: " << (result ? "true" : "false")
+                  << ", diff: " << std::abs(lhs_f - rhs_f) << std::endl;
+    }
+    
+    // Test with different tolerance values for fp16
+    {
+        half lhs(922.0f);
+        half rhs(922.5f);
+        
+        bool result_default = NttTest::are_close(lhs, rhs);
+        bool result_loose = NttTest::are_close(lhs, rhs, 1.0, 1e-3);  // More loose tolerance for fp16
+        bool result_tight = NttTest::are_close(lhs, rhs, 1e-12, 1e-9); // Tighter tolerance
+        
+        float lhs_f = static_cast<float>(lhs);
+        float rhs_f = static_cast<float>(rhs);
+        
+        std::cout << "\nTolerance test for fp16 - lhs: " << lhs_f << ", rhs: " << rhs_f << std::endl;
+        std::cout << "  Default tolerance (1e-9, 1e-5): " << (result_default ? "true" : "false") << std::endl;
+        std::cout << "  Loose tolerance (1.0, 1e-3): " << (result_loose ? "true" : "false") << std::endl;
+        std::cout << "  Tight tolerance (1e-12, 1e-9): " << (result_tight ? "true" : "false") << std::endl;
+        
+        // Calculate what the actual tolerance check values are
+        double abs_diff = std::abs(lhs_f - rhs_f);
+        double rel_tol_default = 1e-5 * std::max(std::abs(lhs_f), std::abs(rhs_f));
+        double abs_tol_default = 1e-9;
+        double threshold_default = std::max(abs_tol_default, rel_tol_default);
+        
+        std::cout << "  Absolute difference: " << abs_diff << std::endl;
+        std::cout << "  Default relative tolerance: " << rel_tol_default << std::endl;
+        std::cout << "  Default absolute tolerance: " << abs_tol_default << std::endl;
+        std::cout << "  Default threshold: " << threshold_default << std::endl;
+        std::cout << "  Passes default threshold: " << (abs_diff <= threshold_default ? "true" : "false") << std::endl;
+    }
+    
+    // Test fp16 precision limitations
+    {
+        std::cout << "\n=== FP16 Precision Analysis ===" << std::endl;
+        
+        // Show actual fp16 values after conversion
+        half h1(922.0f);
+        half h2(922.5f);
+        float f1 = static_cast<float>(h1);
+        float f2 = static_cast<float>(h2);
+        
+        std::cout << "Input: 922.0 -> fp16 -> float: " << f1 << std::endl;
+        std::cout << "Input: 922.5 -> fp16 -> float: " << f2 << std::endl;
+        std::cout << "Difference after fp16 conversion: " << std::abs(f1 - f2) << std::endl;
+        
+        // Show raw fp16 values
+        std::cout << "Raw fp16 value for 922.0: 0x" << std::hex << h1.raw() << std::dec << std::endl;
+        std::cout << "Raw fp16 value for 922.5: 0x" << std::hex << h2.raw() << std::dec << std::endl;
+    }
 }
 
 
