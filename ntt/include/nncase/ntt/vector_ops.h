@@ -302,7 +302,8 @@ template <Vector TVector> struct inner_product<TVector, TVector> {
 };
 
 template <Vector TVector> 
-requires (std::is_same_v<typename TVector::element_type, float_e4m3_t> || std::is_same_v<typename TVector::element_type, float_e5m2_t>)
+requires (std::is_same_v<typename TVector::element_type, float_e4m3_t> || std::is_same_v<typename TVector::element_type, float_e5m2_t>
+            || std::is_same_v<typename TVector::element_type, half>)
 struct inner_product<TVector, TVector> {
     //ulp is too large for fp8
     //intermediate result should be float
