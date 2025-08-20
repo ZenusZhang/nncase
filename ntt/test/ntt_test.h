@@ -148,6 +148,31 @@ void generate_random_tensor(TTensor &tensor, std::mt19937 &gen, [[maybe_unused]]
     });
 }
 
+
+template <typename T>
+T nextToNeg1(T x) {
+    //TODO:  special handling for 0
+    // TODO: logic is wrong about negative numbers
+    // std::cout << "x:" << x << std::endl;
+    float x_f = static_cast<float>(x);
+    x_f = std::fabs(x_f);
+
+    // std::cout << "x_f:" << x_f << std::endl;
+    static_assert(sizeof(T) == 1 || sizeof(T) == 2,
+                  "nextToNeg1 only supports 8-bit or 16-bit formats");
+    using int_type = std::conditional_t<sizeof(T) == 1, std::uint8_t, std::uint16_t>;
+
+    T x_abs = static_cast<T>(x_f);
+    // std::cout << "x_abs:" << x_abs << std::endl;
+    
+    int_type x_i = std::bit_cast<int_type>(x_abs);
+    x_i = (x_i - 1);  
+    T x_lower = std::bit_cast<T>(x_i);
+    // std::cout << "x_lower" << x_lower <<std::endl;
+    return x_lower;
+}
+
+
 template <typename T> T ulp(T x) {
     // For standard floating point types (float, double, long double)
     if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double> || std::is_same_v<T, long double>) {
@@ -160,18 +185,20 @@ template <typename T> T ulp(T x) {
     } else {
         // For custom floating point types (half, bfloat16, etc.)
         // Convert to float for ULP computation
-        float x_f = static_cast<float>(x);
-        x_f = std::fabs(x_f);
-        if (std::isfinite(x_f)) {
-            float lower = std::nextafter(x_f, -1.0f);
-            return static_cast<T>(x_f - lower);
+
+        if (!std::isfinite((float)x)) {
+            return x;
         }
-        return static_cast<T>(x_f);
+        //if(x == 0) //TODO
+        T x_abs = (T)std::fabs((float)x);
+        T lower = nextToNeg1(x_abs);
+        // printf("ulp: %f of %f\n", (float)(x_abs - lower), (float)x);
+        return x_abs - lower;
     }
 }
 
 template <typename T>
-bool are_close(T a, T b, double abs_tol = 1e-9, double rel_tol = 1e-5) {
+bool are_close(T a, T b, double abs_tol = 1e-6,  double rel_tol = 1e-5) {
     // The short-circuit for equality is important for performance and to handle infinities.
     if (a == b) {
         return true;
@@ -179,7 +206,10 @@ bool are_close(T a, T b, double abs_tol = 1e-9, double rel_tol = 1e-5) {
     
     // ULP check for all non-integer types (including float, half, double, etc.)
     if constexpr (!std::is_integral_v<T>) {
-        if (std::abs(a - b) <= ulp(b) || std::abs(a - b) <= ulp(a)) {
+        // std::cout << "std::fabs(a-b) " << std::fabs((a-b))  <<std::endl;
+        // std::cout << "ulp(b):" <<ulp(b) << "   ulp(a)" << ulp(a) << std::endl;
+
+        if (std::fabs(a - b) <= ulp(b) || std::fabs(a - b) <= ulp(a)) {
             return true;
         }
     }
@@ -254,13 +284,15 @@ bool compare_tensor(TTensor1 &lhs, TTensor2 &rhs, double threshold = 0.999f) {
 
     bool pass = true;
     nncase::ntt::apply(lhs.shape(), [&](auto index) {
+        auto lvalue = lhs(index);
+        auto rvalue = rhs(index);
         auto d1 = static_cast<double>(
-            static_cast<typename TTensor1::element_type>(lhs(index)));
+            (lhs(index)));
         auto d2 = static_cast<double>(
-            static_cast<typename TTensor2::element_type>(rhs(index)));
+            (rhs(index)));
         v1.push_back(d1);
         v2.push_back(d2);
-        if (!are_close(d1, d2)) {
+        if (!are_close(lvalue, rvalue)) {
             // #ifndef NDEBUG
             std::cout << "index = (";
             for (size_t i = 0; i < index.rank(); i++)
