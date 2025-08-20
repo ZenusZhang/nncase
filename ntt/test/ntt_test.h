@@ -209,7 +209,7 @@ bool are_close(T a, T b, double abs_tol = 1e-6,  double rel_tol = 1e-5) {
         // std::cout << "std::fabs(a-b) " << std::fabs((a-b))  <<std::endl;
         // std::cout << "ulp(b):" <<ulp(b) << "   ulp(a)" << ulp(a) << std::endl;
 
-        if (std::fabs(a - b) <= ulp(b) || std::fabs(a - b) <= ulp(a)) {
+        if (std::fabs(double(a - b)) <= double(ulp(b)) || std::fabs(double(a - b)) <= double(ulp(a))) {
             return true;
         }
     }

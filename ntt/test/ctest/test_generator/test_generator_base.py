@@ -517,7 +517,7 @@ using namespace ortki;
             lines.append(f"auto {golden_var_name} = ntt::make_tensor<{golden_cpp_type}>({output_shape_expr});")
             lines.append(f"NttTest::ort2ntt({ort_output_var_name}, {golden_var_name});")
             lines.append(f"EXPECT_TRUE(NttTest::compare_tensor({ntt_output_to_compare}, {golden_var_name}));")
-        elif cast_mode == 2:  # cast from ort_type to datatype.cpp
+        elif cast_mode == 2:  #  cast in ntt
             golden_ntt_in_ort_type_var = f"ntt_golden_{ort_type}"
             golden_cpp_type = output_element_cpp_type.replace(datatype.cpp_type, ort_type)
 
@@ -539,7 +539,7 @@ using namespace ortki;
             lines.append(f"ntt::cast(*{golden_cast_source_var}, *{golden_origin_var});")
 
             lines.append(f"EXPECT_TRUE(NttTest::compare_tensor({ntt_output_var_name}, *{golden_origin_var}));")
-        elif cast_mode == 4: 
+        elif cast_mode == 4:   # cast in ort
             lines.append(f"EXPECT_TRUE(NttTest::compare_tensor(ntt_golden, ntt_output));")
 
         lines.append("}")
