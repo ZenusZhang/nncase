@@ -223,8 +223,8 @@ bool are_close(T a, T b, double abs_tol = 1e-6,  double rel_tol = 1e-5) {
         } 
     }
 
-    
-    return std::abs(a - b) <= std::max(abs_tol, rel_tol * std::max(std::abs(a), std::abs(b)));
+
+    return std::abs(double(a - b)) <= std::max(abs_tol, rel_tol * std::max(std::abs(double(a)), std::abs(double(b))));
 }
 
 template <typename T, TensorOrVector TTensor> 
