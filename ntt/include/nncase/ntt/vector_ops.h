@@ -539,7 +539,7 @@ template <Vector TVector1, Vector TVector2> struct cast<TVector1, TVector2> {
     using from_type = typename TVector1::element_type;
     using to_type = typename TVector2::element_type;
     constexpr auto operator()(const TVector1 &v) const noexcept {
-        TVector2 value;
+        TVector2 value{};
         ntt::apply(v.shape(),
                    [&](auto index) { value(index) = op_(v(index)); });
         return value;
@@ -550,7 +550,7 @@ template <Vector TVector1, Vector TVector2> struct cast<TVector1, TVector2> {
         requires(sizeof...(tensors) > 1)
     {
         static_assert((... && (std::decay_t<TVectors>::rank() == 1)));
-        TVector2 value;
+        TVector2 value{};
         size_t count = 0;
 
         auto process_tensor = [&](const auto &tensor) {

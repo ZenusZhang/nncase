@@ -103,8 +103,8 @@ TEST(BinaryTestAddint, are_close_fp16_behavior) {
     
     // Test case 1: lhs = 922, rhs = 922.5
     {
-        half lhs(-0.0405273f);
-        half rhs(-0.0408936f);
+        half lhs(5.1875f);
+        half rhs(5.16406);
         
         // Test are_close directly on half types
         bool result = NttTest::are_close(lhs, rhs);
@@ -112,7 +112,7 @@ TEST(BinaryTestAddint, are_close_fp16_behavior) {
         // Also test float conversion for comparison
         float lhs_f = static_cast<float>(lhs);
         float rhs_f = static_cast<float>(rhs);
-        std::cout << "Test 1 - lhs: " << lhs_f << " (fp16:-0.0405273), rhs: " << rhs_f << " (fp16:-0.0408936" 
+        std::cout << "Test 1 - lhs: " << lhs_f << " (fp16:5.1875), rhs: " << rhs_f << " (fp16:5.16406)" 
                   << ", are_close result: " << (result ? "true" : "false")
                   << ", diff: " << std::abs(lhs_f - rhs_f) << std::endl;
     }

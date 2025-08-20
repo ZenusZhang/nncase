@@ -198,15 +198,9 @@ template <class T1, class T2> struct ceil_div {
  */
 template <class T1, class T2> struct floor_mod {
     constexpr auto operator()(const T1 &v1, const T2 &v2) const noexcept {
-<<<<<<< HEAD
-        return (T1)((double)v1 - std::floor(static_cast<double>(v1) /
-                                            static_cast<double>(v2)) *
-                                     (double)v2);
-=======
-            return v1 -
+            return (T1)(double(v1) -
                    std::floor(static_cast<double>(v1) / static_cast<double>(v2)) *
-                       v2;
->>>>>>> c0721c6a8 ( Floor mod passed on almost all types on x86 except float16)
+                       static_cast<double>(v2));
     }
 };
 
@@ -238,7 +232,7 @@ template <class T1, class T2> struct outer_product {
  */
 template <class T1, class T2> struct mod {
     constexpr auto operator()(const T1 &v1, const T2 &v2) const noexcept {
-        return std::fmod(v1, v2);
+        return (T1)std::fmod((double)v1, (double)v2);
     }
 };
 
@@ -585,7 +579,7 @@ template <class T> constexpr T swish<T>::operator()(const T &v) const noexcept {
 template <class T, class B>
 constexpr T swishb<T, B>::operator()(const T &v, const B &beta) const noexcept {
     //-(double)v is for uint type.
-    return static_cast<T>(double(v) / (ntt::exp((-(double)v) *beta) + (double)1));
+    return static_cast<T>(double(v) / (ntt::exp((-(double)v) *(double)beta) + (double)1));
 }
 
 template <class T1, class T2, class TResult>
