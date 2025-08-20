@@ -74,7 +74,7 @@ endmacro()
 
 file(GLOB HANDWRITTEN_TESTS CONFIGURE_DEPENDS
     # generated/test_ntt_binary_generated_add_Uint16.cpp
-    test_ntt_binary_add.cpp
+    test_ntt_playground.cpp
     # generated/test_ntt_binary_float16_pow_generated.cpp
     # generated/test_ntt_binary_float32_floor_mod_generated.cpp
     # generated/test_ntt_binary_float32_floor_mod_generated.cpp
