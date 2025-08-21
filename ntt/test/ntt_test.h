@@ -130,8 +130,16 @@ void generate_random_tensor(TTensor &tensor, std::mt19937 &gen, T start = static
     };
 
     if (only_int) {
-        std::uniform_int_distribution<int64_t> dis(static_cast<int64_t>(start), static_cast<int64_t>(stop));
-        fill_with_distribution(dis);
+        //bf16 has __bf16 and float cast funtion on x86 which has native bfloat16.
+        //directly cast to int64_t would occur ambiguous
+        if constexpr (std::is_same_v<T, bfloat16> || std::is_same_v<T, half>){
+            std::uniform_int_distribution<int64_t> dis(static_cast<int64_t>(static_cast<float>(start)), static_cast<int64_t>(static_cast<float>(stop)));
+            fill_with_distribution(dis);
+        }
+        else{
+            std::uniform_int_distribution<int64_t> dis(static_cast<int64_t>(start), static_cast<int64_t>(stop));
+            fill_with_distribution(dis);
+        }
     } else {
         std::uniform_real_distribution<double> dis(start, stop);
         fill_with_distribution(dis);

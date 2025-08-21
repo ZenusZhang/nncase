@@ -56,18 +56,18 @@ struct half {
         : value_(std::bit_cast<_Float16>(value)) {}
 
     constexpr operator _Float16() const noexcept { return value_; }
-    constexpr operator float() const noexcept {
-        if (std::is_constant_evaluated()) {
-            return (float)value_;
-        } else {
-#ifdef __F16C__
-            // To avoid extendhfdf2
-            return _cvtsh_ss(raw());
-#else
-            return (float)value_;
-#endif
-        }
-    }
+//     constexpr operator float() const noexcept {
+//         if (std::is_constant_evaluated()) {
+//             return (float)value_;
+//         } else {
+// #ifdef __F16C__
+//             // To avoid extendhfdf2
+//             return _cvtsh_ss(raw());
+// #else
+//             return (float)value_;
+// #endif
+//         }
+//     }
 
     constexpr uint16_t raw() const noexcept {
         return std::bit_cast<uint16_t>(value_);

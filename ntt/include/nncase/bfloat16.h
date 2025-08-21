@@ -43,6 +43,12 @@ struct bfloat16 {
     constexpr operator __bf16() const noexcept {
         return std::bit_cast<__bf16>(value_);
     }
+#else
+    constexpr operator float() const noexcept {
+        uint32_t value = raw() << 16;
+        return std::bit_cast<float>(value);
+    }
+
 #endif
 
     constexpr bfloat16() noexcept = default;
@@ -55,10 +61,10 @@ struct bfloat16 {
 
     constexpr bfloat16(from_raw_t, uint16_t value) noexcept : value_(value) {}
 
-    constexpr operator float() const noexcept {
-        uint32_t value = raw() << 16;
-        return std::bit_cast<float>(value);
-    }
+    // constexpr operator float() const noexcept {
+    //     uint32_t value = raw() << 16;
+    //     return std::bit_cast<float>(value);
+    // }
 
     constexpr uint16_t raw() const noexcept { return value_; }
 
@@ -297,3 +303,5 @@ template <> struct is_arithmetic<bfloat16> : public true_type {};
 inline nncase::bfloat16 operator"" _bf16(long double x) {
     return nncase::bfloat16(float(x));
 }
+
+
