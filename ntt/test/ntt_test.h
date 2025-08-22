@@ -458,7 +458,14 @@ void print_tensor(TTensor &tensor, std::string name) {
             if constexpr (std::is_integral_v<value_type> && !std::is_same_v<value_type, bool>) {
                 printf("%ld ", static_cast<int64_t>(value));
             } else {
-                printf("%lf ",static_cast<double>(float(value)));
+                if constexpr (requires { typename decltype(value)::element_type; }) {
+                    // value is a proxy, extract the element
+                    auto act_val = static_cast<typename decltype(value)::element_type>(value);
+                    printf("%lf ", static_cast<double>(act_val));
+                } else {
+                    // value is already the actual type
+                    printf("%lf ", static_cast<double>(value));
+                }
             }
         });
     }

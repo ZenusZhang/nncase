@@ -23,6 +23,8 @@
 
 #ifdef DE_BUG
 #include <iostream>
+#include <iomanip>
+#include <limits>
 
 #define __RVV_PRINT_VECTOR_INT(LMUL, MLEN, TLEN) \
     void print_rvv_vector_i##TLEN(const vint##TLEN##m##LMUL##_t &vec, const char *label, const size_t print_vl){ \
@@ -55,6 +57,24 @@ __RVV_PRINT_VECTOR_FLOAT(1, 32, 32)
 __RVV_PRINT_VECTOR_FLOAT(2, 16, 32)
 __RVV_PRINT_VECTOR_FLOAT(4, 8, 32)
 __RVV_PRINT_VECTOR_FLOAT(8, 4, 32)
+
+
+#define __RVV_PRINT_VECTOR_HALF(LMUL, MLEN, TLEN) \
+    void print_rvv_vector_f##TLEN(const vfloat##TLEN##m##LMUL##_t &vec, const char *label, const size_t print_vl){ \
+        _Float16 temp[(LMUL*NTT_VLEN/TLEN)]; \
+        __riscv_vse##TLEN##_v_f##TLEN##m##LMUL(temp, vec, print_vl); \
+        std::cout << label << ": "; \
+        for (size_t i = 0; i < print_vl; ++i) { \
+            std::cout << std::setprecision(std::numeric_limits<float>::max_digits10) << temp[i] << " "; \
+        } \
+        std::cout << std::endl; \
+    }
+
+
+__RVV_PRINT_VECTOR_HALF(1, 16, 16)
+__RVV_PRINT_VECTOR_HALF(2, 8, 16)
+__RVV_PRINT_VECTOR_HALF(4, 4, 16)
+__RVV_PRINT_VECTOR_HALF(8, 2, 16)
 
 
 // template <size_t vl>
