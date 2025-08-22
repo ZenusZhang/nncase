@@ -121,6 +121,24 @@ struct half {
         return double(float(*this));
     }
 
+    constexpr explicit operator int8_t() const noexcept {
+        return int(float(*this));
+    }
+
+    constexpr explicit operator uint8_t() const noexcept {
+        return int(float(*this));
+    }
+
+
+    constexpr explicit operator int16_t() const noexcept {
+        return int(float(*this));
+    }
+
+
+    constexpr explicit operator uint16_t() const noexcept {
+        return int(float(*this));
+    }
+    
     constexpr explicit operator int() const noexcept {
         return int(float(*this));
     }

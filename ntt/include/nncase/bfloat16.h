@@ -133,6 +133,25 @@ struct bfloat16 {
         return uint64_t(double(*this));
     }
 
+
+    constexpr explicit operator uint8_t() const noexcept {
+        return uint8_t(float(*this));
+    }
+
+    constexpr explicit operator int8_t() const noexcept {
+        return int8_t(float(*this));
+    }
+
+
+    constexpr explicit operator int16_t() const noexcept {
+        return int16_t(float(*this));
+    }
+
+    constexpr explicit operator uint16_t() const noexcept {
+        return uint16_t(float(*this));
+    }
+
+
     constexpr explicit operator bool() const noexcept {
         return bool(std::bit_cast<uint16_t>(*this));
     }
