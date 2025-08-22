@@ -13,6 +13,8 @@ find_package(Python3 REQUIRED)
 
 include_directories(${CMAKE_CURRENT_LIST_DIR}/..)
 
+# add_definitions(-DDE_BUG)
+
 # --- Generate test source files ---
 # Define kernel names for automatic test generation. Add more kernels here.
 set(KERNEL_NAMES binary pack unpack cast)
