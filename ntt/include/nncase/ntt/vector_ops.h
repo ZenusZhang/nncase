@@ -162,8 +162,8 @@ struct tensor_compare_impl;
 
 template <template <class T1, class T2> class Op, Vector TVector, class T2>
 struct tensor_compare_impl<Op, TVector, T2> {
-    using element_type1 =  TVector;
-    using element_type2 =  T2;
+    using element_type1 =  typename TVector::element_type;
+    using element_type2 = element_or_scalar_t<T2>;
     static constexpr size_t vl = TVector::template lane<0>();
     using TOut = ntt::vector<bool, vl>;
     constexpr TOut operator()(const TVector &v1, const T2 &v2) const noexcept {
