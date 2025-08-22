@@ -43,11 +43,11 @@ struct bfloat16 {
     constexpr operator __bf16() const noexcept {
         return std::bit_cast<__bf16>(value_);
     }
-#else
-    constexpr operator float() const noexcept {
-        uint32_t value = raw() << 16;
-        return std::bit_cast<float>(value);
-    }
+// #else
+//     constexpr operator float() const noexcept {
+//         uint32_t value = raw() << 16;
+//         return std::bit_cast<float>(value);
+//     }
 
 #endif
 
@@ -93,16 +93,18 @@ struct bfloat16 {
     constexpr explicit bfloat16(uint64_t x) noexcept
         : value_(round_to_bfloat16(double(x)).value_) {}
 
+    constexpr explicit bfloat16(float x) noexcept
+        : value_(round_to_bfloat16((x)).value_) {}
     // Floating point conversion constructors
     constexpr explicit bfloat16(double x) noexcept
         : value_(round_to_bfloat16(float(x)).value_) {}
 
     constexpr bfloat16(from_raw_t, uint16_t value) noexcept : value_(value) {}
 
-    // constexpr operator float() const noexcept {
-    //     uint32_t value = raw() << 16;
-    //     return std::bit_cast<float>(value);
-    // }
+    constexpr operator float() const noexcept {
+        uint32_t value = raw() << 16;
+        return std::bit_cast<float>(value);
+    }
 
     constexpr uint16_t raw() const noexcept { return value_; }
 
