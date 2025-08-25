@@ -75,7 +75,7 @@ class nncaseConan(ConanFile):
                 self.options["nethost"].shared = True
 
         if self.options.tests:
-            self.options["ortki"].shared = True
+            self.options["ortki"].shared = False
             self.options["date"].header_only = True
         
     def validate(self):
