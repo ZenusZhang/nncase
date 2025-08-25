@@ -264,7 +264,9 @@ class BuildCMakeExt(build_ext):
                 os.walk(os.path.join(ext.sourcedir, 'install')) for _lib in files if
                 os.path.isfile(os.path.join(root, _lib)) and
                 (os.path.splitext(_lib)[-1] in [".dll", ".so", ".dylib", ".json"] or
-                _lib.startswith("lib"))]
+                _lib.startswith("lib")) and
+                # Exclude problematic shared libraries that cause auditwheel issues
+                not os.path.basename(_lib) in ["libisl.so", "google-ortools-native.so", "libortki.so"]]
 
         sharp_libs_dir = os.path.join(bin_dir, 'sharplibs')
         os.makedirs(sharp_libs_dir)

@@ -73,6 +73,13 @@ class nncaseConan(ConanFile):
         if not self.options.runtime:
             if self.settings.os == 'Windows' and self.settings.build_type == 'Debug':
                 self.options["nethost"].shared = True
+            else:
+                # For Linux and other platforms, use static linking to avoid auditwheel issues
+                self.options["nethost"].shared = False
+            
+            # Configure fmt to be static for Linux builds to avoid auditwheel issues
+            if self.settings.os == 'Linux':
+                self.options["fmt"].shared = False
 
         if self.options.tests:
             self.options["ortki"].shared = False
