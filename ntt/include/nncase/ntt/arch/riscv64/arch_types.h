@@ -39,7 +39,8 @@
     template <Dimensions TIndex>                                                                    \
         requires(TIndex::rank() == 1)                                                               \
     static ntt::vector<element_type_, lanes> get_element(                                           \
-        const buffer_type &array, const TIndex &index) noexcept {                                   \
+        const buffer_type &array,                                                                   \
+        [[maybe_unused]] const TIndex &index) noexcept {                                            \
         static_assert(FixedDimensions<TIndex>);                                                     \
         constexpr size_t index_value = TIndex{}[dim_zero];                                          \
         return __riscv_vget_v_##native_element_type_slim##m##lmul##_##native_element_type_slim##m1( \
@@ -56,7 +57,7 @@
     template <Dimensions TIndex>                                                                    \
         requires(TIndex::rank() == 1)                                                               \
     static void set_element(                                                                        \
-        buffer_type &array, const TIndex &index,                                                    \
+        buffer_type &array, [[maybe_unused]] const TIndex &index,                                   \
         ntt::vector<element_type_, lanes> value) noexcept {                                         \
         static_assert(FixedDimensions<TIndex>);                                                     \
         constexpr size_t index_value = TIndex{}[dim_zero];                                          \
