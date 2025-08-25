@@ -15,7 +15,7 @@
 #pragma once
 #include <cmath>
 
-#ifdef __NEWLIB__
+#if defined(__NEWLIB__) && !defined(NNCASE_XPU_MODULE)
 namespace std {
 using ::erff;
 using ::roundf;
