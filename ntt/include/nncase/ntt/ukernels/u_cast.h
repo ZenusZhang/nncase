@@ -16,6 +16,7 @@
 #include "../post_ops.h"
 #include "../primitive_ops.h"
 #include "../vector.h"
+#include "nncase/ntt/tensor_traits.h"
 
 namespace nncase::ntt {
 namespace ukernels {
@@ -28,6 +29,8 @@ template <bool Arch, size_t in_offset_scale, size_t out_offset_scale, class T1,
           class T2, template <class> class TPostOps>
 struct u_cast {
   public:
+    using T2Elem = element_or_scalar_t<T2>;
+
     constexpr void operator()(const T1 *input, size_t input_stride, T2 *output,
                               size_t output_stride, size_t count) noexcept {
         using policy_t = u_cast_policy<Arch>;
@@ -36,11 +39,11 @@ struct u_cast {
         if constexpr (in_offset_scale == 4 && out_offset_scale == 1) {
             while (count / unroll) {
                 for (size_t i = 0; i < unroll; i++) {
-                    *output =
-                        ntt::ops::cast<T1, T2>()(*(input + 0 * input_stride),
-                                                 *(input + 1 * input_stride),
-                                                 *(input + 2 * input_stride),
-                                                 *(input + 3 * input_stride));
+                    prepend_lanes_t<T1, 4> in_temp{};
+                    ntt::loop<4>([&](auto i) {
+                        in_temp(i) = *(input + i * input_stride);
+                    });
+                    *output = ntt::cast_elem<T2Elem>(in_temp);
                     (*output) = TPostOps<T2>()(*output);
                     input += input_stride * in_offset_scale;
                     output += output_stride * out_offset_scale;
@@ -49,9 +52,10 @@ struct u_cast {
             }
 
             for (size_t i = 0; i < count; i++) {
-                *output = ntt::ops::cast<T1, T2>()(
-                    *(input + 0 * input_stride), *(input + 1 * input_stride),
-                    *(input + 2 * input_stride), *(input + 3 * input_stride));
+                prepend_lanes_t<T1, 4> in_temp{};
+                ntt::loop<4>(
+                    [&](auto i) { in_temp(i) = *(input + i * input_stride); });
+                *output = ntt::cast_elem<T2Elem>(in_temp);
                 (*output) = TPostOps<T2>()(*output);
                 input += input_stride * in_offset_scale;
                 output += output_stride * out_offset_scale;
@@ -59,9 +63,11 @@ struct u_cast {
         } else if constexpr (in_offset_scale == 2 && out_offset_scale == 1) {
             while (count / unroll) {
                 for (size_t i = 0; i < unroll; i++) {
-                    *output =
-                        ntt::ops::cast<T1, T2>()(*(input + 0 * input_stride),
-                                                 *(input + 1 * input_stride));
+                    prepend_lanes_t<T1, 2> in_temp{};
+                    ntt::loop<2>([&](auto i) {
+                        in_temp(i) = *(input + i * input_stride);
+                    });
+                    *output = ntt::cast_elem<T2Elem>(in_temp);
                     (*output) = TPostOps<T2>()(*output);
                     input += input_stride * in_offset_scale;
                     output += output_stride * out_offset_scale;
@@ -70,8 +76,10 @@ struct u_cast {
             }
 
             for (size_t i = 0; i < count; i++) {
-                *output = ntt::ops::cast<T1, T2>()(*(input + 0 * input_stride),
-                                                   *(input + 1 * input_stride));
+                prepend_lanes_t<T1, 2> in_temp{};
+                ntt::loop<2>(
+                    [&](auto i) { in_temp(i) = *(input + i * input_stride); });
+                *output = ntt::cast_elem<T2Elem>(in_temp);
                 (*output) = TPostOps<T2>()(*output);
                 input += input_stride * in_offset_scale;
                 output += output_stride * out_offset_scale;
@@ -82,31 +90,31 @@ struct u_cast {
 
             while (count / unroll) {
                 for (size_t i = 0; i < unroll; i++) {
-                    auto tmp_output = ntt::ops::cast<T1, T2>()(*input);
-                    for (auto s = 0; s < out_offset_scale; s++) {
-                        *output = *((T2 *)(&tmp_output(s)));
+                    auto tmp_output = ntt::cast_elem<T2Elem>(*input);
+                    ntt::loop<out_offset_scale>([&](auto s) {
+                        *output = tmp_output(s);
                         (*output) = TPostOps<T2>()(*output);
                         output += output_stride;
-                    }
+                    });
                     input += input_stride * in_offset_scale;
                     count--;
                 }
             }
 
             for (size_t i = 0; i < count; i++) {
-                auto tmp_output = ntt::ops::cast<T1, T2>()(*input);
-                for (auto s = 0; s < out_offset_scale; s++) {
-                    *output = *((T2 *)(&tmp_output(s)));
+                auto tmp_output = ntt::cast_elem<T2Elem>(*input);
+                ntt::loop<out_offset_scale>([&](auto s) {
+                    *output = tmp_output(s);
                     (*output) = TPostOps<T2>()(*output);
                     output += output_stride;
-                }
+                });
                 input += input_stride * in_offset_scale;
             }
 
         } else {
             while (count / unroll) {
                 for (size_t i = 0; i < unroll; i++) {
-                    *output = ntt::ops::cast<T1, T2>()(*input);
+                    *output = ntt::cast_elem<T2Elem>(*input);
                     (*output) = TPostOps<T2>()(*output);
                     input += input_stride * in_offset_scale;
                     output += output_stride * out_offset_scale;
@@ -115,7 +123,7 @@ struct u_cast {
             }
 
             for (size_t i = 0; i < count; i++) {
-                *output = ntt::ops::cast<T1, T2>()(*input);
+                *output = ntt::cast_elem<T2Elem>(*input);
                 (*output) = TPostOps<T2>()(*output);
                 input += input_stride * in_offset_scale;
                 output += output_stride * out_offset_scale;

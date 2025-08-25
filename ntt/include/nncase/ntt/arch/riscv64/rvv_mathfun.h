@@ -111,9 +111,8 @@ _RVV_FLOAT32_LOG_OP(8, 4)
 
 // e^x = 1 + x + 1/2!x^2 + 1/3!x^3 + 1/4!x^4 + 1/5!x^5 + 1/6!x^6 + 1/7!x^7
 #define _RVV_FLOAT_EXP_OP(LMUL, MLEN, TLEN, E, M)                              \
-    static inline __attribute__((optimize("no-schedule-insns2")))              \
-        vfloat##TLEN##m##LMUL##_t                                              \
-        exp_ps(vfloat##TLEN##m##LMUL##_t x, size_t vl) {                       \
+    static inline NTT_NO_SCHEDULE_INSTS vfloat##TLEN##m##LMUL##_t exp_ps(      \
+        vfloat##TLEN##m##LMUL##_t x, size_t vl) {                              \
         auto a1 = __riscv_vfmv_v_f_f##TLEN##m##LMUL(c_cephes_LOG2EF, vl);      \
         auto c1 = __riscv_vfmv_v_f_f##TLEN##m##LMUL(c_cephes_exp_p1, vl);      \
         auto c3 = __riscv_vfmv_v_f_f##TLEN##m##LMUL(c_cephes_exp_p3, vl);      \
@@ -247,7 +246,7 @@ _RVV_FLOAT_EXPM1F_OP(8, 4, 32, 0x7f, 23)
         auto one = __riscv_vfmv_v_f_f##TLEN##m##LMUL(fp_posOne, vl);           \
         /*tanh(x) = sign(x) * tanh(|x|); suffices to work on |x| for the main  \
          * part */                                                             \
-        auto vx = __riscv_vfsgnj_vf_f##TLEN##m##LMUL(v, 1.f, vl);            \
+        auto vx = __riscv_vfsgnj_vf_f##TLEN##m##LMUL(v, 1.f, vl);              \
         /* Suffices to clip |x| to 20, which is bigger than 28 log(2) */       \
         vx = __riscv_vfmin_vf_f##TLEN##m##LMUL(vx, 0x1.4p4, vl);               \
                                                                                \
@@ -261,7 +260,7 @@ _RVV_FLOAT_EXPM1F_OP(8, 4, 32, 0x7f, 23)
         auto u = __riscv_vadd_vx_i##TLEN##m##LMUL(n, 127, vl);                 \
         auto r_delta =                                                         \
             __riscv_vfnmsac_vf_f##TLEN##m##LMUL(vx, LOG2_HI, n_flt, vl);       \
-        u = __riscv_vsll_vx_i##TLEN##m##LMUL(u, 23, vl);                     \
+        u = __riscv_vsll_vx_i##TLEN##m##LMUL(u, 23, vl);                       \
         auto r =                                                               \
             __riscv_vfnmsac_vf_f##TLEN##m##LMUL(r_delta, LOG2_LO, n_flt, vl);  \
         auto s =                                                               \
@@ -373,7 +372,7 @@ _RVV_FLOAT_EXPM1F_OP(8, 4, 32, 0x7f, 23)
         vy = __riscv_vfmacc_vv_f##TLEN##m##LMUL(vy, Numer, e, vl);             \
         vy = __riscv_vfmacc_vv_f##TLEN##m##LMUL(vy, numer, E, vl);             \
         vy = __riscv_vfmacc_vv_f##TLEN##m##LMUL(vy, Numer, E, vl);             \
-        return __riscv_vfsgnj_vv_f##TLEN##m##LMUL(vy, v, vl);                \
+        return __riscv_vfsgnj_vv_f##TLEN##m##LMUL(vy, v, vl);                  \
     }
 #endif
 

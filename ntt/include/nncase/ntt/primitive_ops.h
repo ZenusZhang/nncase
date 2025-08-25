@@ -308,12 +308,6 @@ template <class T1, class T2> struct clamp {
     }
 };
 
-template <class T1, class T2> struct cast {
-    constexpr T2 operator()(const T1 &v) const noexcept {
-        return static_cast<T2>(v);
-    }
-};
-
 template <class T1, class T2> struct cast_elem {
     constexpr T2 operator()(const T1 &v) const noexcept {
         return static_cast<T2>(v);
@@ -412,14 +406,14 @@ NTT_DEFINE_COMPARE_FUNC_IMPL(less_or_equal)
 NTT_DEFINE_COMPARE_FUNC_IMPL(greater)
 NTT_DEFINE_COMPARE_FUNC_IMPL(greater_or_equal)
 
-template <ScalarOrVector T2, ScalarOrVector T1>
-constexpr auto cast(const T1 &v) noexcept {
-    return ops::cast<T1, T2>()(v);
-}
-
 template <Scalar T2, ScalarOrVector T1>
 constexpr auto cast_elem(const T1 &v) noexcept {
     return ops::cast_elem<T1, T2>()(v);
+}
+
+template <ScalarOrVector T2, ScalarOrVector T1>
+constexpr auto cast(const T1 &v) noexcept {
+    return cast_elem<element_or_scalar_t<T2>>(v);
 }
 
 template <ScalarOrVector T1, ScalarOrVector T2, ScalarOrVector TResult>

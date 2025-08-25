@@ -134,10 +134,12 @@ extern "C" void block_entry(const cpu_block_entry_params_t &params) {
                               THREAD_AFFINITY_POLICY, (thread_policy_t)&policy,
                               THREAD_AFFINITY_POLICY_COUNT);
 #else
+#ifdef _POSIX_PRIORITY_SCHEDULING
             cpu_set_t cpuset;
             CPU_ZERO(&cpuset);
             CPU_SET(cpu_id, &cpuset);
             pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+#endif
 #endif
             auto thread_local_rdata_offset =
                 (size_t)params.thread_local_rdata_header[tid * 2];

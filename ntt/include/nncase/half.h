@@ -14,9 +14,9 @@
  */
 #pragma once
 #include "bfloat16.h"
+#include "math.h"
 #include "ntt/compiler_defs.h"
 #include <bit>
-#include <cmath>
 #include <codecvt>
 #include <cstdint>
 #include <float.h>

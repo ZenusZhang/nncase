@@ -17,7 +17,7 @@ else()
     add_compile_options(-Wno-multichar -Wno-unused-value -fno-common -ffunction-sections -fno-exceptions -fdata-sections -fno-unwind-tables -fno-asynchronous-unwind-tables -fno-stack-protector)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
 
-    if (APPLE)
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         add_compile_options(-fno-stack-check -Wno-c++11-narrowing)
         if (${CMAKE_BUILD_TYPE} STREQUAL "Release")
             add_compile_options(-mllvm -inline-threshold=500)

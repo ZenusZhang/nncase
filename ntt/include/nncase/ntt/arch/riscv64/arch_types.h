@@ -31,6 +31,48 @@
 #define NTT_VL(sew, op, lmul) ((NTT_VLEN) / (sew)op(lmul))
 #endif
 
+#define NTT_BEGIN_DEFINE_RVV_NATIVE_VECTOR2D_DEFAULT(                                               \
+    element_type_, native_element_type, native_element_type_slim, lmul, lanes)                      \
+    NTT_BEGIN_DEFINE_NATIVE_VECTOR(                                                                 \
+        element_type_, fixed_v##native_element_type##m##lmul##_t, lmul, lanes)                      \
+                                                                                                    \
+    template <Dimensions TIndex>                                                                    \
+        requires(TIndex::rank() == 1)                                                               \
+    static ntt::vector<element_type_, lanes> get_element(                                           \
+        const buffer_type &array, const TIndex &index) noexcept {                                   \
+        static_assert(FixedDimensions<TIndex>);                                                     \
+        constexpr size_t index_value = TIndex{}[dim_zero];                                          \
+        return __riscv_vget_v_##native_element_type_slim##m##lmul##_##native_element_type_slim##m1( \
+            array, index_value);                                                                    \
+    }                                                                                               \
+    template <Dimensions TIndex>                                                                    \
+        requires(TIndex::rank() == 2)                                                               \
+    static element_type_ get_element(const buffer_type &array,                                      \
+                                     const TIndex &index) noexcept {                                \
+        return array[(size_t)ntt::linear_offset(index,                                              \
+                                                fixed_shape_v<lmul, lanes>)];                       \
+    }                                                                                               \
+                                                                                                    \
+    template <Dimensions TIndex>                                                                    \
+        requires(TIndex::rank() == 1)                                                               \
+    static void set_element(                                                                        \
+        buffer_type &array, const TIndex &index,                                                    \
+        ntt::vector<element_type_, lanes> value) noexcept {                                         \
+        static_assert(FixedDimensions<TIndex>);                                                     \
+        constexpr size_t index_value = TIndex{}[dim_zero];                                          \
+        array =                                                                                     \
+            __riscv_vset_v_##native_element_type_slim##m1_##native_element_type_slim##m##lmul(      \
+                array, index_value, value);                                                         \
+    }                                                                                               \
+                                                                                                    \
+    template <Dimensions TIndex>                                                                    \
+        requires(TIndex::rank() == 2)                                                               \
+    static void set_element(buffer_type &array, const TIndex &index,                                \
+                            element_type_ value) noexcept {                                         \
+        array[(size_t)ntt::linear_offset(index, fixed_shape_v<lmul, lanes>)] =                      \
+            value;                                                                                  \
+    }
+
 #if defined(__riscv_vector) &&                                                 \
     (defined(__riscv_zvfbfmin) || defined(__riscv_zvfbf))
 #define REGISTER_BFLOAT16_TYPE_WITH_LMUL_LT1()                                 \
@@ -227,11 +269,18 @@ REGISTER_RVV_FIXED_TYPE_WITH_LMUL_GE1(8)
                                                lmul)                           \
     NTT_END_DEFINE_NATIVE_VECTOR()
 
+#define NTT_DEFINE_NATIVE_VECTOR2D_WITH_LMUL_GE1(lmul)                         \
+    NTT_BEGIN_DEFINE_RVV_NATIVE_VECTOR2D_DEFAULT(float, float32, f32, lmul,    \
+                                                 NTT_VLEN / 8 / sizeof(float)) \
+    NTT_END_DEFINE_NATIVE_VECTOR()
+
 NTT_DEFINE_NATIVE_VECTOR_WITH_LMUL_LT1
 NTT_DEFINE_NATIVE_VECTOR_WITH_LMUL_GE1(1)
 NTT_DEFINE_NATIVE_VECTOR_WITH_LMUL_GE1(2)
 NTT_DEFINE_NATIVE_VECTOR_WITH_LMUL_GE1(4)
 NTT_DEFINE_NATIVE_VECTOR_WITH_LMUL_GE1(8)
+
+NTT_DEFINE_NATIVE_VECTOR2D_WITH_LMUL_GE1(2)
 
 // mask vectors
 #define NTT_DEFINE_NATIVE_MASK_VECTOR(bits)                                    \
@@ -270,8 +319,13 @@ NTT_DEFINE_NATIVE_MASK_VECTOR(2)
 NTT_DEFINE_NATIVE_MASK_VECTOR(4)
 NTT_DEFINE_NATIVE_MASK_VECTOR(8)
 NTT_DEFINE_NATIVE_MASK_VECTOR(16)
+
+#if !defined(__clang__) || __riscv_v_fixed_vlen >= 256
 NTT_DEFINE_NATIVE_MASK_VECTOR(32)
+#if !defined(__clang__) || __riscv_v_fixed_vlen >= 512
 NTT_DEFINE_NATIVE_MASK_VECTOR(64)
+#endif
+#endif
 
 #undef NTT_DEFINE_NATIVE_MASK_VECTOR
 #endif

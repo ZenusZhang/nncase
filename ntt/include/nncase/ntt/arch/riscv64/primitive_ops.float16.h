@@ -4,6 +4,7 @@
 #include "../../../half.h"
 #include "../../vector.h"
 #include "arch_types.h"
+#include "primitive_ops.float32.h"
 #include "rvv_mathfun.h"
 #include "rvv_mathfun_half.h"
 #ifdef __riscv_vector
@@ -15,6 +16,16 @@ namespace nncase::ntt::ops {
 #ifndef REGISTER_RVV_FP16_KERNEL
 #define REGISTER_RVV_FP16_KERNEL(kernel)                                       \
     kernel(1, 16) kernel(2, 8) kernel(4, 4) kernel(8, 2)
+#endif
+
+#ifndef REGISTER_RVV_FP16_x2_KERNEL
+#define REGISTER_RVV_FP16_x2_KERNEL(kernel)                                    \
+    kernel(1, 2, 16) kernel(2, 4, 8) kernel(4, 8, 4)
+#endif
+
+#ifndef REGISTER_RVV_FP16_d2_KERNEL
+#define REGISTER_RVV_FP16_d2_KERNEL(kernel)                                    \
+    kernel(2, 1, 16) kernel(4, 2, 8) kernel(8, 4, 4)
 #endif
 
 #define RVV_UNARY_FP16_OP(op, dtype, vl, kernel)                               \
@@ -778,4 +789,22 @@ REGISTER_RVV_BINARY_FP16_OP(max, half, max_float16)
 REGISTER_RVV_FP16_KERNEL(FLOOR_MOD_INT16)
 REGISTER_RVV_BINARY_FP16_OP(floor_mod, int16_t, floor_mod_int16)
 
+// register cast kernel
+#define CAST_FLOAT16_FLOAT32(lmul, lmulx2, mlen)                               \
+    inline vfloat32m##lmulx2##_t cast_float16_float32(                         \
+        const vfloat16m##lmul##_t &v, const size_t vl) {                       \
+        return __riscv_vfwcvt_f_f_v_f32m##lmulx2(v, vl);                       \
+    }
+
+#define CAST_FLOAT32_FLOAT16(lmul, lmuld2, mlen)                               \
+    inline vfloat16m##lmuld2##_t cast_float32_float16(                         \
+        const vfloat32m##lmul##_t &v, const size_t vl) {                       \
+        return __riscv_vfncvt_f_f_w_f16m##lmuld2(v, vl);                       \
+    }
+
+REGISTER_RVV_FP16_x2_KERNEL(CAST_FLOAT16_FLOAT32);
+REGISTER_RVV_FP16_d2_KERNEL(CAST_FLOAT32_FLOAT16);
+
+REGISTER_RVV_CAST_ELEM_OP_1_2(half, float, cast_float16_float32)
+REGISTER_RVV_CAST_ELEM_OP_2_1(float, half, cast_float32_float16)
 } // namespace nncase::ntt::ops

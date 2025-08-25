@@ -13,7 +13,14 @@
  * limitations under the License.
  */
 #pragma once
-#include "primitive_ops.float16.h"
-#include "primitive_ops.float32.h"
+#include <cmath>
 
-namespace nncase::ntt::ops {} // namespace nncase::ntt::ops
+#ifdef __NEWLIB__
+namespace std {
+using ::erff;
+using ::roundf;
+
+inline float erf(float v) noexcept { return erff(v); }
+inline float round(float v) noexcept { return roundf(v); }
+} // namespace std
+#endif
