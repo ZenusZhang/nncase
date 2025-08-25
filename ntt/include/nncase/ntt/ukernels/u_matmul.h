@@ -591,7 +591,7 @@ struct u_matmul<ukernels::matmul_vectorize_kind::vectorize_mn, AccumulateC,
         if constexpr (m0_subtile) {
             TSubOutElem c0_tmp[m0_subtile][N0Tile];
 
-            ntt::loop<TOutElem::shape()[0_dim]>([&](auto sm_tile) {
+            ntt::loop<TOutElem::shape()[0_dim] / m0_subtile>([&](auto sm_tile) {
                 constexpr auto sm1 = sm_tile * m0_subtile;
                 ntt::apply(fixed_shape_v<m0_subtile, N0Tile>, [&](auto index) {
                     c0_tmp[index[0_dim]][index[1_dim]] =
