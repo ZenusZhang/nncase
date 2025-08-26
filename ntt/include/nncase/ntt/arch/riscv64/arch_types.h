@@ -89,6 +89,22 @@
 #define REGISTER_BFLOAT16_TYPE_WITH_LMUL_GE1(lmul)
 #endif
 
+#if defined(NNCASE_XPU_MODULE) && defined(SYS_MODE)
+#define REGISTER_F8E4M3_TYPE_WITH_LMUL_LT1()                                   \
+    typedef vfloat8e4m3mf2_t fixed_vfloat8e4m3mf2_t                            \
+        __attribute__((riscv_rvv_vector_bits(NTT_VLEN / 2)));                  \
+    typedef vfloat8e4m3mf4_t fixed_vfloat8e4m3mf4_t                            \
+        __attribute__((riscv_rvv_vector_bits(NTT_VLEN / 4)));
+
+#define REGISTER_F8E4M3_TYPE_WITH_LMUL_GE1(lmul)                               \
+    typedef vfloat8e4m3m##lmul##_t fixed_vfloat8e4m3m##lmul##_t                \
+        __attribute__((riscv_rvv_vector_bits(NTT_VLEN * lmul)));
+
+#else
+#define REGISTER_F8E4M3_TYPE_WITH_LMUL_LT1()
+#define REGISTER_F8E4M3_TYPE_WITH_LMUL_GE1(lmul)
+#endif
+
 // rvv fixed type
 #define REGISTER_RVV_FIXED_TYPE_WITH_LMUL_LT1                                  \
     typedef vint8mf2_t fixed_vint8mf2_t                                        \
@@ -119,13 +135,10 @@
         __attribute__((riscv_rvv_vector_bits(NTT_VLEN / 2)));                  \
     typedef vfloat16mf4_t fixed_vfloat16mf4_t                                  \
         __attribute__((riscv_rvv_vector_bits(NTT_VLEN / 4)));                  \
-    typedef vfloat8e4m3mf2_t fixed_vfloat8e4m3mf2_t                            \
-        __attribute__((riscv_rvv_vector_bits(NTT_VLEN / 2)));                  \
-    typedef vfloat8e4m3mf4_t fixed_vfloat8e4m3mf4_t                            \
-        __attribute__((riscv_rvv_vector_bits(NTT_VLEN / 4)));                  \
     REGISTER_BFLOAT16_TYPE_WITH_LMUL_LT1()                                     \
     typedef vfloat32mf2_t fixed_vfloat32mf2_t                                  \
-        __attribute__((riscv_rvv_vector_bits(NTT_VLEN / 2)));
+        __attribute__((riscv_rvv_vector_bits(NTT_VLEN / 2)));                  \
+    REGISTER_F8E4M3_TYPE_WITH_LMUL_LT1()
 
 #define REGISTER_RVV_FIXED_TYPE_WITH_LMUL_GE1(lmul)                            \
     typedef vint8m##lmul##_t fixed_vint8m##lmul##_t                            \
@@ -146,13 +159,12 @@
         __attribute__((riscv_rvv_vector_bits(NTT_VLEN * lmul)));               \
     typedef vfloat16m##lmul##_t fixed_vfloat16m##lmul##_t                      \
         __attribute__((riscv_rvv_vector_bits(NTT_VLEN * lmul)));               \
-    typedef vfloat8e4m3m##lmul##_t fixed_vfloat8e4m3m##lmul##_t                \
-        __attribute__((riscv_rvv_vector_bits(NTT_VLEN * lmul)));               \
     REGISTER_BFLOAT16_TYPE_WITH_LMUL_GE1(lmul)                                 \
     typedef vfloat32m##lmul##_t fixed_vfloat32m##lmul##_t                      \
         __attribute__((riscv_rvv_vector_bits(NTT_VLEN * lmul)));               \
     typedef vfloat64m##lmul##_t fixed_vfloat64m##lmul##_t                      \
-        __attribute__((riscv_rvv_vector_bits(NTT_VLEN * lmul)));
+        __attribute__((riscv_rvv_vector_bits(NTT_VLEN * lmul)));               \
+    REGISTER_F8E4M3_TYPE_WITH_LMUL_GE1(lmul)
 
 REGISTER_RVV_FIXED_TYPE_WITH_LMUL_LT1
 REGISTER_RVV_FIXED_TYPE_WITH_LMUL_GE1(1)
@@ -181,7 +193,7 @@ REGISTER_RVV_FIXED_TYPE_WITH_LMUL_GE1(8)
 #define NTT_DEFINE_BFLOAT16_VECTORS_GE(lmul)
 #endif
 
-#ifdef NNCASE_XPU_MODULE
+#if defined(NNCASE_XPU_MODULE) && defined(SYS_MODE)
 #define NTT_DEFINE_F8E4M3_NATIVE_VECTOR_WITH_LMUL_F2()                         \
     NTT_DEFINE_NATIVE_VECTOR_DEFAULT_BITCAST(                                  \
         float_e4m3_t, fixed_vfloat8e4m3mf2_t, fixed_vfloat8e4m3mf2_t,          \
