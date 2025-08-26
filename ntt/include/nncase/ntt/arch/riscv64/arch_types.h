@@ -317,6 +317,9 @@ REGISTER_RVV_FIXED_TYPE_WITH_LMUL_GE1(8)
 #define NTT_DEFINE_NATIVE_VECTOR2D_WITH_LMUL_GE1(lmul)                         \
     NTT_BEGIN_DEFINE_RVV_NATIVE_VECTOR2D_DEFAULT(float, float32, f32, lmul,    \
                                                  NTT_VLEN / 8 / sizeof(float)) \
+    NTT_END_DEFINE_NATIVE_VECTOR()                                             \
+    NTT_BEGIN_DEFINE_RVV_NATIVE_VECTOR2D_DEFAULT(half, float16, f16, lmul,     \
+                                                 NTT_VLEN / 8 / sizeof(half))  \
     NTT_END_DEFINE_NATIVE_VECTOR()
 
 NTT_DEFINE_NATIVE_VECTOR_WITH_LMUL_LT1
