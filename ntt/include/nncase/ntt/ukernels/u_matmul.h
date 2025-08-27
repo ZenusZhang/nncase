@@ -311,7 +311,7 @@ struct u_matmul_generic {
                     loop<n0_tile_scaled>([&](auto j) {
                         ntt::apply(c0_tmp[i][j].shape(), [&](auto index) {
                             c0_tmp[i][j](index) =
-                                (TElem)c0_grouped[i][j](index);
+                                (TElem)(float)c0_grouped[i][j](index);
                         });
                     });
                 });
@@ -354,7 +354,7 @@ struct u_matmul_generic {
                     loop<n0_tile_scaled>([&](auto j) {
                         ntt::apply(c0_tmp[i][j].shape(), [&](auto index) {
                             c0_tmp[i][j](index) =
-                                (TElem)c0_grouped[i][j](index);
+                                (TElem)(float)c0_grouped[i][j](index);
                         });
                     });
                 });
@@ -405,7 +405,7 @@ struct u_matmul_generic {
                     loop<n0_tile_scaled>([&](auto j) {
                         ntt::apply(c0_tmp[i][j].shape(), [&](auto index) {
                             c0_tmp[i][j](index) =
-                                (TElem)c0_grouped[i][j](index);
+                                (TElem)(float)c0_grouped[i][j](index);
                         });
                     });
                 });
@@ -461,7 +461,7 @@ struct u_matmul_generic {
                     loop<n0_tile_scaled>([&](auto j) {
                         ntt::apply(c0_tmp[i][j].shape(), [&](auto index) {
                             c0_tmp[i][j](index) =
-                                (TElem)c0_grouped[i][j](index);
+                                (TElem)(float)c0_grouped[i][j](index);
                         });
                     });
                 });
@@ -519,7 +519,7 @@ struct u_matmul_generic {
                     loop<n0_tile_scaled>([&](auto j) {
                         ntt::apply(c0_tmp[i][j].shape(), [&](auto index) {
                             c0_tmp[i][j](index) =
-                                (TElem)c0_grouped[i][j](index);
+                                (TElem)(float)c0_grouped[i][j](index);
                         });
                     });
                 });
