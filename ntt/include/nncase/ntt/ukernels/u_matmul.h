@@ -301,7 +301,7 @@ struct u_matmul_generic {
                         ntt::loop<m0_scale>([&](auto k) {
                             u_mul_add<VectorizeKind, true>(
                                 ntt::unwrap_proxy(a0_grouped[m](k)),
-                                b0_grouped[n], c0_grouped[m][n]);
+                                b0_grouped[n], c0_grouped[k][n]);
                         });
                     }
                 }
