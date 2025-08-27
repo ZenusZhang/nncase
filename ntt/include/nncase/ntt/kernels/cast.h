@@ -71,7 +71,7 @@ class cast_impl {
                 ntt::loop<in_offset_scale>([&](auto i) {
                     in_temp(i) = input(in_index);
                     if constexpr (vectorizedAxes.rank() == 1) {
-                        in_index[fixed_dim_v<vectorizedAxes.at(0)>] =
+                        in_index[fixed_dim_v<vectorizedAxes.at(0)>] +=
                             input_stride;
                     }
                 });
