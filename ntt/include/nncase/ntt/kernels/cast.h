@@ -55,63 +55,73 @@ class cast_impl {
         static_assert(vectorizedAxes.rank() == 0 || vectorizedAxes.rank() == 1,
                       "vectorizedAxes rank for cast must be 0 or 1");
 
-        [[maybe_unused]] auto input_stride =
-            vectorizedAxes.rank() == 1 ? input.strides()[vectorizedAxes.at(0)]
-                                       : 1;
-        [[maybe_unused]] auto output_stride =
-            vectorizedAxes.rank() == 1 ? output.strides()[vectorizedAxes.at(0)]
-                                       : 1;
-        if constexpr (in_offset_scale > 1 && out_offset_scale == 1) {
-            ntt::apply(output.shape(), [&](auto index) {
-                auto in_index = index;
-                if constexpr (vectorizedAxes.rank() == 1)
-                    in_index[fixed_dim_v<vectorizedAxes.at(0)>] *=
-                        in_offset_scale;
-                prepend_lanes_t<InElemType, in_offset_scale> in_temp{};
-                ntt::loop<in_offset_scale>([&](auto i) {
-                    in_temp(i) = input(in_index);
-                    if constexpr (vectorizedAxes.rank() == 1) {
-                        in_index[fixed_dim_v<vectorizedAxes.at(0)>] += 1;
-                    }
-                });
-                output(index) =
-                    ntt::cast_elem<element_or_scalar_t<OutElemType>>(in_temp);
-                output(index) = TPostOp<OutElemType>()(output(index));
-            });
-        } else if constexpr (in_offset_scale == 1 && out_offset_scale > 1) {
-            ntt::apply(input.shape(), [&](auto index) {
-                auto out_index = index;
-                if constexpr (vectorizedAxes.rank() == 1)
-                    out_index[fixed_dim_v<vectorizedAxes.at(0)>] *=
-                        out_offset_scale;
+        auto input_conti_dims = contiguous_dims(input.shape(), input.strides());
+        auto output_conti_dims =
+            contiguous_dims(output.shape(), output.strides());
 
-                auto tmp_output =
-                    ntt::cast_elem<element_or_scalar_t<OutElemType>>(
-                        input(index));
-                ntt::loop<out_offset_scale>([&](auto s) {
-                    output(out_index) = tmp_output(s);
-                    output(out_index) =
-                        TPostOp<OutElemType>()(output(out_index));
-                    if constexpr (vectorizedAxes.rank() == 1)
-                        out_index[fixed_dim_v<vectorizedAxes.at(0)>] += 1;
-                });
-            });
+        auto addr_input = input.elements().data();
+        auto addr_output_element = output.elements().data();
+
+        auto len_in = input.shape().length();
+        auto len_out = input.shape().length();
+
+        auto input_stride = vectorizedAxes.rank() == 1
+                                ? input.strides()[vectorizedAxes.at(0)]
+                                : 1;
+        auto output_stride = vectorizedAxes.rank() == 1
+                                 ? output.strides()[vectorizedAxes.at(0)]
+                                 : 1;
+        if ((input_conti_dims == TIn::rank()) &&
+            (output_conti_dims == TOut::rank())) {
+            ntt::u_cast<in_offset_scale, out_offset_scale, TPostOp>(
+                addr_input, input_stride, addr_output_element, output_stride,
+                len_in, len_out);
         } else {
-            ntt::apply(input.shape(), [&](auto index) {
-                output(index) =
-                    ntt::cast_elem<element_or_scalar_t<OutElemType>>(
-                        input(index));
-                output(index) = TPostOp<OutElemType>()(output(index));
-            });
-        }
-    }
+            if constexpr (in_offset_scale > 1 && out_offset_scale == 1) {
+                ntt::apply(output.shape(), [&](auto index) {
+                    auto in_index = index;
+                    if constexpr (vectorizedAxes.rank() == 1)
+                        in_index[fixed_dim_v<vectorizedAxes.at(0)>] *=
+                            in_offset_scale;
+                    prepend_lanes_t<InElemType, in_offset_scale> in_temp{};
+                    ntt::loop<in_offset_scale>([&](auto i) {
+                        in_temp(i) = input(in_index);
+                        if constexpr (vectorizedAxes.rank() == 1) {
+                            in_index[fixed_dim_v<vectorizedAxes.at(0)>] += 1;
+                        }
+                    });
+                    output(index) =
+                        ntt::cast_elem<element_or_scalar_t<OutElemType>>(
+                            in_temp);
+                    output(index) = TPostOp<OutElemType>()(output(index));
+                });
+            } else if constexpr (in_offset_scale == 1 && out_offset_scale > 1) {
+                ntt::apply(input.shape(), [&](auto index) {
+                    auto out_index = index;
+                    if constexpr (vectorizedAxes.rank() == 1)
+                        out_index[fixed_dim_v<vectorizedAxes.at(0)>] *=
+                            out_offset_scale;
 
-  private:
-    template <size_t in_offset_scale, size_t out_offset_scale, class T1,
-              class T2>
-    constexpr void cast_contiguous(const T1 *input, T2 *output, size_t extent) {
-        ntt::u_cast<in_offset_scale, out_offset_scale, TPostOp>(
-            input, 1, output, 1, extent);
+                    auto tmp_output =
+                        ntt::cast_elem<element_or_scalar_t<OutElemType>>(
+                            input(index));
+                    ntt::loop<out_offset_scale>([&](auto s) {
+                        output(out_index) = tmp_output(s);
+                        output(out_index) =
+                            TPostOp<OutElemType>()(output(out_index));
+                        if constexpr (vectorizedAxes.rank() == 1)
+                            out_index[fixed_dim_v<vectorizedAxes.at(0)>] += 1;
+                    });
+                });
+            } else {
+                ntt::apply(input.shape(), [&](auto index) {
+                    output(index) =
+                        ntt::cast_elem<element_or_scalar_t<OutElemType>>(
+                            input(index));
+                    output(index) = TPostOp<OutElemType>()(output(index));
+                });
+            }
+        }
     }
 };
 } // namespace detail
