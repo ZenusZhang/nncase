@@ -50,79 +50,65 @@ class cast_impl {
   public:
     constexpr void operator()(const TIn &input, TOut &output,
                               const VectorizedAxes &) noexcept {
-#if 0
-        if constexpr (scale != 1.0f) {
-            static_assert(TIn::rank() == 1,
-                          "Only support 1D tensor revectorize for now!");
-        }
 
-        dynamic_shape_t<rank> index{};
-        const auto conti_dims =
-            ntt::min(contiguous_dims(input.shape(), input.strides()),
-                     contiguous_dims(output.shape(), output.strides()));
-
-        if constexpr (scale >= 1.0f) {
-            apply<0>(conti_dims, output.shape(), index, input, output);
-        } else {
-            apply<0>(conti_dims, input.shape(), index, input, output);
-        }
-#endif
         constexpr VectorizedAxes vectorizedAxes;
-        if constexpr (scale >= 1.f) {
+        static_assert(vectorizedAxes.rank() == 0 || vectorizedAxes.rank() == 1,
+                      "vectorizedAxes rank for cast must be 0 or 1");
+
+        auto input_stride = vectorizedAxes.rank() == 1
+                                ? input.strides()[vectorizedAxes.at(0)]
+                                : 1;
+        auto output_stride = vectorizedAxes.rank() == 1
+                                 ? output.strides()[vectorizedAxes.at(0)]
+                                 : 1;
+        if constexpr (in_offset_scale > 1 && out_offset_scale == 1) {
             ntt::apply(output.shape(), [&](auto index) {
                 auto in_index = index;
                 if constexpr (vectorizedAxes.rank() == 1)
                     in_index[fixed_dim_v<vectorizedAxes.at(0)>] *=
                         in_offset_scale;
-                ntt::u_cast<in_offset_scale, out_offset_scale, TPostOp>(
-                    &input(in_index),
-                    vectorizedAxes.rank() == 1
-                        ? input.strides()[vectorizedAxes.at(0)]
-                        : 1,
-                    &output(index), 1, 1);
+                prepend_lanes_t<InElemType, in_offset_scale> in_temp{};
+                ntt::loop<in_offset_scale>([&](auto i) {
+                    in_temp(i) = input(in_index);
+                    if constexpr (vectorizedAxes.rank() == 1) {
+                        in_index[fixed_dim_v<vectorizedAxes.at(0)>] =
+                            input_stride;
+                    }
+                });
+                output(index) =
+                    ntt::cast_elem<element_or_scalar_t<OutElemType>>(in_temp);
+                output(index) = TPostOp<OutElemType>()(output(index));
             });
-        } else {
+        } else if constexpr (in_offset_scale == 1 && out_offset_scale > 1) {
             ntt::apply(input.shape(), [&](auto index) {
                 auto out_index = index;
                 if constexpr (vectorizedAxes.rank() == 1)
                     out_index[fixed_dim_v<vectorizedAxes.at(0)>] *=
                         out_offset_scale;
-                ntt::u_cast<in_offset_scale, out_offset_scale, TPostOp>(
-                    &input(index), 1, &output(out_index),
-                    vectorizedAxes.rank() == 1
-                        ? output.strides()[vectorizedAxes.at(0)]
-                        : 1,
-                    1);
+
+                auto tmp_output =
+                    ntt::cast_elem<element_or_scalar_t<OutElemType>>(
+                        input(index));
+                ntt::loop<out_offset_scale>([&](auto s) {
+                    output(out_index) = tmp_output(s);
+                    output(out_index) =
+                        TPostOp<OutElemType>()(output(out_index));
+                    if constexpr (vectorizedAxes.rank() == 1)
+                        out_index[fixed_dim_v<vectorizedAxes.at(0)>] +=
+                            output_stride;
+                });
+            });
+        } else {
+            ntt::apply(input.shape(), [&](auto index) {
+                output(index) =
+                    ntt::cast_elem<element_or_scalar_t<OutElemType>>(
+                        input(index));
+                output(index) = TPostOp<OutElemType>()(output(index));
             });
         }
     }
 
   private:
-#if 0    
-    template <size_t Axis, Dimension TContiguousDims, Shape TRestDims>
-    constexpr void
-    apply(const TContiguousDims &conti_dims, const TRestDims &rest_dims,
-          dynamic_shape_t<rank> &index, const TIn &input, TOut &output) {
-        if (conti_dims == rest_dims.rank()) {
-            const auto inner_size = rest_dims.length();
-            auto in_offset =
-                linear_offset(index, input.strides()) * in_offset_scale;
-            auto out_offset =
-                linear_offset(index, output.strides()) * out_offset_scale;
-            auto input_p = input.elements().data() + in_offset;
-            auto output_p = output.elements().data() + out_offset;
-            cast_contiguous(input_p, output_p, inner_size);
-        } else if constexpr (Axis + 1 < rank) {
-            for (index[fixed_dim_v<Axis>] = 0;
-                 index[fixed_dim_v<Axis>] < rest_dims[dim_zero];
-                 index[fixed_dim_v<Axis>]++) {
-                apply<Axis + 1>(conti_dims, rest_dims.template slice<1>(),
-                                index, input, output);
-            }
-        }
-    }
-#endif
-
     template <size_t in_offset_scale, size_t out_offset_scale, class T1,
               class T2>
     constexpr void cast_contiguous(const T1 *input, T2 *output, size_t extent) {
@@ -132,10 +118,11 @@ class cast_impl {
 };
 } // namespace detail
 
-template <template<class> class TPostOp = DefaultPostOp, Tensor TIn, Tensor TOut,
-          FixedDimensions VectorizedAxes = shape_t<>>
-__attribute__((noinline)) void cast(const TIn &input, TOut &&output,
-          const VectorizedAxes &vectorizedAxes = {}) noexcept {
+template <template <class> class TPostOp = DefaultPostOp, Tensor TIn,
+          Tensor TOut, FixedDimensions VectorizedAxes = shape_t<>>
+__attribute__((noinline)) void
+cast(const TIn &input, TOut &&output,
+     const VectorizedAxes &vectorizedAxes = {}) noexcept {
     detail::cast_impl<TIn, std::decay_t<TOut>, VectorizedAxes, TPostOp> impl;
     impl(input, output, vectorizedAxes);
 }
