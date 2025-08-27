@@ -55,12 +55,12 @@ class cast_impl {
         static_assert(vectorizedAxes.rank() == 0 || vectorizedAxes.rank() == 1,
                       "vectorizedAxes rank for cast must be 0 or 1");
 
-        auto input_stride = vectorizedAxes.rank() == 1
-                                ? input.strides()[vectorizedAxes.at(0)]
-                                : 1;
-        auto output_stride = vectorizedAxes.rank() == 1
-                                 ? output.strides()[vectorizedAxes.at(0)]
-                                 : 1;
+        [[maybe_unused]] auto input_stride =
+            vectorizedAxes.rank() == 1 ? input.strides()[vectorizedAxes.at(0)]
+                                       : 1;
+        [[maybe_unused]] auto output_stride =
+            vectorizedAxes.rank() == 1 ? output.strides()[vectorizedAxes.at(0)]
+                                       : 1;
         if constexpr (in_offset_scale > 1 && out_offset_scale == 1) {
             ntt::apply(output.shape(), [&](auto index) {
                 auto in_index = index;
@@ -71,8 +71,7 @@ class cast_impl {
                 ntt::loop<in_offset_scale>([&](auto i) {
                     in_temp(i) = input(in_index);
                     if constexpr (vectorizedAxes.rank() == 1) {
-                        in_index[fixed_dim_v<vectorizedAxes.at(0)>] +=
-                            input_stride;
+                        in_index[fixed_dim_v<vectorizedAxes.at(0)>] += 1;
                     }
                 });
                 output(index) =
@@ -94,8 +93,7 @@ class cast_impl {
                     output(out_index) =
                         TPostOp<OutElemType>()(output(out_index));
                     if constexpr (vectorizedAxes.rank() == 1)
-                        out_index[fixed_dim_v<vectorizedAxes.at(0)>] +=
-                            output_stride;
+                        out_index[fixed_dim_v<vectorizedAxes.at(0)>] += 1;
                 });
             });
         } else {
