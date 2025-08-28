@@ -63,7 +63,7 @@ class cast_impl {
         auto addr_output_element = output.elements().data();
 
         auto len_in = input.shape().length();
-        auto len_out = input.shape().length();
+        auto len_out = output.shape().length();
 
         auto input_stride = vectorizedAxes.rank() == 1
                                 ? input.strides()[vectorizedAxes.at(0)]

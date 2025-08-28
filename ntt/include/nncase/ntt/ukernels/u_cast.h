@@ -71,12 +71,14 @@ struct u_cast {
             while (count / unroll) {
                 for (size_t i = 0; i < unroll; i++) {
                     auto tmp_output = ntt::cast_elem<T2Elem>(*input);
+                    auto out_ptr = output;
                     ntt::loop<out_offset_scale>([&](auto s) {
-                        *output = tmp_output(s);
-                        (*output) = TPostOps<T2>()(*output);
-                        output += output_stride;
+                        *out_ptr = tmp_output(s);
+                        (*out_ptr) = TPostOps<T2>()(*out_ptr);
+                        out_ptr += output_stride;
                     });
-                    input += input_stride * in_offset_scale;
+                    output += 1;
+                    input += 1;
                     count--;
                 }
             }
@@ -88,7 +90,7 @@ struct u_cast {
                     (*output) = TPostOps<T2>()(*output);
                     output += output_stride;
                 });
-                input += input_stride * in_offset_scale;
+                input += 1;
             }
 
         } else {
