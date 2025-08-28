@@ -1,12 +1,3 @@
-#test case combination:
-# 1. lhs/rhs
-# 2            # "div": f"auto ort_output = ortki_Div(ort_input_lhs, ort_input_rhs);",
-# 3. lhs broadcast to rhs, rhs broadcast to lhs
-# 3.1. 1 dim broadcast
-# 3.2. 2 dims broadcast
-# 4. scalar/vector/2d vector
-# 5. tensor/ view
-
 import itertools
 import os
 from typing import List
@@ -18,8 +9,8 @@ class BinaryTestGenerator(BaseTestGenerator):
     def __init__(self):
         super().__init__()
         
-        # ORT binary operations do not support these data types, need to cast to double 
-        # fortunately, they could be cast in ort( fp8 are unfortunate)
+        # ORT *binary operations* do not support these data types, need to cast to double 
+        # fortunately, they could be *cast* in ort( fp8 are unfortunate)
         self.types_need_cast_in_ort = {
             "swishb": [ 'bool', 'uint8_t', 'uint16_t', 'uint32_t',
                 'uint64_t', 'int8_t', 'int16_t', 'bfloat16', 'half',
@@ -75,11 +66,7 @@ class BinaryTestGenerator(BaseTestGenerator):
 
         }
 
-        self.simple_continuities = [
-            Continuity(is_contiguous=True, non_contiguous_dim=None, big_tensor_op=None),
-            # Continuity(is_contiguous=False, non_contiguous_dim=1, big_tensor_op="*2"),
-            Continuity(is_contiguous=False, non_contiguous_dim=2, big_tensor_op="+3"),
-        ]
+
 
         self.integer_types = ['int8_t', 'int16_t', 'int32_t', 'int64_t', 'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t'] 
         
@@ -89,6 +76,7 @@ class BinaryTestGenerator(BaseTestGenerator):
             "inner_product": self._generate_inner_product_operation,
         }
 
+        # tests in self.op_str_map_exhaustive would go through exhaustive tests.
         self.op_str_map_exhaustive = {
             "add": f"auto ort_output = ortki_Add(ort_input_lhs, ort_input_rhs);",
             "swishb":  f"auto ort_output = ortki_SwishB(ort_input_lhs, ort_input_rhs);",
@@ -123,11 +111,6 @@ class BinaryTestGenerator(BaseTestGenerator):
         }
 
 
-    def _get_ulp_tolerance(self, op_str, datatype):
-        """Get the ULP tolerance for a specific operation and data type."""
-        if op_str in self.ulp_tolerances:
-            return self.ulp_tolerances[op_str].get(datatype.cpp_type, self.ulp_tolerances[op_str]["default"])
-        return self.ulp_tolerances["default"].get(datatype.cpp_type, self.ulp_tolerances["default"]["default"])
 
     def _generate_minmax_operation(self, operation_func):
         """Generate code for min/max operations with reduced duplication"""
@@ -247,11 +230,6 @@ class BinaryTestGenerator(BaseTestGenerator):
             "}\n\n"
         )
 
-    def generate_ort_custom_op(self, datatype, custom_op_name):
-        """Generate custom ORT operation functions"""
-        if custom_op_name in self.ort_custom_function:
-            return self.ort_custom_function[custom_op_name](datatype)
-        return ""
 
     def _generate_aligned_ntt_scalar_input(self, ntt_op_str, datatype, input_var_name, continuity_var_name, 
                                    is_dynamic_shape, dims_spec, vector_rank, other_vector_rank):
@@ -789,7 +767,7 @@ class BinaryTestGenerator(BaseTestGenerator):
         # set cast mode for back to ntt function
         cast_mode = 0
         # Compare outputs
-        if(datatype.cpp_type in self.types_need_cast_in_ntt): # fp8 
+        if(datatype.cpp_type in self.types_need_cast_in_ntt): 
             cast_mode = 4
         
         cast_code, golden_var_name = self.generate_ort_back2ntt(
@@ -903,7 +881,7 @@ class BinaryTestGenerator(BaseTestGenerator):
         # Choose appropriate dims_specs based on op_str
         dims_specs_to_use = self.dims_specs_options.get(op_str, self.dims_specs_options["default"])
         
-        param_combinations_exhausitive = itertools.product(
+        param_combinations_exhaustive = itertools.product(
             is_dynamic_options,          # lhs_is_dynamic_shape 2
             is_dynamic_options,          # rhs_is_dynamic_shape 2
             dims_specs_to_use,           # (lhs_dims_spec, rhs_dims_spec) 6
@@ -922,7 +900,7 @@ class BinaryTestGenerator(BaseTestGenerator):
             [Continuity(is_contiguous=True, non_contiguous_dim=None, big_tensor_op=None)]
         )
         if op_str in self.op_str_map_exhaustive:
-            return param_combinations_exhausitive
+            return param_combinations_exhaustive
         else:
             return param_combinations_simplified
 
@@ -934,7 +912,7 @@ class BinaryTestGenerator(BaseTestGenerator):
 
         # Generate custom ORT functions if needed
         if op_str in self.ort_custom_function:
-            custom_op_func = self.generate_ort_custom_op(datatype, op_str)
+            custom_op_func = self._generate_ort_custom_op(datatype, op_str)
             code.append(custom_op_func)
 
         param_combinations = self._get_param_combinations(op_str)

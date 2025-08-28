@@ -79,6 +79,33 @@ class BaseTestGenerator:
             'bfloat16': 'DataType_BFLOAT16',
         }
 
+        self.simple_continuities = [
+            Continuity(is_contiguous=True, non_contiguous_dim=None, big_tensor_op=None),
+            # Continuity(is_contiguous=False, non_contiguous_dim=1, big_tensor_op="*2"),
+            Continuity(is_contiguous=False, non_contiguous_dim=2, big_tensor_op="+3"),
+        ]
+
+        self.ulp_tolerances = {
+            "default": {
+                "default": 1
+            }
+        }
+
+        self.ort_custom_function = {}
+
+
+    def _generate_ort_custom_op(self, datatype, custom_op_name):
+        """Generate custom ORT operation functions"""
+        if custom_op_name in self.ort_custom_function:
+            return self.ort_custom_function[custom_op_name](datatype)
+        return ""
+
+    def _get_ulp_tolerance(self, op_str, datatype):
+        """Get the ULP tolerance for a specific operation and data type."""
+        if op_str in self.ulp_tolerances:
+            return self.ulp_tolerances[op_str].get(datatype.cpp_type, self.ulp_tolerances[op_str]["default"])
+        return self.ulp_tolerances["default"].get(datatype.cpp_type, self.ulp_tolerances["default"]["default"])
+
     def get_unpacked_dims(self, dim_names, unpack_axes) -> List[str]:
         """Generate dimension expressions for an unpack operation."""
         output_dims = []
