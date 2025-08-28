@@ -148,7 +148,7 @@ template <bool UseMean = true, Tensor TIn, Tensor TScale, Tensor TBias,
           typename TOut, FixedDimension TAxis,
           FixedDimensions VectorizedAxes = shape_t<>,
           Dimensions PadedNums = shape_t<>>
-void __attribute__((noinline)) vectorized_layer_norm(const TIn &input, const TScale &scale,
+void vectorized_layer_norm(const TIn &input, const TScale &scale,
                            const TBias &bias, TOut &&output,
                            const float &epsilon, const TAxis &axis = -1_dim,
                            const VectorizedAxes &vectorizedAxes = {},
