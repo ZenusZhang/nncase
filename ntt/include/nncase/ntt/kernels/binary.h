@@ -63,7 +63,7 @@ class binary_impl
 template <template <class T1, class T2> class TOp,
           template <class> class TPostOp = DefaultPostOp, Tensor TLhs,
           Tensor TRhs, class TOut>
-void binary(const TLhs &lhs, const TRhs &rhs, TOut &&output) {
+__attribute__((noinline)) void binary(const TLhs &lhs, const TRhs &rhs, TOut &&output) {
     const TOp<std::remove_cv_t<typename TLhs::element_type>,
               std::remove_cv_t<typename TRhs::element_type>>
         op;

@@ -648,6 +648,12 @@ template <> struct swish<ntt::vector<half, 16>> {
 // // binary
 
 // add
+template <> struct add<float, half> {
+    constexpr float operator()(const float &s1, const half &s2) const noexcept {
+        return s1 + (float)s2;
+    }
+};
+
 template <> struct add<ntt::vector<half, 16>, ntt::vector<half, 16>> {
     ntt::vector<half, 16>
     operator()(const ntt::vector<half, 16> &v1,
@@ -656,6 +662,15 @@ template <> struct add<ntt::vector<half, 16>, ntt::vector<half, 16>> {
         const auto fp32_v2 = ntt::cast_elem<float>(v2);
         const auto fp32_ret = ntt::add(fp32_v1, fp32_v2);
         return ntt::cast_elem<half>(fp32_ret);
+    }
+};
+
+template <> struct add<ntt::vector<float, 2, 8>, ntt::vector<half, 16>> {
+    ntt::vector<float, 2, 8>
+    operator()(const ntt::vector<float, 2, 8> &v1,
+               const ntt::vector<half, 16> &v2) const noexcept {
+        const auto fp32_v2 = ntt::cast_elem<float>(v2);
+        return ntt::add(v1, fp32_v2);
     }
 };
 

@@ -537,6 +537,38 @@ REGISTER_RVV_UNARY_FP16_OP(erf, half, erf_float16)
         };                                                                     \
     };
 
+#define RVV_BINARY_fp32_fp16_OP(op, vl, kernel)                                \
+    template <>                                                                \
+    struct op<ntt::vector<float, 2, vl / 2>, ntt::vector<half, vl>> {          \
+        ntt::vector<float, 2, vl / 2>                                          \
+        operator()(const ntt::vector<float, 2, vl / 2> &v1,                    \
+                   const ntt::vector<half, vl> &v2) const noexcept {           \
+            return kernel(v1, v2, vl);                                         \
+        }                                                                      \
+    };                                                                         \
+    template <>                                                                \
+    struct op<ntt::vector<half, vl>, ntt::vector<float, 2, vl / 2>> {          \
+        ntt::vector<float, 2, vl / 2>                                          \
+        operator()(const ntt::vector<half, vl> &v1,                            \
+                   const ntt::vector<float, 2, vl / 2> &v2) const noexcept {   \
+            return kernel(v1, v2, vl);                                         \
+        }                                                                      \
+    };                                                                         \
+    template <> struct op<ntt::vector<float, 2, vl / 2>, half> {               \
+        ntt::vector<float, 2, vl / 2>                                          \
+        operator()(const ntt::vector<float, 2, vl / 2> &v,                     \
+                   const half &s) const noexcept {                             \
+            return kernel(v, s, vl);                                           \
+        }                                                                      \
+    };                                                                         \
+    template <> struct op<half, ntt::vector<float, 2, vl / 2>> {               \
+        ntt::vector<float, 2, vl / 2>                                          \
+        operator()(const half &s,                                              \
+                   const ntt::vector<float, 2, vl / 2> &v) const noexcept {    \
+            return kernel(s, v, vl);                                           \
+        };                                                                     \
+    };
+
 // binary op
 #define REGISTER_RVV_BINARY_FP16_OP(op, dtype, kernel)                         \
     RVV_BINARY_fp16_OP(op, dtype, NTT_VL(sizeof(dtype) * 8, *, 1), kernel)     \
@@ -545,6 +577,12 @@ REGISTER_RVV_UNARY_FP16_OP(erf, half, erf_float16)
                                kernel)                                         \
                 RVV_BINARY_fp16_OP(op, dtype, NTT_VL(sizeof(dtype) * 8, *, 8), \
                                    kernel)
+
+#define REGISTER_RVV_BINARY_FP32_FP16_OP(op, kernel)                           \
+    RVV_BINARY_fp32_fp16_OP(op, NTT_VL(sizeof(half) * 8, *, 1), kernel)        \
+        RVV_BINARY_fp32_fp16_OP(op, NTT_VL(sizeof(half) * 8, *, 2), kernel)    \
+            RVV_BINARY_fp32_fp16_OP(op, NTT_VL(sizeof(half) * 8, *, 4),        \
+                                    kernel)
 
 // add
 #define ADD_FLOAT16(lmul, mlen)                                                \
@@ -566,6 +604,32 @@ REGISTER_RVV_UNARY_FP16_OP(erf, half, erf_float16)
 
 REGISTER_RVV_FP16_KERNEL(ADD_FLOAT16)
 REGISTER_RVV_BINARY_FP16_OP(add, half, add_float16)
+
+#define ADD_FLOAT32_FLOAT16(lmul, lmulx2, mlen)                                \
+    inline vfloat32m##lmulx2##_t add_float16(const vfloat32m##lmulx2##_t &v1,  \
+                                             const vfloat16m##lmul##_t &v2,    \
+                                             const size_t vl) {                \
+        return __riscv_vfwadd_wv_f32m##lmulx2(v1, v2, vl);                     \
+    }                                                                          \
+                                                                               \
+    inline vfloat32m##lmulx2##_t add_float16(const vfloat16m##lmul##_t &v1,    \
+                                             const vfloat32m##lmulx2##_t &v2,  \
+                                             const size_t vl) {                \
+        return __riscv_vfwadd_wv_f32m##lmulx2(v2, v1, vl);                     \
+    }                                                                          \
+                                                                               \
+    inline vfloat32m##lmulx2##_t add_float16(const vfloat32m##lmulx2##_t &v,   \
+                                             const half &s, const size_t vl) { \
+        return __riscv_vfwadd_wf_f32m##lmulx2(v, s, vl);                       \
+    }                                                                          \
+                                                                               \
+    inline vfloat32m##lmulx2##_t add_float16(                                  \
+        const half &s, const vfloat32m##lmulx2##_t &v, const size_t vl) {      \
+        return __riscv_vfwadd_wf_f32m##lmulx2(v, s, vl);                       \
+    }
+
+REGISTER_RVV_FP16_x2_KERNEL(ADD_FLOAT32_FLOAT16);
+REGISTER_RVV_BINARY_FP32_FP16_OP(add, add_float16)
 
 // sub
 #define SUB_FLOAT16(lmul, mlen)                                                \

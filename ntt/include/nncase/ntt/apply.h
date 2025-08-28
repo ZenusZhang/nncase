@@ -13,36 +13,63 @@
  * limitations under the License.
  */
 #pragma once
-#include "nncase/ntt/shape.h"
+#include "dimension.h"
+#include "shape.h"
 
 namespace nncase::ntt {
 namespace detail {
-template <size_t Axis, class Shape, class Callable> struct apply_impl {
-    void operator()(dynamic_shape_t<Shape::rank()> &index, const Shape &shape,
-                    Callable &&callable) {
-        constexpr auto fixed_dim_axis = fixed_dim_v<Axis>;
-        for (index[fixed_dim_axis] = 0;
-             index[fixed_dim_axis] < shape[fixed_dim_axis];
-             index[fixed_dim_axis]++) {
-            if constexpr (Axis == Shape::rank() - 1) {
-                callable(index);
-            } else {
-                apply_impl<Axis + 1, Shape, Callable>()(
-                    index, shape, std::forward<Callable>(callable));
-            }
+template <size_t Axis, class TIndex, class Shape, class Callable>
+constexpr void apply_impl(const TIndex &index_prefix, const Shape &shape,
+                          Callable &&callable) {
+    for (dim_t i = 0; i < shape[fixed_dim_v<Axis>]; i++) {
+        const auto index = index_prefix.append(i);
+        if constexpr (Axis == Shape::rank() - 1) {
+            callable(index);
+        } else {
+            apply_impl<Axis + 1>(index, shape,
+                                 std::forward<Callable>(callable));
         }
     }
-};
+}
+
+template <size_t Axis, class TIndex, class Shape, class Strides, class Callable>
+constexpr void
+apply_with_linear_offset_impl(const TIndex &index_prefix, dim_t linear_offset,
+                              const Shape &shape, const Strides &strides,
+                              Callable &&callable) {
+    for (dim_t i = 0; i < shape[fixed_dim_v<Axis>]; i++) {
+        const auto index = index_prefix.append(i);
+        if constexpr (Axis == Shape::rank() - 1) {
+            callable(index, linear_offset);
+        } else {
+            apply_with_linear_offset_impl<Axis + 1>(
+                index, linear_offset, shape, strides,
+                std::forward<Callable>(callable));
+        }
+
+        linear_offset += strides[fixed_dim_v<Axis>];
+    }
+}
 } // namespace detail
 
 template <class Shape, class Callable>
-void apply(const Shape &shape, Callable &&callable) {
-    dynamic_shape_t<Shape::rank()> index;
+constexpr void apply(const Shape &shape, Callable &&callable) {
     if constexpr (Shape::rank()) {
-        detail::apply_impl<0, Shape, Callable>()(
-            index, shape, std::forward<Callable>(callable));
+        detail::apply_impl<0>(fixed_shape_v<>, shape,
+                              std::forward<Callable>(callable));
     } else {
-        callable(index);
+        callable(fixed_shape_v<>);
+    }
+}
+
+template <Tensor TTensor, class Callable>
+constexpr void apply_with_linear_offset(TTensor &tensor, Callable &&callable) {
+    if constexpr (TTensor::rank()) {
+        detail::apply_with_linear_offset_impl<0>(
+            fixed_shape_v<>, 0, tensor.shape(), tensor.strides(),
+            std::forward<Callable>(callable));
+    } else {
+        callable(fixed_shape_v<>, 0);
     }
 }
 } // namespace nncase::ntt
