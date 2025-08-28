@@ -71,7 +71,7 @@ class cast_impl {
         auto output_stride = vectorizedAxes.rank() == 1
                                  ? output.strides()[vectorizedAxes.at(0)]
                                  : 1;
-        if ((input_conti_dims == TIn::rank()) &&
+        if (false && (input_conti_dims == TIn::rank()) &&
             (output_conti_dims == TOut::rank())) {
             ntt::u_cast<in_offset_scale, out_offset_scale, TPostOp>(
                 addr_input, input_stride, addr_output_element, output_stride,
