@@ -200,20 +200,19 @@ REGISTER_RVV_FIXED_TYPE_WITH_LMUL_GE1(8)
 #if defined(NNCASE_XPU_MODULE) && defined(SYS_MODE)
 #define NTT_DEFINE_F8E4M3_NATIVE_VECTOR_WITH_LMUL_F2()                         \
     NTT_DEFINE_NATIVE_VECTOR_DEFAULT_BITCAST(                                  \
-        float_e4m3_t, fixed_vfloat8e4m3mf2_t, fixed_vfloat8e4m3mf2_t,          \
-        signed char, NTT_VLEN / 8 / sizeof(float_e4m3_t) / 2)                  \
+        float_e4m3_t, fixed_vfloat8e4m3mf2_t, signed char,                     \
+        NTT_VLEN / 8 / sizeof(float_e4m3_t) / 2)                               \
     NTT_END_DEFINE_NATIVE_VECTOR()
 
 #define NTT_DEFINE_F8E4M3_NATIVE_VECTOR_WITH_LMUL_F4()                         \
     NTT_DEFINE_NATIVE_VECTOR_DEFAULT_BITCAST(                                  \
-        float_e4m3_t, fixed_vfloat8e4m3mf4_t, fixed_vfloat8e4m3mf4_t,          \
-        signed char, NTT_VLEN / 8 / sizeof(float_e4m3_t) / 4)                  \
+        float_e4m3_t, fixed_vfloat8e4m3mf4_t, signed char,                     \
+        NTT_VLEN / 8 / sizeof(float_e4m3_t) / 4)                               \
     NTT_END_DEFINE_NATIVE_VECTOR()
 
 #define NTT_DEFINE_F8E4M3_NATIVE_VECTOR_WITH_LMUL_GE1(lmul)                    \
     NTT_DEFINE_NATIVE_VECTOR_DEFAULT_BITCAST(                                  \
-        float_e4m3_t, fixed_vfloat8e4m3m##lmul##_t,                            \
-        fixed_vfloat8e4m3m##lmul##_t, signed char,                             \
+        float_e4m3_t, fixed_vfloat8e4m3m##lmul##_t, signed char,               \
         NTT_VLEN / 8 / sizeof(float_e4m3_t) * lmul)                            \
     NTT_END_DEFINE_NATIVE_VECTOR()
 #else
