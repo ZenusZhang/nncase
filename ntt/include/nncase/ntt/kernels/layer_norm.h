@@ -74,15 +74,18 @@ void within_axis_vectorize_impl(const TIn &input, const TScale &scale,
                 for (size_t i = 0; i < inner_size; i++)
                     extended_mean += input_p[i];
                 extended_mean *= norm_factor;
-                mean = (TElemScalar)reduce_sum(extended_mean);
+                auto extended_mean_s = reduce_sum(extended_mean);
 
                 for (auto i = 0; i < inner_size; i++) {
-                    const auto val = ntt::square(input_p[i] - mean);
+                    const auto val = ntt::square(
+                        ntt::cast_elem<float>(input_p[i]) - extended_mean_s);
                     extended_sum += val;
                 }
+                mean = (TElemScalar)extended_mean_s;
             } else {
                 for (auto i = 0; i < inner_size; i++) {
-                    const auto val = ntt::square(input_p[i]);
+                    const auto val =
+                        ntt::square(ntt::cast_elem<float>(input_p[i]));
                     extended_sum += val;
                 }
             }
@@ -108,18 +111,20 @@ void within_axis_vectorize_impl(const TIn &input, const TScale &scale,
             if constexpr (UseMean) {
                 auto extended_mean = (TAccElem)0;
                 for (size_t i = 0; i < inner_size; i++)
-                    extended_mean += ntt::cast_elem<float>(input_p[i]);
+                    extended_mean += input_p[i];
                 extended_mean *= norm_factor;
-                mean = ntt::cast_elem<TElemScalar>(extended_mean);
 
                 for (auto i = 0; i < inner_size; i++) {
-                    const auto val = ntt::square(input_p[i] - mean);
-                    extended_sum += ntt::cast_elem<float>(val);
+                    const auto val = ntt::square(
+                        ntt::cast_elem<float>(input_p[i]) - extended_mean);
+                    extended_sum += val;
                 }
+                mean = ntt::cast_elem<TElemScalar>(extended_mean);
             } else {
                 for (auto i = 0; i < inner_size; i++) {
-                    const auto val = ntt::square(input_p[i]);
-                    extended_sum += ntt::cast_elem<float>(val);
+                    const auto val =
+                        ntt::square(ntt::cast_elem<float>(input_p[i]));
+                    extended_sum += val;
                 }
             }
 
