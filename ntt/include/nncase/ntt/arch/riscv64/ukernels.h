@@ -107,98 +107,6 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
     }
 };
 
-#define DEFINE_U_UNARY_HALF_32V(OP)                                            \
-    template <>                                                                \
-    struct u_unary<ntt::ops::OP<vector<half, NTT_VLEN / 16>>,                  \
-                   vector<half, NTT_VLEN / 16>, true> {                        \
-      public:                                                                  \
-        void operator()(const ntt::ops::OP<vector<half, NTT_VLEN / 16>> &op,   \
-                        const vector<half, NTT_VLEN / 16> *input,              \
-                        size_t in_stride, vector<half, NTT_VLEN / 16> *output, \
-                        size_t out_stride, size_t count) noexcept {            \
-            using policy_t =                                                   \
-                u_unary_policy<ntt::ops::OP<vector<half, NTT_VLEN / 16>>,      \
-                               vector<half, NTT_VLEN / 16>, true>;             \
-            constexpr auto unroll = policy_t::unroll;                          \
-            constexpr auto lmul = 8;                                           \
-            constexpr auto vl = NTT_VLEN / 16 * lmul;                          \
-            constexpr auto unit = sizeof(vector<half, vl>);                    \
-            auto in_strides = in_stride * unit;                                \
-            auto out_strides = out_stride * unit;                              \
-            register fixed_vfloat16m8_t v0_reg asm("v0");                      \
-            register fixed_vfloat16m8_t v8_reg asm("v8");                      \
-            register fixed_vfloat16m8_t v16_reg asm("v16");                    \
-            register fixed_vfloat16m8_t v24_reg asm("v24");                    \
-                                                                               \
-            while (count / unroll) {                                           \
-                asm("vsetvli zero, %[vl], e16, m8, ta, ma\n" ::[vl] "r"(vl));  \
-                asm volatile(                                                  \
-                    "vle16.v %[v0_reg],  (%[input])\n"                         \
-                    "add %[input], %[input], %[in_strides]\n"                  \
-                    "vle16.v %[v8_reg],  (%[input])\n"                         \
-                    "add %[input], %[input], %[in_strides]\n"                  \
-                    "vle16.v %[v16_reg],  (%[input])\n"                        \
-                    "add %[input], %[input], %[in_strides]\n"                  \
-                    "vle16.v %[v24_reg],  (%[input])\n"                        \
-                    "add %[input], %[input], %[in_strides]\n"                  \
-                    : [input] "+r"(input), [output] "+r"(output),              \
-                      [v0_reg] "+vr"(v0_reg), [v8_reg] "+vr"(v8_reg),          \
-                      [v16_reg] "+vr"(v16_reg), [v24_reg] "+vr"(v24_reg)       \
-                    : [in_strides] "r"(in_strides), [out_strides] "r"(         \
-                                                        out_strides)           \
-                    : "memory");                                               \
-                                                                               \
-                v0_reg = nncase::ntt::OP((ntt::vector<half, vl>)v0_reg);       \
-                asm volatile(                                                  \
-                    "vse16.v %[v0_reg],  (%[output])\n"                        \
-                    "add %[output], %[output], %[out_strides]\n"               \
-                    : [input] "+r"(input), [output] "+r"(output),              \
-                      [v0_reg] "+vr"(v0_reg)                                   \
-                    : [in_strides] "r"(in_strides), [out_strides] "r"(         \
-                                                        out_strides)           \
-                    : "memory");                                               \
-                                                                               \
-                v8_reg = nncase::ntt::OP((ntt::vector<half, vl>)v8_reg);       \
-                asm volatile(                                                  \
-                    "vse16.v %[v8_reg],  (%[output])\n"                        \
-                    "add %[output], %[output], %[out_strides]\n"               \
-                    : [input] "+r"(input), [output] "+r"(output),              \
-                      [v8_reg] "+vr"(v8_reg)                                   \
-                    : [in_strides] "r"(in_strides), [out_strides] "r"(         \
-                                                        out_strides)           \
-                    : "memory");                                               \
-                                                                               \
-                v16_reg = nncase::ntt::OP((ntt::vector<half, vl>)v16_reg);     \
-                asm volatile(                                                  \
-                    "vse16.v %[v16_reg],  (%[output])\n"                       \
-                    "add %[output], %[output], %[out_strides]\n"               \
-                    : [input] "+r"(input), [output] "+r"(output),              \
-                      [v16_reg] "+vr"(v16_reg)                                 \
-                    : [in_strides] "r"(in_strides), [out_strides] "r"(         \
-                                                        out_strides)           \
-                    : "memory");                                               \
-                                                                               \
-                v24_reg = nncase::ntt::OP((ntt::vector<half, vl>)v24_reg);     \
-                asm volatile(                                                  \
-                    "vse16.v %[v24_reg],  (%[output])\n"                       \
-                    "add %[output], %[output], %[out_strides]\n"               \
-                    : [input] "+r"(input), [output] "+r"(output),              \
-                      [v24_reg] "+vr"(v24_reg)                                 \
-                    : [in_strides] "r"(in_strides), [out_strides] "r"(         \
-                                                        out_strides)           \
-                    : "memory");                                               \
-                                                                               \
-                count -= unroll;                                               \
-            }                                                                  \
-                                                                               \
-            for (size_t i = 0; i < count; i++) {                               \
-                *output = op(*input);                                          \
-                input += in_stride;                                            \
-                output += out_stride;                                          \
-            }                                                                  \
-        }                                                                      \
-    };
-
 #define DEFINE_U_UNARY_F32_16V(OP)                                             \
     template <>                                                                \
     struct u_unary<ntt::ops::OP<vector<float, NTT_VLEN / 32>>,                 \
@@ -216,24 +124,22 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
             constexpr auto lmul = 8;                                           \
             constexpr auto vl = NTT_VLEN / 32 * lmul;                          \
             constexpr auto unit = sizeof(vector<float, vl>);                   \
-            auto in_strides = in_stride * unit;                                \
-            auto out_strides = out_stride * unit;                              \
                                                                                \
             while (count / unroll) {                                           \
                 ntt::vector<float, vl> v0 =                                    \
                     __riscv_vle32_v_f32m8((const float *)input, vl);           \
-                input += lmul;                                                 \
+                input += in_stride * lmul;                                     \
                 ntt::vector<float, vl> v8 =                                    \
                     __riscv_vle32_v_f32m8((const float *)input, vl);           \
-                input += lmul;                                                 \
+                input += in_stride * lmul;                                     \
                 __asm__ __volatile__("" : : : "memory");                       \
                 v0 = nncase::ntt::OP(v0);                                      \
                 v8 = nncase::ntt::OP(v8);                                      \
                 __asm__ __volatile__("" : : : "memory");                       \
                 __riscv_vse32_v_f32m8((float *)output, v0, vl);                \
-                output += lmul;                                                \
+                output += out_stride * lmul;                                   \
                 __riscv_vse32_v_f32m8((float *)output, v8, vl);                \
-                output += lmul;                                                \
+                output += out_stride * lmul;                                   \
                 count -= unroll;                                               \
             }                                                                  \
                                                                                \
@@ -262,8 +168,6 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
             constexpr auto lmul = 8;                                           \
             constexpr auto vl = NTT_VLEN / 32 * lmul;                          \
             constexpr auto unit = sizeof(vector<float, vl>);                   \
-            auto in_strides = in_stride * unit;                                \
-            auto out_strides = out_stride * unit;                              \
                                                                                \
             while (count / unroll) {                                           \
                 ntt::vector<float, vl> v0 =                                    \
@@ -271,6 +175,7 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
                 input += in_stride * lmul;                                     \
                 v0 = nncase::ntt::OP(v0);                                      \
                 __riscv_vse32_v_f32m8((float *)output, v0, vl);                \
+                output += out_stride * lmul;                                   \
                 count -= unroll;                                               \
             }                                                                  \
                                                                                \
@@ -298,24 +203,22 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
             constexpr auto lmul = 8;                                           \
             constexpr auto vl = NTT_VLEN / 16 * lmul;                          \
             constexpr auto unit = sizeof(vector<half, vl>);                    \
-            auto in_strides = in_stride * unit;                                \
-            auto out_strides = out_stride * unit;                              \
                                                                                \
             while (count / unroll) {                                           \
                 ntt::vector<half, vl> v0 =                                     \
                     __riscv_vle16_v_f16m8((const _Float16 *)input, vl);        \
-                input += lmul;                                                 \
+                input += in_stride * lmul;                                     \
                 ntt::vector<half, vl> v8 =                                     \
                     __riscv_vle16_v_f16m8((const _Float16 *)input, vl);        \
-                input += lmul;                                                 \
+                input += in_stride * lmul;                                     \
                 __asm__ __volatile__("" : : : "memory");                       \
                 v0 = nncase::ntt::OP(v0);                                      \
                 v8 = nncase::ntt::OP(v8);                                      \
                 __asm__ __volatile__("" : : : "memory");                       \
                 __riscv_vse16_v_f16m8((_Float16 *)output, v0, vl);             \
-                output += lmul;                                                \
+                output += out_stride * lmul;                                   \
                 __riscv_vse16_v_f16m8((_Float16 *)output, v8, vl);             \
-                output += lmul;                                                \
+                output += out_stride * lmul;                                   \
                 count -= unroll;                                               \
             }                                                                  \
                                                                                \
@@ -343,16 +246,14 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
             constexpr auto lmul = 8;                                           \
             constexpr auto vl = NTT_VLEN / 16 * lmul;                          \
             constexpr auto unit = sizeof(vector<half, vl>);                    \
-            auto in_strides = in_stride * unit;                                \
-            auto out_strides = out_stride * unit;                              \
                                                                                \
             while (count / unroll) {                                           \
                 ntt::vector<half, vl> v0 =                                     \
                     __riscv_vle16_v_f16m8((const _Float16 *)input, vl);        \
-                input += lmul;                                                 \
+                input += in_stride * lmul;                                     \
                 v0 = nncase::ntt::OP(v0);                                      \
                 __riscv_vse16_v_f16m8((_Float16 *)output, v0, vl);             \
-                output += lmul;                                                \
+                output += out_stride * lmul;                                   \
                 count -= unroll;                                               \
             }                                                                  \
                                                                                \
