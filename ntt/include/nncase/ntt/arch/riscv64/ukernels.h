@@ -123,7 +123,6 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
             constexpr auto unroll = policy_t::unroll;                          \
             constexpr auto lmul = 8;                                           \
             constexpr auto vl = NTT_VLEN / 32 * lmul;                          \
-            constexpr auto unit = sizeof(vector<float, vl>);                   \
                                                                                \
             while (count / unroll) {                                           \
                 ntt::vector<float, vl> v0 =                                    \
@@ -167,7 +166,6 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
             constexpr auto unroll = policy_t::unroll;                          \
             constexpr auto lmul = 8;                                           \
             constexpr auto vl = NTT_VLEN / 32 * lmul;                          \
-            constexpr auto unit = sizeof(vector<float, vl>);                   \
                                                                                \
             while (count / unroll) {                                           \
                 ntt::vector<float, vl> v0 =                                    \
@@ -202,7 +200,6 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
             constexpr auto unroll = policy_t::unroll;                          \
             constexpr auto lmul = 8;                                           \
             constexpr auto vl = NTT_VLEN / 16 * lmul;                          \
-            constexpr auto unit = sizeof(vector<half, vl>);                    \
                                                                                \
             while (count / unroll) {                                           \
                 ntt::vector<half, vl> v0 =                                     \
@@ -245,7 +242,6 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
             constexpr auto unroll = policy_t::unroll;                          \
             constexpr auto lmul = 8;                                           \
             constexpr auto vl = NTT_VLEN / 16 * lmul;                          \
-            constexpr auto unit = sizeof(vector<half, vl>);                    \
                                                                                \
             while (count / unroll) {                                           \
                 ntt::vector<half, vl> v0 =                                     \
