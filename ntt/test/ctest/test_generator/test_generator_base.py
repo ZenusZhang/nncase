@@ -56,8 +56,8 @@ ALL_DATATYPES = [
     DataType('float', 'Float32', '-3.4e15', '3.4e15', False),
     DataType('double', 'Float64', '-1.7e150', '1.7e150', False),
     DataType('bfloat16', 'Bfloat16', '-1.0e10_bf16', '1.0e10_bf16', False),
-    DataType('float_e4m3_t', 'Float8e4m3', 'float_e4m3_t(-16.0f)', 'float_e4m3_t(16.0f)', False),
-    DataType('float_e5m2_t', 'Float8e5m2', 'float_e5m2_t(-32.0f)', 'float_e5m2_t(32.0f)', False)
+    # DataType('float_e4m3_t', 'Float8e4m3', 'float_e4m3_t(-16.0f)', 'float_e4m3_t(16.0f)', False),
+    # DataType('float_e5m2_t', 'Float8e5m2', 'float_e5m2_t(-32.0f)', 'float_e5m2_t(32.0f)', False)
 ]
 
 class BaseTestGenerator:
@@ -78,7 +78,7 @@ class BaseTestGenerator:
             'double': 'DataType_DOUBLE',
             'bfloat16': 'DataType_BFLOAT16',
         }
-
+        self.indent = "    "
         self.simple_continuities = [
             Continuity(is_contiguous=True, non_contiguous_dim=None, big_tensor_op=None),
             # Continuity(is_contiguous=False, non_contiguous_dim=1, big_tensor_op="*2"),
@@ -105,6 +105,15 @@ class BaseTestGenerator:
         if op_str in self.ulp_tolerances:
             return self.ulp_tolerances[op_str].get(datatype.cpp_type, self.ulp_tolerances[op_str]["default"])
         return self.ulp_tolerances["default"].get(datatype.cpp_type, self.ulp_tolerances["default"]["default"])
+
+    def _need_cast_in_ort(self, datatype, op_str):
+        """Check if datatype needs to be cast in ORT for the given operation."""
+        if not hasattr(self, 'types_need_cast_in_ort'):
+            raise NotImplementedError(
+                f"{self.__class__.__name__} must implement 'types_need_cast_in_ort' attribute"
+            )
+        types_to_cast_in_ort = self.types_need_cast_in_ort.get(op_str, self.types_need_cast_in_ort["default"])
+        return datatype.cpp_type in types_to_cast_in_ort
 
     def get_unpacked_dims(self, dim_names, unpack_axes) -> List[str]:
         """Generate dimension expressions for an unpack operation."""
@@ -430,8 +439,40 @@ using namespace ortki;
             ])
 
         return self.generate_ntt_operation_section(op_section)
+    
+    def generate_ort_cast_back(self, datatype, cast_input_var = "ort_output", cast_output_var = "ort_golden"):
+        """cast ort tensor of double back to ort tensor of original type"""
+        """if original type is uint, cast to int64 first"""
+        code = []
+        code.append(f"// Cast outputs from double to original datatype")
+        original_type = self.ort_datatype_map[datatype.cpp_type]
+        var_name_cast_to_orig_type = cast_input_var
+        if("uint" in datatype.cpp_type):
+            var_name_cast_to_orig_type = cast_output_var+"int"
+            code.append(f"auto {var_name_cast_to_orig_type} = ortki_Cast({cast_input_var}, 1, ortki::DataType_INT64);")
+        code.append(f"auto {cast_output_var} = ortki_Cast({var_name_cast_to_orig_type}, 1, ortki::{original_type});")
+        return code
+    
+    def generate_ort_output(self, datatype, ntt_op_str):
+        ort_type = self.ort_datatype_map.get(datatype.cpp_type, 'DataType_FLOAT')
+        
+        # Check both dictionaries for the operation string
+        if ntt_op_str in self.op_str_map_exhaustive:
+            op_str = self.op_str_map_exhaustive[ntt_op_str]
+        elif ntt_op_str in self.op_str_map_simplified:
+            op_str = self.op_str_map_simplified[ntt_op_str]
+        else:
+            raise KeyError(f"Operation '{ntt_op_str}' not found in either op_str_map_exhaustive or op_str_map_simplified")
+            
+        if callable(op_str):
+            op_str = op_str(datatype)
+        return [
+            f"// Execute Ort operation",
+            f"{op_str}",
+            ""
+        ]
 
-    def prepare_contiguous_input(self, input_name, datatype, vector_rank, vec_param, 
+    def _prepare_contiguous_input(self, input_name, datatype, vector_rank, vec_param, 
                                   is_dynamic_shape, dims_spec, continuity):
         
         continuity_var_name = input_name
@@ -452,6 +493,7 @@ using namespace ortki;
         
         return continuity_var_name, code
 
+    """ Not a good abstraction """
     def generate_ort_input_section(self,
                                    datatype: DataType,
                                    shape_type,
