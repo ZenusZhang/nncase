@@ -367,40 +367,23 @@ SPECIALIZE_U_BINARY(floor_mod, 8)
             constexpr auto unroll = policy_t::unroll;                          \
             constexpr auto lmul = 8;                                           \
             constexpr auto vl = NTT_VLEN / 32 * lmul;                          \
-            constexpr auto unit = sizeof(vector<float, vl>);                   \
-            auto in_strides = input1_stride * unit;                            \
-            auto out_strides = output_stride * unit;                           \
-            register fixed_vfloat32m8_t v0_reg asm("v0");                      \
-            register fixed_vfloat32m8_t v8_reg asm("v8");                      \
-            register fixed_vfloat32m8_t v16_reg asm("v16");                    \
                                                                                \
             TPostOp<vector<float, vl>> post_op_m8;                             \
             TPostOp<vector<float, NTT_VLEN / 32>> post_op_m1;                  \
                                                                                \
             while (count / unroll) {                                           \
-                asm("vsetvli zero, %[vl], e32, m8, ta, ma\n" ::[vl] "r"(vl));  \
-                asm volatile(                                                  \
-                    "vle32.v %[v0_reg],  (%[input1])\n"                        \
-                    "add %[input1], %[input1], %[in_strides]\n"                \
-                    "vle32.v %[v8_reg],  (%[input2])\n"                        \
-                    "add %[input2], %[input2], %[in_strides]\n"                \
-                    : [input1] "+r"(input1), [input2] "+r"(input2),            \
-                      [v0_reg] "+vr"(v0_reg), [v8_reg] "+vr"(v8_reg)           \
-                    : [in_strides] "r"(in_strides), [out_strides] "r"(         \
-                                                        out_strides)           \
-                    : "memory");                                               \
+                ntt::vector<float, vl> v0 =                                    \
+                    __riscv_vle32_v_f32m8((const float *)input1, vl);          \
+                input1 += input1_stride * lmul;                                \
+                ntt::vector<float, vl> v8 =                                    \
+                    __riscv_vle32_v_f32m8((const float *)input2, vl);          \
+                input2 += input2_stride * lmul;                                \
                                                                                \
-                v16_reg = nncase::ntt::OP((ntt::vector<float, vl>)v0_reg,      \
-                                          (ntt::vector<float, vl>)v8_reg);     \
-                v16_reg = post_op_m8((ntt::vector<float, vl>)v16_reg);         \
+                auto v16 = nncase::ntt::OP(v0, v8);                            \
+                v16 = post_op_m8(v16);                                         \
                                                                                \
-                asm volatile("vse32.v %[v16_reg],  (%[output])\n"              \
-                             "add %[output], %[output], %[out_strides]\n"      \
-                             : [output] "+r"(output), [v16_reg] "+vr"(v16_reg) \
-                             : [out_strides] "r"(out_strides)                  \
-                             : "memory");                                      \
-                                                                               \
-                count -= unroll;                                               \
+                __riscv_vse32_v_f32m8((float *)output, v16, vl);               \
+                output += output_stride * lmul;                                \
             }                                                                  \
                                                                                \
             for (size_t i = 0; i < count; i++) {                               \
@@ -437,39 +420,23 @@ SPECIALIZE_U_BINARY(floor_mod, 8)
             constexpr auto unroll = policy_t::unroll;                          \
             constexpr auto lmul = 8;                                           \
             constexpr auto vl = NTT_VLEN / 16 * lmul;                          \
-            constexpr auto unit = sizeof(vector<half, vl>);                    \
-            auto in_strides = input1_stride * unit;                            \
-            auto out_strides = output_stride * unit;                           \
-            register vfloat16m8_t v0_reg asm("v0");                            \
-            register vfloat16m8_t v8_reg asm("v8");                            \
-            register vfloat16m8_t v16_reg asm("v16");                          \
                                                                                \
             TPostOp<vector<half, vl>> post_op_m8;                              \
             TPostOp<vector<half, NTT_VLEN / 16>> post_op_m1;                   \
                                                                                \
             while (count / unroll) {                                           \
-                asm("vsetvli zero, %[vl], e16, m8, ta, ma\n" ::[vl] "r"(vl));  \
-                asm volatile(                                                  \
-                    "vle16.v %[v0_reg],  (%[input1])\n"                        \
-                    "add %[input1], %[input1], %[in_strides]\n"                \
-                    "vle16.v %[v8_reg],  (%[input2])\n"                        \
-                    "add %[input2], %[input2], %[in_strides]\n"                \
-                    : [input1] "+r"(input1), [input2] "+r"(input2),            \
-                      [v0_reg] "+vr"(v0_reg), [v8_reg] "+vr"(v8_reg)           \
-                    : [in_strides] "r"(in_strides), [out_strides] "r"(         \
-                                                        out_strides)           \
-                    : "memory");                                               \
+                ntt::vector<half, vl> v0 =                                     \
+                    __riscv_vle16_v_f16m8((const _Float16 *)input1, vl);       \
+                input1 += input1_stride * lmul;                                \
+                ntt::vector<half, vl> v8 =                                     \
+                    __riscv_vle16_v_f16m8((const _Float16 *)input2, vl);       \
+                input2 += input2_stride * lmul;                                \
                                                                                \
-                v16_reg = nncase::ntt::OP((ntt::vector<half, vl>)v0_reg,       \
-                                          (ntt::vector<half, vl>)v8_reg);      \
-                v16_reg = post_op_m8((ntt::vector<half, vl>)v16_reg);          \
+                auto v16 = nncase::ntt::OP(v0, v8);                            \
+                v16 = post_op_m8(v16);                                         \
                                                                                \
-                asm volatile("vse16.v %[v16_reg],  (%[output])\n"              \
-                             "add %[output], %[output], %[out_strides]\n"      \
-                             : [output] "+r"(output), [v16_reg] "+vr"(v16_reg) \
-                             : [out_strides] "r"(out_strides)                  \
-                             : "memory");                                      \
-                                                                               \
+                __riscv_vse16_v_f16m8((_Float16 *)output, v16, vl);            \
+                output += output_stride * lmul;                                \
                 count -= unroll;                                               \
             }                                                                  \
                                                                                \

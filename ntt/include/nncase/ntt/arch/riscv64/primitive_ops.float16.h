@@ -585,6 +585,12 @@ REGISTER_RVV_UNARY_FP16_OP(erf, half, erf_float16)
                                     kernel)
 
 // add
+template <> struct add<float, half> {
+    constexpr float operator()(const float &a, const half &b) const noexcept {
+        return a + static_cast<float>(b);
+    }
+};
+
 #define ADD_FLOAT16(lmul, mlen)                                                \
     inline vfloat16m##lmul##_t add_float16(const vfloat16m##lmul##_t &v1,      \
                                            const vfloat16m##lmul##_t &v2,      \
