@@ -46,12 +46,14 @@ class cast_impl {
                                                                 : (size_t)1;
     inline static constexpr auto
         out_offset_scale = scale > 1.0f ? (size_t)1 : (size_t)(1.0f / scale);
+    inline static constexpr auto axis =
+        VectorizedAxes::rank() == 1 ? VectorizedAxes{}.at(0) : 0_dim;
 
   public:
     constexpr void operator()(const TIn &input, TOut &output,
                               const VectorizedAxes &) noexcept {
 
-        constexpr VectorizedAxes vectorizedAxes;
+        constexpr auto vectorizedAxes = VectorizedAxes{};
         static_assert(vectorizedAxes.rank() == 0 || vectorizedAxes.rank() == 1,
                       "vectorizedAxes rank for cast must be 0 or 1");
 
@@ -59,23 +61,67 @@ class cast_impl {
         auto output_conti_dims =
             contiguous_dims(output.shape(), output.strides());
 
-        auto addr_input = input.elements().data();
-        auto addr_output_element = output.elements().data();
-
-        auto len_in = input.shape().length();
-        auto len_out = output.shape().length();
-
         auto input_stride = vectorizedAxes.rank() == 1
                                 ? input.strides()[vectorizedAxes.at(0)]
                                 : 1;
         auto output_stride = vectorizedAxes.rank() == 1
                                  ? output.strides()[vectorizedAxes.at(0)]
                                  : 1;
-        if (false && (input_conti_dims == TIn::rank()) &&
+
+        if (Vector<InElemType> && Vector<OutElemType> &&
+            (input_conti_dims == TIn::rank()) &&
             (output_conti_dims == TOut::rank())) {
-            ntt::u_cast<in_offset_scale, out_offset_scale, TPostOp>(
-                addr_input, input_stride, addr_output_element, output_stride,
-                len_in, len_out);
+
+            constexpr auto rank = TIn::rank();
+            auto input_domain_before_axis =
+                input.shape().template slice<0, axis + 1>();
+            auto input_domain_after_axis =
+                input.shape().template slice<axis + 1, rank - axis - 1>();
+
+            auto output_domain_before_axis =
+                output.shape().template slice<0, axis + 1>();
+            auto output_domain_after_axis =
+                output.shape().template slice<axis + 1, rank - axis - 1>();
+            dynamic_shape_t<rank> src_index;
+            ntt::loop<rank>([&](auto &i) { src_index[i] = 0; });
+
+            if constexpr (in_offset_scale > 1 && out_offset_scale == 1) {
+
+                ntt::apply(output_domain_before_axis, [&](auto index) {
+                    loop<axis + 1>([&](auto j) { src_index[j] = index[j]; });
+                    auto in_index = src_index;
+                    if constexpr (vectorizedAxes.rank() == 1)
+                        in_index[fixed_dim_v<vectorizedAxes.at(0)>] *=
+                            in_offset_scale;
+                    auto in_ptr = &input(in_index);
+                    auto out_ptr = &output(src_index);
+                    auto len = output_domain_after_axis.length();
+                    ntt::u_cast<in_offset_scale, out_offset_scale, TPostOp>(
+                        in_ptr, input_stride, out_ptr, output_stride, len);
+                });
+
+            } else if constexpr (in_offset_scale == 1 && out_offset_scale > 1) {
+
+                ntt::apply(input_domain_before_axis, [&](auto index) {
+                    loop<axis + 1>([&](auto j) { src_index[j] = index[j]; });
+                    auto out_index = src_index;
+                    if constexpr (vectorizedAxes.rank() == 1)
+                        out_index[fixed_dim_v<vectorizedAxes.at(0)>] *=
+                            out_offset_scale;
+
+                    auto in_ptr = &input(src_index);
+                    auto out_ptr = &output(out_index);
+                    auto len = input_domain_after_axis.length();
+                    ntt::u_cast<in_offset_scale, out_offset_scale, TPostOp>(
+                        in_ptr, input_stride, out_ptr, output_stride, len);
+                });
+            } else {
+                auto in_ptr = input.elements().data();
+                auto out_ptr = output.elements().data();
+                auto len = input.shape().length();
+                ntt::u_cast<in_offset_scale, out_offset_scale, TPostOp>(
+                    in_ptr, 1, out_ptr, 1, len);
+            }
         } else {
             if constexpr (in_offset_scale > 1 && out_offset_scale == 1) {
                 ntt::apply(output.shape(), [&](auto index) {
