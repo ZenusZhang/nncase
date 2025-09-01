@@ -14,62 +14,57 @@
  */
 #pragma once
 #include "dimension.h"
+#include "loop.h"
 #include "shape.h"
+#include <cstddef>
+#include <tuple>
+#include <utility>
 
 namespace nncase::ntt {
 namespace detail {
-template <size_t Axis, class TIndex, class Shape, class Callable>
-constexpr void apply_impl(const TIndex &index_prefix, const Shape &shape,
-                          Callable &&callable) {
-    for (dim_t i = 0; i < shape[fixed_dim_v<Axis>]; i++) {
-        const auto index = index_prefix.append(i);
-        if constexpr (Axis == Shape::rank() - 1) {
+template <size_t Axis, class Shape, class Offsets, class Callable,
+          class... Strides>
+constexpr void apply_impl(dynamic_shape_t<Shape::rank()> &index,
+                          Offsets offsets, const Shape &shape,
+                          Callable &&callable,
+                          const std::tuple<Strides...> &strides) {
+    auto call = [&]<size_t... I>(std::index_sequence<I...>) {
+        if constexpr (sizeof...(Strides)) {
+            callable(index, offsets[fixed_dim_v<I>]...);
+        } else {
             callable(index);
-        } else {
-            apply_impl<Axis + 1>(index, shape,
-                                 std::forward<Callable>(callable));
         }
-    }
-}
-
-template <size_t Axis, class TIndex, class Shape, class Strides, class Callable>
-constexpr void
-apply_with_linear_offset_impl(const TIndex &index_prefix, dim_t linear_offset,
-                              const Shape &shape, const Strides &strides,
-                              Callable &&callable) {
-    for (dim_t i = 0; i < shape[fixed_dim_v<Axis>]; i++) {
-        const auto index = index_prefix.append(i);
+    };
+    auto &dim = index[fixed_dim_v<Axis>];
+    for (dim = 0; dim < shape[fixed_dim_v<Axis>]; dim++) {
         if constexpr (Axis == Shape::rank() - 1) {
-            callable(index, linear_offset);
+            call(std::make_index_sequence<sizeof...(Strides)>{});
         } else {
-            apply_with_linear_offset_impl<Axis + 1>(
-                index, linear_offset, shape, strides,
-                std::forward<Callable>(callable));
+            apply_impl<Axis + 1>(index, offsets, shape,
+                                 std::forward<Callable>(callable), strides);
         }
-
-        linear_offset += strides[fixed_dim_v<Axis>];
+        ntt::loop<sizeof...(Strides)>([&](auto i) {
+            offsets[i] += std::get<i>(strides)[fixed_dim_v<Axis>];
+        });
     }
 }
 } // namespace detail
 
-template <class Shape, class Callable>
-constexpr void apply(const Shape &shape, Callable &&callable) {
-    if constexpr (Shape::rank()) {
-        detail::apply_impl<0>(fixed_shape_v<>, shape,
-                              std::forward<Callable>(callable));
+template <Shape TShape, class Callable, Strides... TStrides>
+constexpr void apply(const TShape &shape, Callable &&callable,
+                     const TStrides &...strides) {
+    if constexpr (TShape::rank()) {
+        dynamic_shape_t<TShape::rank()> index{};
+        detail::apply_impl<0>(index, make_repeat_shape<sizeof...(TStrides)>(0),
+                              shape, std::forward<Callable>(callable),
+                              std::forward_as_tuple(strides...));
     } else {
-        callable(fixed_shape_v<>);
-    }
-}
-
-template <Tensor TTensor, class Callable>
-constexpr void apply_with_linear_offset(TTensor &tensor, Callable &&callable) {
-    if constexpr (TTensor::rank()) {
-        detail::apply_with_linear_offset_impl<0>(
-            fixed_shape_v<>, 0, tensor.shape(), tensor.strides(),
-            std::forward<Callable>(callable));
-    } else {
-        callable(fixed_shape_v<>, 0);
+        if constexpr (sizeof...(TStrides)) {
+            callable(fixed_shape_v<>,
+                     make_repeat_shape<sizeof...(TStrides)>(0));
+        } else {
+            callable(fixed_shape_v<>);
+        }
     }
 }
 } // namespace nncase::ntt

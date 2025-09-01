@@ -734,16 +734,22 @@ template <> struct mul<half, ntt::vector<float, 16>> {
     }
 };
 
-// template <>
-// struct mul_add<ntt::vector<float, 8>, ntt::vector<float, 8>,
-//                ntt::vector<float, 8>> {
-//     ntt::vector<float, 8>
-//     operator()(const ntt::vector<float, 8> &v1, const ntt::vector<float, 8>
-//     &v2,
-//                const ntt::vector<float, 8> &v3) const noexcept {
-//         return _mm256_fmadd_ps(v1, v2, v3);
-//     }
-// };
+template <>
+struct mul_add<ntt::vector<half, 16>, ntt::vector<half, 16>,
+               ntt::vector<float, 2, 8>> {
+    ntt::vector<float, 2, 8>
+    operator()(const ntt::vector<half, 16> &v1, const ntt::vector<half, 16> &v2,
+               const ntt::vector<float, 2, 8> &v3) const noexcept {
+        auto v1_fp32 = ntt::cast_elem<float>(v1);
+        auto v2_fp32 = ntt::cast_elem<float>(v2);
+        auto v3_fp32 = ntt::cast_elem<float>(v3);
+        v3_fp32(0_dim) =
+            _mm256_fmadd_ps(v1_fp32(0_dim), v2_fp32(0_dim), v3_fp32(0_dim));
+        v3_fp32(1_dim) =
+            _mm256_fmadd_ps(v1_fp32(1_dim), v2_fp32(1_dim), v3_fp32(1_dim));
+        return v3_fp32;
+    }
+};
 
 template <> struct mul_add<half, ntt::vector<half, 16>, ntt::vector<half, 16>> {
     ntt::vector<half, 16>

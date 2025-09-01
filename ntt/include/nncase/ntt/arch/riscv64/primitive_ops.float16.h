@@ -877,4 +877,87 @@ REGISTER_RVV_FP16_d2_KERNEL(CAST_FLOAT32_FLOAT16);
 
 REGISTER_RVV_CAST_ELEM_OP_1_2(half, float, cast_float16_float32)
 REGISTER_RVV_CAST_ELEM_OP_2_1(float, half, cast_float32_float16)
+
+// mul_add
+#define MUL_ADD_FLOAT16(lmul, mlen)                                            \
+    inline vfloat16m##lmul##_t mul_add_float16(                                \
+        const vfloat16m##lmul##_t &v1, const vfloat16m##lmul##_t &v2,          \
+        const vfloat16m##lmul##_t &v3, const size_t vl) {                      \
+        return __riscv_vfmacc_vv_f16m##lmul(v3, v1, v2, vl);                   \
+    }                                                                          \
+                                                                               \
+    inline vfloat16m##lmul##_t mul_add_float16(                                \
+        const vfloat16m##lmul##_t &v1, const half &s2,                         \
+        const vfloat16m##lmul##_t &v3, const size_t vl) {                      \
+        return __riscv_vfmacc_vf_f16m##lmul(v3, s2, v1, vl);                   \
+    }                                                                          \
+                                                                               \
+    inline vfloat16m##lmul##_t mul_add_float16(                                \
+        const half &s1, const vfloat16m##lmul##_t &v2,                         \
+        const vfloat16m##lmul##_t &v3, const size_t vl) {                      \
+        return __riscv_vfmacc_vf_f16m##lmul(v3, s1, v2, vl);                   \
+    }
+
+REGISTER_RVV_KERNEL(MUL_ADD_FLOAT16)
+REGISTER_RVV_MUL_ADD_OP(half, mul_add_float16)
+
+#define MUL_ADD_FLOAT32_FLOAT16(lmul, lmulx2, mlen)                            \
+    inline vfloat32m##lmulx2##_t mul_add_float16(                              \
+        const vfloat16m##lmul##_t &v1, const vfloat16m##lmul##_t &v2,          \
+        const vfloat32m##lmulx2##_t &v3, const size_t vl) {                    \
+        return __riscv_vfwmacc_vv_f32m##lmulx2(v3, v1, v2, vl);                \
+    }                                                                          \
+                                                                               \
+    inline vfloat32m##lmulx2##_t mul_add_float16(                              \
+        const vfloat16m##lmul##_t &v, const half &s,                           \
+        const vfloat32m##lmulx2##_t &v3, const size_t vl) {                    \
+        return __riscv_vfwmacc_vf_f32m##lmulx2(v3, s, v, vl);                  \
+    }                                                                          \
+                                                                               \
+    inline vfloat32m##lmulx2##_t mul_add_float16(                              \
+        const half &s, const vfloat16m##lmul##_t &v,                           \
+        const vfloat32m##lmulx2##_t &v3, const size_t vl) {                    \
+        return __riscv_vfwmacc_vf_f32m##lmulx2(v3, s, v, vl);                  \
+    }
+
+REGISTER_RVV_FP16_x2_KERNEL(MUL_ADD_FLOAT32_FLOAT16);
+
+#define RVV_FP32_FP16_MUL_ADD_OP(vl, kernel)                                   \
+    template <>                                                                \
+    struct mul_add<ntt::vector<half, vl>, ntt::vector<half, vl>,               \
+                   ntt::vector<float, 2, vl / 2>> {                            \
+        ntt::vector<float, 2, vl / 2>                                          \
+        operator()(const ntt::vector<half, vl> &v1,                            \
+                   const ntt::vector<half, vl> &v2,                            \
+                   const ntt::vector<float, 2, vl / 2> &v3) const noexcept {   \
+            return kernel(v1, v2, v3, vl);                                     \
+        }                                                                      \
+    };                                                                         \
+                                                                               \
+    template <>                                                                \
+    struct mul_add<ntt::vector<half, vl>, half,                                \
+                   ntt::vector<float, 2, vl / 2>> {                            \
+        ntt::vector<float, 2, vl / 2>                                          \
+        operator()(const ntt::vector<half, vl> &v1, const half &s2,            \
+                   const ntt::vector<float, 2, vl / 2> &v3) const noexcept {   \
+            return kernel(v1, s2, v3, vl);                                     \
+        }                                                                      \
+    };                                                                         \
+                                                                               \
+    template <>                                                                \
+    struct mul_add<half, ntt::vector<half, vl>,                                \
+                   ntt::vector<float, 2, vl / 2>> {                            \
+        ntt::vector<float, 2, vl / 2>                                          \
+        operator()(const half &s1, const ntt::vector<half, vl> &v2,            \
+                   const ntt::vector<float, 2, vl / 2> &v3) const noexcept {   \
+            return kernel(s1, v2, v3, vl);                                     \
+        }                                                                      \
+    };
+
+#define REGISTER_RVV_FP32_FP16_MUL_ADD_OP(kernel)                              \
+    RVV_FP32_FP16_MUL_ADD_OP(NTT_VL(sizeof(half) * 8, *, 1), kernel)           \
+    RVV_FP32_FP16_MUL_ADD_OP(NTT_VL(sizeof(half) * 8, *, 2), kernel)           \
+    RVV_FP32_FP16_MUL_ADD_OP(NTT_VL(sizeof(half) * 8, *, 4), kernel)
+
+REGISTER_RVV_FP32_FP16_MUL_ADD_OP(mul_add_float16)
 } // namespace nncase::ntt::ops

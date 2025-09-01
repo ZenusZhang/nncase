@@ -297,8 +297,8 @@ struct reduce {
 };
 
 template <class T1, class T2, class TResult> struct mul_add {
-    constexpr TResult operator()(const T1 &v1, const T2 &v2,
-                                 const TResult &v3) const noexcept;
+    constexpr auto operator()(const T1 &v1, const T2 &v2,
+                              const TResult &v3) const noexcept;
 };
 
 template <class T1, class T2> struct clamp {
@@ -417,8 +417,7 @@ constexpr auto cast(const T1 &v) noexcept {
 }
 
 template <ScalarOrVector T1, ScalarOrVector T2, ScalarOrVector TResult>
-constexpr TResult mul_add(const T1 &v1, const T2 &v2,
-                          const TResult &v3) noexcept {
+constexpr auto mul_add(const T1 &v1, const T2 &v2, const TResult &v3) noexcept {
     return ops::mul_add<T1, T2, TResult>()(v1, v2, v3);
 }
 
@@ -549,7 +548,7 @@ constexpr T swishb<T, B>::operator()(const T &v, const B &beta) const noexcept {
 }
 
 template <class T1, class T2, class TResult>
-constexpr TResult
+constexpr auto
 mul_add<T1, T2, TResult>::operator()(const T1 &v1, const T2 &v2,
                                      const TResult &v3) const noexcept {
     using TResultElem = element_or_scalar_t<TResult>;
