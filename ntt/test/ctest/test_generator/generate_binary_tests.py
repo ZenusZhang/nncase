@@ -250,7 +250,6 @@ class BinaryTestGenerator(BaseTestGenerator):
         unsqueeze_dims = ""
         unpack_dims = ""
         if vector_rank >= other_vector_rank :
-            # no 1s be appended
 
             if vector_rank == 0:
                 code.append(f"// for tensors pair that are all tensor of scalar")
@@ -258,7 +257,6 @@ class BinaryTestGenerator(BaseTestGenerator):
                 aligned_dims = dims_spec
             else:
                 if vector_rank == 1:
-                # because vector_rank < other_vector_rank:
                     if ntt_op_str == "outer_product":
                         unsqueeze_dims = f"{len(dims_spec)}, {len(dims_spec)+1}"
                         if "lhs" in input_var_name:
@@ -271,8 +269,6 @@ class BinaryTestGenerator(BaseTestGenerator):
                         unsqueeze_dims = f"{len(dims_spec)}"
                         aligned_dims = [str(d) for d in dims_spec] + ["P"]
                         unpack_dims = unsqueeze_dims
-
-
                 elif vector_rank == 2:
                     unsqueeze_dims = f"{len(dims_spec)}, {len(dims_spec)+1}"
                     aligned_dims = [str(d) for d in dims_spec] + ["4" ,"P"]
@@ -300,28 +296,17 @@ class BinaryTestGenerator(BaseTestGenerator):
             code.append(f"ntt::unpack({input_var_name}_unsqueezed, {input_var_name}_aligned, fixed_shape_v<{unpack_dims}>);")
         return code, aligned_dims
 
-    def _generate_ntt_cast_golden_output(self, datatype, 
-                                   lhs_is_dynamic_shape, rhs_is_dynamic_shape,
-                                   lhs_dims_spec, rhs_dims_spec,
-                                   lhs_vector_rank, rhs_vector_rank,
-                                   lhs_continuity, rhs_continuity,
-                                   lhs_vec_param, rhs_vec_param,
+    def _prepare_double_input_alignment(self, code, datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+                                   lhs_dims_spec, rhs_dims_spec, lhs_vector_rank, rhs_vector_rank,
+                                   lhs_continuity, rhs_continuity, lhs_vec_param, rhs_vec_param,
                                    ntt_op_str):
-        """Special handling for types that cannot be cast in ORT"""
-        """following steps would be done if necessary:
+        """Prepare input alignment and cast to double for ORT operations
         1. ntt_tensor -> ntt_tensor_contiguous
         2. ntt_tensor_contiguous -> ntt_tensor_aligned_of_scalar
         2.1  ntt_tensor_contiguous of vector -> ntt_tensor_contiguous of scalar
-        2.2  add proper dim_1 to the shape of ntt_tensor_contiguous of scalar
         3.  ntt_tensor_aligned_of_scalar -> ntt_tensor_aligned_double
-        4. transform to ort tensor and performe the opertation.
-        5. transform back to ntt tensor of double scalar
-        6. cast back to original type, still tensor of scalar
-        7. vectorized back to original tensor of vector (if necessary)
         """
-
-        code = []
-        
+        # 1.1 get ntt_input_lhs_aligned_{cpp.type}_scalar, ntt_input_rhs_aligned
         # Prepare contiguous inputs
         lhs_continuity_var_name, lhs_copy_code = self._prepare_contiguous_input(
             "ntt_input_lhs", datatype, lhs_vector_rank, lhs_vec_param,
@@ -337,7 +322,6 @@ class BinaryTestGenerator(BaseTestGenerator):
         
         code.append("// align in NTT, then cast to double, then process in ORT")
         
-        # 1.1 get ntt_input_lhs_aligned_{cpp.type}_scalar, ntt_input_rhs_aligned
         # Determine if tensors need alignment based on vector ranks
         need_alignment = (lhs_vector_rank + rhs_vector_rank != 0 )
         # Initialize aligned dimensions to default values
@@ -374,62 +358,71 @@ class BinaryTestGenerator(BaseTestGenerator):
         code.append("ntt::cast(ntt_input_lhs_aligned, ntt_lhs_double);")
         code.append("ntt::cast(ntt_input_rhs_aligned, ntt_rhs_double);")
         
+        return lhs_aligned_dims, rhs_aligned_dims
+
+    def _execute_ort_operation(self, code, datatype, ntt_op_str):
+        """Execute ORT operation on aligned double tensors"""
+        """1. cast to ort tensor"""
+        """2. calculate ort_output"""
         # 2. calculated ort_output
         code.append("")
         code.append("// 2. calculated ort_output")
         code.append(f"auto [ort_input_lhs, ort_input_rhs] = NttTest::convert_and_align_to_ort(ntt_lhs_double, ntt_rhs_double, false, false);")
         code.extend(self.generate_ort_output(datatype, ntt_op_str))
         code.append(f"auto ort_golden_double = ort_output;")
-        
-        # 3. transform ort_golden_double to ntt_golden{cpp_type}_scalar
-        code.append(f"// 3. transform ort_golden_double to ntt_golden{datatype.cpp_type}_scalar")
+        return "ort_golden_double"
 
+
+
+    def _generate_ntt_cast_golden_output(self, datatype, 
+                                   lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+                                   lhs_dims_spec, rhs_dims_spec,
+                                   lhs_vector_rank, rhs_vector_rank,
+                                   lhs_continuity, rhs_continuity,
+                                   lhs_vec_param, rhs_vec_param,
+                                   ntt_op_str):
+        """Special handling for types that cannot be cast in ORT"""
+        """following steps would be done if necessary:
+        1. ntt_tensor -> ntt_tensor_contiguous
+        2. ntt_tensor_contiguous -> ntt_tensor_aligned_of_scalar
+        2.1  ntt_tensor_contiguous of vector -> ntt_tensor_contiguous of scalar
+        2.2  add proper dim_1 to the shape of ntt_tensor_contiguous of scalar
+        3.  ntt_tensor_aligned_of_scalar -> ntt_tensor_aligned_double
+        4. transform to ort tensor and performe the opertation.
+        5. transform back to ntt tensor of double scalar
+        6. cast back to original type, still tensor of scalar
+        7. vectorized back to original tensor of vector (if necessary)
+        """
+
+        code = []
+        
+        # 1. Prepare input alignment and cast to double
+        lhs_aligned_dims, rhs_aligned_dims = self._prepare_double_input_alignment(
+            code, datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+            lhs_dims_spec, rhs_dims_spec, lhs_vector_rank, rhs_vector_rank,
+            lhs_continuity, rhs_continuity, lhs_vec_param, rhs_vec_param,
+            ntt_op_str
+        )
+        
+        # 2. Execute ORT operation
+        ort_golden_double_var = self._execute_ort_operation(
+            code, datatype, ntt_op_str
+        )
+        
         # Calculate output shape for scalar tensor
         output_is_dynamic_shape, output_dims_spec = self.get_binary_output_shape(
             lhs_is_dynamic_shape, rhs_is_dynamic_shape, lhs_dims_spec, rhs_dims_spec)
         output_vector_rank = self._get_output_vector_rank(ntt_op_str, lhs_vector_rank, rhs_vector_rank)
+        output_vec_param = self._get_output_vec_param(ntt_op_str, lhs_vec_param, rhs_vec_param)
+
+
+        # 3. Process ORT output back to NTT format
+        self._cast_ort_golden_double_into_ntt_shape(
+            code, datatype, ntt_op_str, output_is_dynamic_shape, 
+            output_dims_spec, output_vector_rank, 
+            output_vec_param, ort_golden_double_var
+        )
         
-        # # Get shape of ntt_golden_double_scalar based on aligned shapes and operation
-
-        if output_vector_rank > 0:
-            if output_vector_rank == 1:
-                golden_scalar_dims = output_dims_spec + ["P"]
-            else:  # 2D vector
-                if ntt_op_str == "outer_product":
-                    golden_scalar_dims = output_dims_spec  + ["P", "P"]
-                else:
-                    golden_scalar_dims = output_dims_spec + ["4", "P"]
-        else:
-            golden_scalar_dims = output_dims_spec
-            
-        golden_scalar_shape_expr = self.generate_shape_init(output_is_dynamic_shape, golden_scalar_dims)
-
-        code.append(f"auto ntt_golden_double_scalar = ntt::make_unique_tensor<double>({golden_scalar_shape_expr});")
-        code.append("NttTest::ort2ntt(ort_golden_double, *ntt_golden_double_scalar);")
-        code.append("")
-        code.append(f"auto ntt_golden_{datatype.cpp_type}_scalar = ntt::make_unique_tensor<{datatype.cpp_type}>({golden_scalar_shape_expr});")
-        code.append(f"ntt::cast(*ntt_golden_double_scalar, *ntt_golden_{datatype.cpp_type}_scalar);")
-
-        # 4. transform ntt_golden_{datatype.cpp_type}_scalar to ntt_golden
-        code.append("")
-        if output_vector_rank > 0:
-            # 4.b if ntt_output is tensor of vector
-            code.append("// 4.b if ntt_output is tensor of vector")
-            unsqueeze_shape_dims = output_dims_spec + (["1"] if output_vector_rank == 1 else ["1", "1"])
-            unsqueeze_shape_expr = self.generate_shape_init(output_is_dynamic_shape, unsqueeze_shape_dims)
-            output_vec_param = self._get_output_vec_param(ntt_op_str, lhs_vec_param, rhs_vec_param)
-            vector_type_str = self.get_element_cpp_type(datatype.cpp_type, output_vector_rank, output_vec_param)
-            code.append(f"auto ntt_golden_unsqueeze = ntt::make_tensor<{vector_type_str}>({unsqueeze_shape_expr});")
-            dims_spec_len = len(output_dims_spec)
-            pack_dims = f"{dims_spec_len}" if output_vector_rank == 1 else f"{dims_spec_len}, {dims_spec_len + 1}"
-            code.append(f"ntt::pack(*ntt_golden_{datatype.cpp_type}_scalar, ntt_golden_unsqueeze, fixed_shape_v<{pack_dims}>);")
-            code.append(f"auto ntt_golden = ntt_golden_unsqueeze.squeeze( (fixed_shape_v<{pack_dims}>));")
-        else:
-            # 4.a if ntt_output is not tensor of vector
-            code.append("// 4.a if ntt_output is not tensor of vector")
-            code.append(f"auto ntt_golden = *ntt_golden_{datatype.cpp_type}_scalar;")
-
-        code.append("")
         return code
 
     def _generate_ort_cast_golden_output(self, datatype, 

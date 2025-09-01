@@ -139,13 +139,107 @@ class UnaryTestGenerator(BaseTestGenerator):
 
         return code, output_shape_expr, output_element_type
 
+    def _generate_vector_to_scalar_conversion(
+        self, code, 
+        datatype, input_var_name, input_continuity_var_name, input_is_dynamic,
+                input_dims_spec, vec_rank
+    ):
+        assert(vec_rank > 0)
+    
+        unsqueeze_dims = ""
+        unpack_dims = ""
+        scalar_dims = None
+        # 1. unsqueeze
+        if vec_rank == 1:
+            unsqueeze_dims = f"{len(input_dims_spec)}"
+            scalar_dims =  [str(d) for d in input_dims_spec] + ["P"]
+            unpack_dims = unsqueeze_dims
+        else: #vec_rank == 2
+            unsqueeze_dims = f"{len(input_dims_spec)}, {len(input_dims_spec)+1}"
+            scalar_dims = [str(d) for d in input_dims_spec] + ["4" ,"P"]
+            unpack_dims = unsqueeze_dims
+
+        code.append(f"auto {input_var_name}_unsqueezed = ({input_continuity_var_name}).unsqueeze(fixed_shape_v<{unsqueeze_dims}>);")
+
+        # 2. unpack
+        code.append(f"auto {input_var_name}_scalar = ntt::make_tensor<{datatype.cpp_type}>(fixed_shape_v<{','.join(map(str,scalar_dims))}>);")
+        code.append(f"ntt::unpack({input_var_name}_unsqueezed, {input_var_name}_scalar, fixed_shape_v<{unpack_dims}>);")
+        return scalar_dims
+
+    def _prepare_contiguous_double_scalar_input(
+        self, code, datatype, input_is_dynamic, input_dims_spec, 
+        vector_rank, vec_param, input_continuity
+    ):
+        """
+        1. ntt_tensor -> ntt_tensor_contiguous
+        2. ntt_tensor_contiguous -> ntt_tensor_aligned_of_scalar
+        2.1  ntt_tensor_contiguous of vector -> ntt_tensor_contiguous of scalar
+        3.  ntt_tensor_aligned_of_scalar -> ntt_tensor_aligned_double
+        """
+
+        input_continuity_var_name, input_copy_code = self._prepare_contiguous_input(
+            "ntt_input", datatype, vector_rank, vec_param,
+            input_is_dynamic, input_dims_spec, input_continuity
+        )
+        code.extend(input_copy_code)
+
+        code.append("// align in NTT, then cast to double, then process in ORT")
+
+        input_is_vec = vector_rank > 0
+
+        input_scalar_dims = input_dims_spec
+        if input_is_vec:
+            input_scalar_dims = self._generate_vector_to_scalar_conversion(
+                code, datatype, "ntt_input", input_continuity_var_name, input_is_dynamic,
+                input_dims_spec, vector_rank
+            )
+        else:
+            code.append("// 1.1.b for input that are tensor of scalar")
+            code.append(f"auto ntt_input_scalar = ({input_continuity_var_name}).view();")
+
+        input_double_shape_expr = self.generate_shape_init(input_is_dynamic, input_scalar_dims)
+
+        code.append("//1.2 get ntt_input_double")
+        code.append(f"auto ntt_input_double = ntt::make_tensor<double>({input_double_shape_expr});")
+        code.append("")
+        code.append("ntt::cast(ntt_input_scalar, ntt_input_double);")
+
+        return input_scalar_dims
+
+
+    def _execute_ort_operation(self, code, datatype, ntt_op_str):
+        """1. cast to ort tensor"""
+        """2. calculate ort_output"""
+        code.append("")
+        code.append("// 2. calculated ort_output")
+        code.append(f"auto ort_input = NttTest::ntt2ort(ntt_input_double);")
+        code.extend(self.generate_ort_output(datatype, ntt_op_str))
+        code.append(f"auto ort_golden_double = ort_output;")
+        return "ort_golden_double"
+
+
+
     def _generate_ntt_cast_golden_output(self, datatype, op_str, 
                                    input_is_dynamic, output_is_dynamic,
-                                   dims_spec, vector_rank, vec_param, 
+                                   dims_spec , vector_rank, vec_param, 
                                    input_continuity):
         """Special handling for types that cannot be cast in ORT"""
         # TODO: Implement special handling for fp8 types
         code = []
+
+        self._prepare_contiguous_double_scalar_input(
+            code, datatype, input_is_dynamic, dims_spec,
+            vector_rank, vec_param, input_continuity)
+
+        ort_golden_double_var = self._execute_ort_operation(
+            code, datatype, op_str
+        )
+
+        self._cast_ort_golden_double_into_ntt_shape(
+            code, datatype, op_str, output_is_dynamic, dims_spec, vector_rank,
+            vec_param, ort_golden_double_var
+        )
+            
         return code
 
     def _generate_ort_cast_golden_output(self, datatype, op_str,

@@ -56,8 +56,8 @@ ALL_DATATYPES = [
     DataType('float', 'Float32', '-3.4e15', '3.4e15', False),
     DataType('double', 'Float64', '-1.7e150', '1.7e150', False),
     DataType('bfloat16', 'Bfloat16', '-1.0e10_bf16', '1.0e10_bf16', False),
-    # DataType('float_e4m3_t', 'Float8e4m3', 'float_e4m3_t(-16.0f)', 'float_e4m3_t(16.0f)', False),
-    # DataType('float_e5m2_t', 'Float8e5m2', 'float_e5m2_t(-32.0f)', 'float_e5m2_t(32.0f)', False)
+    DataType('float_e4m3_t', 'Float8e4m3', 'float_e4m3_t(-16.0f)', 'float_e4m3_t(16.0f)', False),
+    DataType('float_e5m2_t', 'Float8e5m2', 'float_e5m2_t(-32.0f)', 'float_e5m2_t(32.0f)', False)
 ]
 
 class BaseTestGenerator:
@@ -452,6 +452,67 @@ using namespace ortki;
             code.append(f"auto {var_name_cast_to_orig_type} = ortki_Cast({cast_input_var}, 1, ortki::DataType_INT64);")
         code.append(f"auto {cast_output_var} = ortki_Cast({var_name_cast_to_orig_type}, 1, ortki::{original_type});")
         return code
+
+    # back2ntt used in ntt cast version.
+    def _cast_ort_golden_double_into_ntt_shape(self, code, datatype, ntt_op_str,
+            output_is_dynamic, output_dims_spec, output_vector_rank,
+            output_vec_param, ort_golden_double_var):
+        """Process ORT output back to NTT format with proper casting and vectorization"""
+        """
+        5. transform back to ntt tensor of double scalar
+        6. cast back to original type, still tensor of scalar
+        7. vectorized back to original tensor of vector (if necessary)
+        """
+        # 3. transform ort_golden_double to ntt_golden{cpp_type}_scalar
+        code.append(f"//  transform ort_golden_double to ntt_golden{datatype.cpp_type}_scalar")
+
+        
+        # # Get shape of ntt_golden_double_scalar based on aligned shapes and operation
+        golden_scalar_dims = self.generate_ntt_golden_double_scalar_dims_spec(ntt_op_str, output_dims_spec, output_vector_rank)
+
+        golden_scalar_shape_expr = self.generate_shape_init(output_is_dynamic, golden_scalar_dims)
+
+        code.append(f"auto ntt_golden_double_scalar = ntt::make_unique_tensor<double>({golden_scalar_shape_expr});")
+        code.append(f"NttTest::ort2ntt({ort_golden_double_var}, *ntt_golden_double_scalar);")
+        code.append("")
+        code.append(f"auto ntt_golden_{datatype.cpp_type}_scalar = ntt::make_unique_tensor<{datatype.cpp_type}>({golden_scalar_shape_expr});")
+        code.append(f"ntt::cast(*ntt_golden_double_scalar, *ntt_golden_{datatype.cpp_type}_scalar);")
+
+        # 4. transform ntt_golden_{datatype.cpp_type}_scalar to ntt_golden
+        code.append("")
+        if output_vector_rank > 0:
+            # 4.b if ntt_output is tensor of vector
+            code.append("// 4.b if ntt_output is tensor of vector")
+            unsqueeze_shape_dims = output_dims_spec + (["1"] if output_vector_rank == 1 else ["1", "1"])
+            unsqueeze_shape_expr = self.generate_shape_init(output_is_dynamic, unsqueeze_shape_dims)
+            vector_type_str = self.get_element_cpp_type(datatype.cpp_type, output_vector_rank, output_vec_param)
+            code.append(f"auto ntt_golden_unsqueeze = ntt::make_tensor<{vector_type_str}>({unsqueeze_shape_expr});")
+            dims_spec_len = len(output_dims_spec)
+            pack_dims = f"{dims_spec_len}" if output_vector_rank == 1 else f"{dims_spec_len}, {dims_spec_len + 1}"
+            code.append(f"ntt::pack(*ntt_golden_{datatype.cpp_type}_scalar, ntt_golden_unsqueeze, fixed_shape_v<{pack_dims}>);")
+            code.append(f"auto ntt_golden = ntt_golden_unsqueeze.squeeze( (fixed_shape_v<{pack_dims}>));")
+        else:
+            # 4.a if ntt_output is not tensor of vector
+            code.append("// 4.a if ntt_output is not tensor of vector")
+            code.append(f"auto ntt_golden = *ntt_golden_{datatype.cpp_type}_scalar;")
+
+        code.append("")
+
+
+
+    def generate_ntt_golden_double_scalar_dims_spec(self, ntt_op_str, output_dims_spec, output_vector_rank):
+        if output_vector_rank > 0:
+            if output_vector_rank == 1:
+                golden_scalar_dims = output_dims_spec + ["P"]
+            else:  # 2D vector
+                if ntt_op_str == "outer_product":
+                    golden_scalar_dims = output_dims_spec  + ["P", "P"]
+                else:
+                    golden_scalar_dims = output_dims_spec + ["4", "P"]
+        else:
+            golden_scalar_dims = output_dims_spec
+
+        return golden_scalar_dims
     
     def generate_ort_output(self, datatype, ntt_op_str):
         ort_type = self.ort_datatype_map.get(datatype.cpp_type, 'DataType_FLOAT')
@@ -559,6 +620,7 @@ using namespace ortki;
         return header + ort_operation_lines + [""]
     
 
+    #back2ntt early version
     def generate_ort_back2ntt_and_compare_section(self,
                                                   datatype: DataType,
                                                   output_element_cpp_type: str,
@@ -616,6 +678,7 @@ using namespace ortki;
         lines.append("")
         return lines
 
+    #back2ntt used for cast in ort 
     def generate_ort_back2ntt(self,
                                 datatype: DataType,
                                 output_element_cpp_type: str,
