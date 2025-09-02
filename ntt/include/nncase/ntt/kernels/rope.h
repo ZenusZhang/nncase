@@ -36,20 +36,20 @@ void rope(const TInput &input, const TCos &cos, const TSin &sin,
     ntt::apply(
         domain,
         [&](auto, auto in_offset, auto cos_offset) {
-            // 1st half
-            ntt::loop<half_dim>([&](const auto &i) {
-                output_p[in_offset + i] = ntt::mul_add(
-                    input_p[in_offset + i], cos_p[cos_offset + i],
-                    -input_p[in_offset + i + half_dim] * sin_p[cos_offset + i]);
-            });
+            for (size_t i = 0; i < half_dim; i++) {
+                const auto input_0 = input_p[in_offset + i];
+                const auto input_1 = input_p[in_offset + i + half_dim];
 
-            // 2nd half
-            ntt::loop<half_dim>([&](const auto &i) {
-                output_p[in_offset + i + half_dim] = ntt::mul_add(
-                    input_p[in_offset + i + half_dim],
-                    cos_p[cos_offset + i + half_dim],
-                    input_p[in_offset + i] * sin_p[cos_offset + i + half_dim]);
-            });
+                // 1st half
+                output_p[in_offset + i] =
+                    ntt::mul_add(input_0, cos_p[cos_offset + i],
+                                 -input_1 * sin_p[cos_offset + i]);
+
+                // 2nd half
+                output_p[in_offset + i + half_dim] =
+                    ntt::mul_add(input_1, cos_p[cos_offset + i + half_dim],
+                                 input_0 * sin_p[cos_offset + i + half_dim]);
+            }
         },
         in_strides, cos_strides);
 }

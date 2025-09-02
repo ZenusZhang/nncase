@@ -115,23 +115,6 @@ struct tensor_binary_impl<Op, TVector, T2> {
 //     Op<element_type1, element_type2> op_;
 };
 
-template <template <class T1, class T2> class Op, Vector T1, Vector T2>
-    requires(T1::rank() == 2 && T2::rank() == 2)
-struct tensor_binary_impl<Op, T1, T2> {
-    using sub_vector_type =
-        vector<typename T1::element_type, T1::shape().at(1)>;
-
-    constexpr T1 operator()(const T1 &v1, const T2 &v2) const noexcept {
-        T1 value{};
-        ntt::loop<T1::shape().at(0)>(
-            [&](auto m) { value(m) = op_(v1(m), v2(m)); });
-        return value;
-    }
-
-  private:
-    Op<sub_vector_type, sub_vector_type> op_;
-};
-
 //T1 scalar, T2 1D vector or 2D vector
 template <template <class T1, class T2> class Op, Scalar TScalar,
           Vector TVector>

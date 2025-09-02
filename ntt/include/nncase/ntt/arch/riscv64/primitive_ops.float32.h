@@ -162,7 +162,7 @@ REGISTER_RVV_UNARY_OP(acos, float, acos_float32)
         auto add = __riscv_vfadd_vf_f32m##lmul(v, 1.f, vl);                    \
         auto mul = __riscv_vfmul_vv_f32m##lmul(sub, add, vl);                  \
         auto sqrt = __riscv_vfsqrt_v_f32m##lmul(mul, vl);                      \
-        return log_ps(__riscv_vfadd_vv_f32m##lmul(v, sqrt, vl), vl);           \
+        return log_ps_fp32(__riscv_vfadd_vv_f32m##lmul(v, sqrt, vl), vl);      \
     }
 #else
 #define ACOSH_FLOAT32(lmul, mlen)                                              \
@@ -302,7 +302,7 @@ REGISTER_RVV_UNARY_OP(asin, float, asin_float32)
         sum = __riscv_vfmacc_vv_f32m##lmul(sum, v, v, vl);                     \
         auto sqrt = __riscv_vfrec7_v_f32m##lmul(                               \
             __riscv_vfrsqrt7_v_f32m##lmul(sum, vl), vl);                       \
-        auto ret = log_ps(__riscv_vfadd_vv_f32m##lmul(x, sqrt, vl), vl);       \
+        auto ret = log_ps_fp32(__riscv_vfadd_vv_f32m##lmul(x, sqrt, vl), vl);  \
         return __riscv_vfsgnj_vv_f32##m##lmul(ret, v, vl);                     \
     }
 #else
@@ -315,7 +315,7 @@ REGISTER_RVV_UNARY_OP(asin, float, asin_float32)
         auto sub = __riscv_vfsub_vf_f32m##lmul(x, 1.f, vl);                    \
         add = __riscv_vfmadd_vv_f32m##lmul(add, sub, two, vl);                 \
         auto sqrt = __riscv_vfsqrt_v_f32m##lmul(add, vl);                      \
-        auto ret = log_ps(__riscv_vfadd_vv_f32m##lmul(x, sqrt, vl), vl);       \
+        auto ret = log_ps_fp32(__riscv_vfadd_vv_f32m##lmul(x, sqrt, vl), vl);  \
         return __riscv_vfsgnj_vv_f32##m##lmul(ret, v, vl);                     \
     }
 #endif
@@ -384,8 +384,8 @@ REGISTER_RVV_UNARY_OP(cos, float, cos_float32)
 #define COSH_FLOAT32(lmul, mlen)                                               \
     inline vfloat32m##lmul##_t cosh_float32(const vfloat32m##lmul##_t &v,      \
                                             const size_t vl) {                 \
-        auto a = exp_ps(v, vl);                                                \
-        auto b = exp_ps(vfneg_v_f32m##lmul(v, vl), vl);                        \
+        auto a = exp_ps_fp32(v, vl);                                           \
+        auto b = exp_ps_fp32(vfneg_v_f32m##lmul(v, vl), vl);                   \
         auto sum = __riscv_vfadd_vv_f32m##lmul(a, b, vl);                      \
         return __riscv_vfdiv_vf_f32m##lmul(sum, 2.f, vl);                      \
     }
@@ -395,7 +395,7 @@ REGISTER_RVV_UNARY_OP(cos, float, cos_float32)
 #define COSH_FLOAT32(lmul, mlen)                                               \
     inline vfloat32m##lmul##_t cosh_float32(const vfloat32m##lmul##_t &v,      \
                                             const size_t vl) {                 \
-        auto a = exp_ps(v, vl);                                                \
+        auto a = exp_ps_fp32(v, vl);                                           \
         auto b = __riscv_vfrec7_v_f32m##lmul(a, vl);                           \
         auto sum = __riscv_vfadd_vv_f32m##lmul(a, b, vl);                      \
         return __riscv_vfmul_vf_f32m##lmul(sum, 0.5f, vl);                     \
@@ -404,7 +404,7 @@ REGISTER_RVV_UNARY_OP(cos, float, cos_float32)
 #define COSH_FLOAT32(lmul, mlen)                                               \
     inline vfloat32m##lmul##_t cosh_float32(const vfloat32m##lmul##_t &v,      \
                                             const size_t vl) {                 \
-        auto a = exp_ps(v, vl);                                                \
+        auto a = exp_ps_fp32(v, vl);                                           \
         auto b = __riscv_vfrdiv_vf_f32m##lmul(a, 1.f, vl);                     \
         auto sum = __riscv_vfadd_vv_f32m##lmul(a, b, vl);                      \
         return __riscv_vfmul_vf_f32m##lmul(sum, 0.5f, vl);                     \
@@ -419,7 +419,7 @@ REGISTER_RVV_UNARY_OP(cosh, float, cosh_float32)
 #define EXP_FLOAT32(lmul, mlen)                                                \
     inline vfloat32m##lmul##_t exp_float32(const vfloat32m##lmul##_t &v,       \
                                            const size_t vl) {                  \
-        return exp_ps(v, vl);                                                  \
+        return exp_ps_fp32(v, vl);                                             \
     }
 
 REGISTER_RVV_KERNEL(EXP_FLOAT32)
@@ -442,7 +442,7 @@ REGISTER_RVV_UNARY_OP(floor, float, floor_float32)
 #define LOG_FLOAT32(lmul, mlen)                                                \
     inline vfloat32m##lmul##_t log_float32(const vfloat32m##lmul##_t &v,       \
                                            const size_t vl) {                  \
-        return log_ps(v, vl);                                                  \
+        return log_ps_fp32(v, vl);                                             \
     }
 
 REGISTER_RVV_KERNEL(LOG_FLOAT32)
@@ -583,7 +583,7 @@ REGISTER_RVV_UNARY_OP(sin, float, sin_float32)
 #define SINH_FLOAT32(lmul, mlen)                                               \
     inline vfloat32m##lmul##_t sinh_float32(const vfloat32m##lmul##_t &v,      \
                                             const size_t vl) {                 \
-        auto a = exp_ps(v, vl);                                                \
+        auto a = exp_ps_fp32(v, vl);                                           \
         auto b = __riscv_vfrec7_v_f32m##lmul(a, vl);                           \
         return __riscv_vfmul_vf_f32m##lmul(                                    \
             __riscv_vfsub_vv_f32m##lmul(a, b, vl), 0.5f, vl);                  \
@@ -592,7 +592,7 @@ REGISTER_RVV_UNARY_OP(sin, float, sin_float32)
 #define SINH_FLOAT32(lmul, mlen)                                               \
     inline vfloat32m##lmul##_t sinh_float32(const vfloat32m##lmul##_t &v,      \
                                             const size_t vl) {                 \
-        auto a = exp_ps(v, vl);                                                \
+        auto a = exp_ps_fp32(v, vl);                                           \
         auto b = __riscv_vfrdiv_vf_f32m##lmul(a, 1.f, vl);                     \
         return __riscv_vfmul_vf_f32m##lmul(                                    \
             __riscv_vfsub_vv_f32m##lmul(a, b, vl), 0.5f, vl);                  \
@@ -859,19 +859,19 @@ REGISTER_RVV_BINARY_OP(max, float, max_float32)
     inline vfloat32m##lmul##_t pow_float32(const vfloat32m##lmul##_t &v1,      \
                                            const vfloat32m##lmul##_t &v2,      \
                                            const size_t vl) {                  \
-        return pow_ps(v1, v2, vl);                                             \
+        return pow_ps_fp32(v1, v2, vl);                                        \
     }                                                                          \
                                                                                \
     inline vfloat32m##lmul##_t pow_float32(const vfloat32m##lmul##_t &v1,      \
                                            const float &s, const size_t vl) {  \
         auto v2 = __riscv_vfmv_v_f_f32m##lmul(s, vl);                          \
-        return pow_ps(v1, v2, vl);                                             \
+        return pow_ps_fp32(v1, v2, vl);                                        \
     }                                                                          \
                                                                                \
     inline vfloat32m##lmul##_t pow_float32(                                    \
         const float &s, const vfloat32m##lmul##_t &v2, const size_t vl) {      \
         auto v1 = __riscv_vfmv_v_f_f32m##lmul(s, vl);                          \
-        return pow_ps(v1, v2, vl);                                             \
+        return pow_ps_fp32(v1, v2, vl);                                        \
     }
 
 REGISTER_RVV_KERNEL(POW_FLOAT32)
@@ -922,7 +922,7 @@ REGISTER_RVV_BINARY_OP(floor_mod, int32_t, floor_mod_int32)
 #define SWISH_FLOAT32(lmul, mlen)                                              \
     inline vfloat32m##lmul##_t swish_float32(const vfloat32m##lmul##_t &v,     \
                                              const size_t vl) {                \
-        auto tmp = exp_ps(__riscv_vfneg_v_f32m##lmul(v, vl), vl);              \
+        auto tmp = exp_ps_fp32(__riscv_vfneg_v_f32m##lmul(v, vl), vl);         \
         return __riscv_vfdiv_vv_f32m##lmul(                                    \
             v, __riscv_vfadd_vf_f32m##lmul(tmp, 1.f, vl), vl);                 \
     }
@@ -936,7 +936,7 @@ REGISTER_RVV_BINARY_OP(floor_mod, int32_t, floor_mod_int32)
     inline vfloat32m##lmul##_t swishb_float32(const vfloat32m##lmul##_t &v,    \
                                               float beta, const size_t vl) {   \
         auto tmp = __riscv_vfmul_vf_f32m##lmul(v, -beta, vl);                  \
-        tmp = exp_ps(tmp, vl);                                                 \
+        tmp = exp_ps_fp32(tmp, vl);                                            \
         tmp = __riscv_vfadd_vf_f32m##lmul(tmp, 1.0f, vl);                      \
         return __riscv_vfdiv_vv_f32m##lmul(v, tmp, vl);                        \
     }
