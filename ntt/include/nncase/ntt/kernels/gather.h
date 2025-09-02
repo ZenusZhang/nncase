@@ -112,10 +112,10 @@ template <Tensor TA, Tensor TB, Tensor TC> class gather_impl {
                                                          rank - (axis + 1)>());
                 auto addr_input =
                     reinterpret_cast<const element_type *>(&(input(in_index)));
-                auto addr_output = reinterpret_cast<const element_type *>(
-                    &(output(out_index)));
+                auto addr_output =
+                    reinterpret_cast<element_type *>(&(output(out_index)));
                 ntt::u_unary(ntt::ops::copy<element_type>{}, addr_input, 1,
-                             const_cast<std::remove_const_t<element_type>*>(addr_output), 1, 1);
+                             addr_output, 1, 1);
             });
         }
     }
@@ -162,6 +162,7 @@ class distributed_gather_impl {
     using mesh_type = typename TA::mesh_type;
     using local_input_tensor_type = typename TA::local_tensor_type;
     using element_type = local_input_tensor_type::value_type;
+    using TInShape = typename local_input_tensor_type::shape_type;
 
     inline static constexpr auto rank = TA::rank();
     inline static constexpr auto indices_rank = TB::rank();
@@ -180,24 +181,69 @@ class distributed_gather_impl {
         const auto axis_global_start = global_offset[axis];
         const auto axis_global_end = axis_global_start + local_shape[axis];
 
-        ntt::apply(output.shape(), [&](auto out_index) {
-            const auto indices_index =
-                out_index.template slice<axis, indices_rank>();
-            auto global_idx = indices(indices_index);
+        if constexpr (axis == rank - 2 &&
+                      FixedDimension<
+                          std::tuple_element_t<rank - 1, TInShape>>) {
+            auto domains = output.shape().template slice<0, rank - 1>();
+            auto input_strides =
+                local_input.strides().template slice<0, rank - 1>();
+            auto output_strides =
+                output.strides().template slice<0, rank - 1>();
+            ntt::apply(domains, [&](auto out_index) {
+                const auto indices_index =
+                    out_index.template slice<axis, indices_rank>();
+                auto global_idx = indices(indices_index);
+                auto addr_output = output.elements().data() +
+                                   linear_offset(out_index, output_strides);
 
-            if (global_idx >= axis_global_start &&
-                global_idx < axis_global_end) {
-                const auto in_index =
-                    out_index.template slice<0, axis>()
-                        .append((dim_t)global_idx - axis_global_start)
-                        .concat(out_index.template slice<axis + indices_rank,
+                if (global_idx >= axis_global_start &&
+                    global_idx < axis_global_end) {
+                    const auto in_index =
+                        out_index.template slice<0, axis>()
+                            .append((dim_t)global_idx - axis_global_start)
+                            .concat(
+                                out_index.template slice<axis + indices_rank,
+                                                         rank - 2 - axis>());
+                    auto addr_input = local_input.elements().data() +
+                                      linear_offset(in_index, input_strides);
+                    ntt::u_unary(ntt::ops::copy<element_type>{}, addr_input, 1,
+                                 addr_output, 1, local_shape[rank - 1]);
+                } else {
+                    // Index is outside the local shard's range, fill with zeros
+                    alignas(sizeof(element_type)) element_type
+                        zero[std::tuple_element_t<rank - 1, TInShape>{}]{};
+                    ntt::u_unary(ntt::ops::copy<element_type>{}, zero, 1,
+                                 addr_output, 1, local_shape[rank - 1]);
+                }
+            });
+        } else {
+            ntt::apply(output.shape(), [&](auto out_index) {
+                const auto indices_index =
+                    out_index.template slice<axis, indices_rank>();
+                auto global_idx = indices(indices_index);
+                auto addr_output =
+                    reinterpret_cast<element_type *>(&(output(out_index)));
+
+                if (global_idx >= axis_global_start &&
+                    global_idx < axis_global_end) {
+                    const auto in_index =
+                        out_index.template slice<0, axis>()
+                            .append((dim_t)global_idx - axis_global_start)
+                            .concat(
+                                out_index.template slice<axis + indices_rank,
                                                          rank - (axis + 1)>());
-                output(out_index) = local_input(in_index);
-            } else {
-                // Index is outside the local shard's range, fill with zeros
-                output(out_index) = element_type{};
-            }
-        });
+                    auto addr_input = reinterpret_cast<const element_type *>(
+                        &(local_input(in_index)));
+                    ntt::u_unary(ntt::ops::copy<element_type>{}, addr_input, 1,
+                                 addr_output, 1, 1);
+                } else {
+                    // Index is outside the local shard's range, fill with zeros
+                    alignas(sizeof(element_type)) element_type zero{};
+                    ntt::u_unary(ntt::ops::copy<element_type>{}, &zero, 1,
+                                 addr_output, 1, 1);
+                }
+            });
+        }
     }
 };
 
