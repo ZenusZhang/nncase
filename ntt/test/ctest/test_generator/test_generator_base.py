@@ -456,7 +456,7 @@ using namespace ortki;
     # back2ntt used in ntt cast version.
     def _cast_ort_golden_double_into_ntt_shape(self, code, datatype, ntt_op_str,
             output_is_dynamic, output_dims_spec, output_vector_rank,
-            output_vec_param, ort_golden_double_var):
+            output_vec_param, ort_golden_double_var, cast_target = "double"):
         """Process ORT output back to NTT format with proper casting and vectorization"""
         """
         5. transform back to ntt tensor of double scalar
@@ -464,7 +464,7 @@ using namespace ortki;
         7. vectorized back to original tensor of vector (if necessary)
         """
         # 3. transform ort_golden_double to ntt_golden{cpp_type}_scalar
-        code.append(f"//  transform ort_golden_double to ntt_golden{datatype.cpp_type}_scalar")
+        code.append(f"//  transform ort_golden_{cast_target} to ntt_golden{datatype.cpp_type}_scalar")
 
         
         # # Get shape of ntt_golden_double_scalar based on aligned shapes and operation
@@ -472,11 +472,11 @@ using namespace ortki;
 
         golden_scalar_shape_expr = self.generate_shape_init(output_is_dynamic, golden_scalar_dims)
 
-        code.append(f"auto ntt_golden_double_scalar = ntt::make_unique_tensor<double>({golden_scalar_shape_expr});")
-        code.append(f"NttTest::ort2ntt({ort_golden_double_var}, *ntt_golden_double_scalar);")
+        code.append(f"auto ntt_golden_{cast_target}_scalar = ntt::make_unique_tensor<{cast_target}>({golden_scalar_shape_expr});")
+        code.append(f"NttTest::ort2ntt({ort_golden_double_var}, *ntt_golden_{cast_target}_scalar);")
         code.append("")
         code.append(f"auto ntt_golden_{datatype.cpp_type}_scalar = ntt::make_unique_tensor<{datatype.cpp_type}>({golden_scalar_shape_expr});")
-        code.append(f"ntt::cast(*ntt_golden_double_scalar, *ntt_golden_{datatype.cpp_type}_scalar);")
+        code.append(f"ntt::cast(*ntt_golden_{cast_target}_scalar, *ntt_golden_{datatype.cpp_type}_scalar);")
 
         # 4. transform ntt_golden_{datatype.cpp_type}_scalar to ntt_golden
         code.append("")
@@ -515,7 +515,6 @@ using namespace ortki;
         return golden_scalar_dims
     
     def generate_ort_output(self, datatype, ntt_op_str):
-        ort_type = self.ort_datatype_map.get(datatype.cpp_type, 'DataType_FLOAT')
         
         # Check both dictionaries for the operation string
         if ntt_op_str in self.op_str_map_exhaustive:

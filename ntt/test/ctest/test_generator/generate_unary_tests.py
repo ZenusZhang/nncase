@@ -10,6 +10,8 @@ class UnaryTestGenerator(BaseTestGenerator):
         super().__init__()
         self.op_str_map_exhaustive= {
             "abs": f"auto ort_output = ortki_Abs(ort_input);", 
+            "cos": f"auto ort_output = ortki_Cos(ort_input);",
+            "sin": f"auto ort_output = ortki_Sin(ort_input);"
             # "acos", "acosh", "asin", "asinh", "ceil", "copy", "cos", "cosh",
             # "exp", "erf", "floor", "log", "neg", "round", "rsqrt", "sign", "sin",
             # "sinh", "sqrt", "square", "tanh", "swish",
@@ -32,6 +34,15 @@ class UnaryTestGenerator(BaseTestGenerator):
         # ORT *unary operations* do not support these data types, need to cast to double 
         # fortunately, they could be *cast* in ort( fp8 are unfortunate)
         self.types_need_cast_in_ort = {
+            "sin": [ 'bool',  'int8_t', 'int16_t', 'bfloat16', 'half',
+                    'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t', 
+                    'int32_t', 'int64_t'
+                ],
+            "cos": [ 'bool',  'int8_t', 'int16_t', 'bfloat16', 'half',
+                    'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t', 
+                    'int32_t', 'int64_t', 'double'
+                ],
+
             "default": [ 'bool',  'int8_t', 'int16_t', 'bfloat16', 'half',
                     'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t'
                 ]
@@ -40,7 +51,28 @@ class UnaryTestGenerator(BaseTestGenerator):
             'float_e4m3_t', 'float_e5m2_t' 
         }
 
+        self.OPRATOR_SPECICAL_TYPES = {
+            "sin": {
+                "float": DataType("float", "Float32", "-1e6", "1e6", False)
+            },
+            "cos": {
+                "float": DataType("float", "Float32", "-1e6", "1e6", False),
+                "double": DataType("double", "Float64", "-1e6", "1e6", False),
+            }
+        }
 
+
+        self.ulp_tolerances  = {
+            "sin": {
+                "default": 2
+            },
+            "cos":{
+                "default": 2
+            },
+            "default": {
+                "default": 1
+            }
+        }
     def _get_param_combinations(self, op_str):
         is_dynamic_options = [False, True]
         is_view_options = [False, True]
@@ -168,7 +200,7 @@ class UnaryTestGenerator(BaseTestGenerator):
 
     def _prepare_contiguous_double_scalar_input(
         self, code, datatype, input_is_dynamic, input_dims_spec, 
-        vector_rank, vec_param, input_continuity
+        vector_rank, vec_param, input_continuity, cast_target = "double"
     ):
         """
         1. ntt_tensor -> ntt_tensor_contiguous
@@ -183,7 +215,7 @@ class UnaryTestGenerator(BaseTestGenerator):
         )
         code.extend(input_copy_code)
 
-        code.append("// align in NTT, then cast to double, then process in ORT")
+        code.append(f"// align in NTT, then cast to {cast_target}, then process in ORT")
 
         input_is_vec = vector_rank > 0
 
@@ -199,45 +231,44 @@ class UnaryTestGenerator(BaseTestGenerator):
 
         input_double_shape_expr = self.generate_shape_init(input_is_dynamic, input_scalar_dims)
 
-        code.append("//1.2 get ntt_input_double")
-        code.append(f"auto ntt_input_double = ntt::make_tensor<double>({input_double_shape_expr});")
+        code.append(f"//1.2 get ntt_input_{cast_target}")
+        code.append(f"auto ntt_input_{cast_target} = ntt::make_tensor<{cast_target}>({input_double_shape_expr});")
         code.append("")
-        code.append("ntt::cast(ntt_input_scalar, ntt_input_double);")
+        code.append(f"ntt::cast(ntt_input_scalar, ntt_input_{cast_target});")
 
         return input_scalar_dims
 
 
-    def _execute_ort_operation(self, code, datatype, ntt_op_str):
+    def _execute_ort_operation(self, code, datatype, ntt_op_str, cast_target):
         """1. cast to ort tensor"""
         """2. calculate ort_output"""
         code.append("")
         code.append("// 2. calculated ort_output")
-        code.append(f"auto ort_input = NttTest::ntt2ort(ntt_input_double);")
+        code.append(f"auto ort_input = NttTest::ntt2ort(ntt_input_{cast_target});")
         code.extend(self.generate_ort_output(datatype, ntt_op_str))
-        code.append(f"auto ort_golden_double = ort_output;")
-        return "ort_golden_double"
+        code.append(f"auto ort_golden_{cast_target} = ort_output;")
+        return f"ort_golden_{cast_target}"
 
 
 
     def _generate_ntt_cast_golden_output(self, datatype, op_str, 
                                    input_is_dynamic, output_is_dynamic,
                                    dims_spec , vector_rank, vec_param, 
-                                   input_continuity):
+                                   input_continuity, cast_target):
         """Special handling for types that cannot be cast in ORT"""
-        # TODO: Implement special handling for fp8 types
         code = []
 
         self._prepare_contiguous_double_scalar_input(
             code, datatype, input_is_dynamic, dims_spec,
-            vector_rank, vec_param, input_continuity)
+            vector_rank, vec_param, input_continuity, cast_target)
 
         ort_golden_double_var = self._execute_ort_operation(
-            code, datatype, op_str
+            code, datatype, op_str, cast_target
         )
 
         self._cast_ort_golden_double_into_ntt_shape(
             code, datatype, op_str, output_is_dynamic, dims_spec, vector_rank,
-            vec_param, ort_golden_double_var
+            vec_param, ort_golden_double_var, cast_target
         )
             
         return code
@@ -245,7 +276,7 @@ class UnaryTestGenerator(BaseTestGenerator):
     def _generate_ort_cast_golden_output(self, datatype, op_str,
                                    input_is_dynamic, output_is_dynamic,
                                    dims_spec, vector_rank, vec_param,
-                                   input_continuity):
+                                   input_continuity, cast_target):
         """Generate golden output using ORT with optional casting"""
         code = []
         
@@ -262,7 +293,7 @@ class UnaryTestGenerator(BaseTestGenerator):
 
         # this is not a good impmentation
         if need_cast_in_ort:
-            code.append(f"auto ort_input = ortki_Cast({ort_input_origin_type}, 1, ortki::DataType_DOUBLE);")
+            code.append(f"auto ort_input = ortki_Cast({ort_input_origin_type}, 1, ortki::{self.ort_datatype_map[cast_target]});")
         else:
             code.append(f"auto ort_input = {ort_input_origin_type};")
 
@@ -284,9 +315,16 @@ class UnaryTestGenerator(BaseTestGenerator):
             output_shape_expr,
             cast_mode=0,  # no cast be dealed in this step
             ntt_output_var_name="ntt_output",
-            ort_output_var_name="ort_golden")
+            ort_output_var_name="ort_golden",
+            ort_type = cast_target)
         code.extend(cast_code)
         return code, golden_var_name
+
+    def _get_cast_target(self, datatype, op_str):
+        if op_str == "cos":
+            return "float"
+        else:
+            return "double"
 
     def generate_ntt_golden_output(self, datatype, op_str,
                                    input_is_dynamic, output_is_dynamic,
@@ -297,18 +335,19 @@ class UnaryTestGenerator(BaseTestGenerator):
         # Check if datatype needs special fp8 handling
         need_cast_in_ntt = datatype.cpp_type in self.types_need_cast_in_ntt
         golden_var_name = "ntt_golden"
-        
+        cast_target = self._get_cast_target(datatype, op_str)
+
         if need_cast_in_ntt:
-            # Special handling for fp8 types that cannot be cast in ORT
+            # cast in ntt
             code.extend(self._generate_ntt_cast_golden_output(
                 datatype, op_str, input_is_dynamic, output_is_dynamic,
-                dims_spec, vector_rank, vec_param, input_continuity
+                dims_spec, vector_rank, vec_param, input_continuity, cast_target
             ))
         else:
-            # Original logic for non-fp8 types
+            # cast in ort or need not cast
             golden_output_code, golden_var_name = self._generate_ort_cast_golden_output(
                 datatype, op_str, input_is_dynamic, output_is_dynamic,
-                dims_spec, vector_rank, vec_param, input_continuity
+                dims_spec, vector_rank, vec_param, input_continuity, cast_target
             )
             code.extend(golden_output_code)
 
@@ -337,6 +376,7 @@ class UnaryTestGenerator(BaseTestGenerator):
         code.extend(self.generate_function_name(f"UnaryTest{op_str}", datatype, test_name))
         if vector_rank > 0:
             code.extend(self.generate_P_constants(P))
+
 
         ntt_output_code, output_shape_expr, output_element_type = self.generate_ntt_output_to_test(
                                         datatype, op_str, 
@@ -383,15 +423,21 @@ class UnaryTestGenerator(BaseTestGenerator):
             test_case = self.generate_test_case(datatype, op_str, input_is_dynamic, output_is_dynamic, dims_spec, input_vector_rank, input_continuity)
             code.append(test_case)
 
+        code.append(self.generate_footer())
         return "\n".join(code)
 
 def is_uint(datatype):
     return "uint" in datatype.cpp_type
 
+def is_int(datatype):
+    return "int" in datatype.cpp_type
+
 def need_skip(datatype, op_str):
     if(datatype.cpp_type == "bool"):
         return True
     if(is_uint(datatype) and op_str == "abs"):
+        return True
+    if(is_int(datatype) and (op_str == "cos" or op_str == "sin")):
         return True
 
     return False
@@ -401,6 +447,14 @@ def generate_tests_for_op(op_str, generator):
 
         if(need_skip(datatype, op_str)):
             continue
+
+
+        if op_str in generator.OPRATOR_SPECICAL_TYPES:
+            # For operations with special type requirements, use the specified data types
+            special_types = generator.OPRATOR_SPECICAL_TYPES[op_str]
+            # Check if current datatype's cpp_type is in the special types
+            if datatype.cpp_type in special_types:
+                datatype = special_types[datatype.cpp_type]
 
         test_code = generator.generate_all_tests_for_type(datatype, op_str)
         filename = f"test_ntt_unary_{datatype.name_suffix.lower()}_{op_str}_generated.cpp"

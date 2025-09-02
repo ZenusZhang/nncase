@@ -114,7 +114,7 @@ template <typename T, TensorOrVector TTensor>
 requires(std::is_floating_point_v<T>)
 void generate_random_tensor(TTensor &tensor, std::mt19937 &gen, T start = static_cast<T>(0),
                             T stop = static_cast<T>(1), bool allow_zr = true, bool only_int = false) {
-    
+
     auto fill_with_distribution = [&](auto &distribution) {
         ntt::apply(tensor.shape(), [&](auto &index) {
             if (allow_zr) {
@@ -146,15 +146,7 @@ void generate_random_tensor(TTensor &tensor, std::mt19937 &gen, T start = static
     }
 }
 
-template <typename T, TensorOrVector TTensor>
-requires(std::is_same_v<T, bool>)
-void generate_random_tensor(TTensor &tensor, std::mt19937 &gen, [[maybe_unused]]T start = static_cast<T>(0),
-                            [[maybe_unused]]T stop = static_cast<T>(1), [[maybe_unused]]bool allow_zr = true, [[maybe_unused]]bool only_int = false) {
-    std::uniform_int_distribution<int> dis(0, 1);
-    ntt::apply(tensor.shape(), [&](auto &index) {
-        tensor(index) = static_cast<bool>(dis(gen) < 0.5);
-    });
-}
+
 
 
 template <typename T>
@@ -236,6 +228,8 @@ bool are_close(T a, T b,[[maybe_unused]] float ulp_tlrce = 1, double abs_tol = 1
     if constexpr (!std::is_integral_v<T>) {
         // std::cout << "std::fabs(a-b) " << std::fabs((a-b))  <<std::endl;
         // std::cout << "ulp(b):" <<ulp(b) << "   ulp(a)" << ulp(a) << std::endl;
+        if(std::isinf(double(a)) != std::isinf(double(b)))
+            return false;
         if (std::fabs(double(a - b)) <= ulp_tlrce*double(ulp(b)) || std::fabs(double(a - b)) <= ulp_tlrce*double(ulp(a))) {
             return true;
         }
