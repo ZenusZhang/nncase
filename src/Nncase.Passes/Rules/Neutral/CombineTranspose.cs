@@ -10,6 +10,7 @@ using Nncase.IR;
 using Nncase.IR.Math;
 using Nncase.IR.NN;
 using Nncase.IR.Shapes;
+using Nncase.IR.Tensors;
 using Nncase.PatternMatch;
 using static Nncase.IR.F.Math;
 using static Nncase.IR.F.NN;
@@ -548,5 +549,34 @@ public sealed partial class CombineActivationsTranspose : IRewriteRule
         return Transpose(
           newCall,
           perm);
+    }
+}
+
+[RuleGenerator]
+public sealed partial class CombineSliceTranspose : IRewriteRule
+{
+    /// <inheritdoc/>
+    public IPattern Pattern { get; } = IsTranspose(
+        "transpose",
+        _ => true,
+        IsSlice(
+            "slice",
+            "sliceCall",
+            _ => true,
+            IsWildcard("input"),
+            IsRankedShape("begins"),
+            IsRankedShape("ends"),
+            IsFixedShape("axes"),
+            IsFixedShape("strides")),
+        IsFixedShape("perm"));
+
+    private Expr GetReplace(Slice slice, Call sliceCall, Expr input, long[] perm, RankedShape begins, RankedShape ends, long[] axes, long[] strides)
+    {
+        var newAxes = axes.Select(a => perm.IndexOf(a)).Order().ToArray();
+        var newBegins = newAxes.Select(a => begins[axes.IndexOf(perm[a])]).ToArray();
+        var newEnds = newAxes.Select(a => ends[axes.IndexOf(perm[a])]).ToArray();
+        var newStrides = newAxes.Select(a => strides[axes.IndexOf(perm[a])]).ToArray();
+
+        return Slice(Transpose(input, perm), newBegins, newEnds, newAxes, newStrides).InheritMetaData(sliceCall);
     }
 }
