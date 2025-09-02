@@ -37,9 +37,18 @@ class unary_impl : public unary_like_impl<unary_impl<TIn, TOut>, TIn, TOut> {
             (output_conti_dims == TOut::rank())) {
             ntt::u_unary(op, addr_input, 1, addr_output_element, 1, len);
         } else {
-            ntt::apply(output.shape(), [&](auto index) {
-                ntt::u_unary(op, &input(index), 1, &output(index), 1, 1);
-            });
+            using TInElem = element_or_scalar_t<TBroadcastedIn>;
+            using TOutElem = element_or_scalar_t<TOut>;
+            const TInElem *NTT_RESTRICT input_p = input.elements().data();
+            TOutElem *NTT_RESTRICT output_p = output.elements().data();
+
+            ntt::apply(
+                output.shape(),
+                [&](auto, auto input_offset, auto output_offset) {
+                    ntt::u_unary(op, input_p + input_offset, 1,
+                                 output_p + output_offset, 1, 1);
+                },
+                input.strides(), output.strides());
         }
     }
 };
