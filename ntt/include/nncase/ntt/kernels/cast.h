@@ -18,6 +18,8 @@
 #include "../post_ops.h"
 #include "../tensor_ops.h"
 #include "../ukernels.h"
+#include <cassert>
+#include <stdio.h>
 #include "../utility.h"
 #include "nncase/ntt/shape.h"
 
@@ -27,20 +29,24 @@ template <Tensor TIn, Tensor TOut, FixedDimensions VectorizedAxes,
           template <class> class TPostOp>
 class cast_impl {
     inline static constexpr size_t rank = TIn::rank();
-
-    // FIXME: vector<bool> of x86 may fail.
+    // !! For vector<bool>, the element counts must be same as the other cast oprand.
     using InElemType = element_or_scalar_t<TIn>;
     using OutElemType = element_or_scalar_t<TOut>;
     static_assert((Vector<InElemType> && Vector<OutElemType>) ||
                       (Scalar<InElemType> && Scalar<OutElemType>),
                   "input & output must have the same type.");
     inline static constexpr auto in_ele_size =
-        sizeof(std::conditional_t<Vector<InElemType>,
+        sizeof(std::conditional_t<Vector<InElemType>,  //if vector
                                   element_or_scalar_t<InElemType>, size_t>);
     inline static constexpr auto out_ele_size =
         sizeof(std::conditional_t<Vector<OutElemType>,
                                   element_or_scalar_t<OutElemType>, size_t>);
-    inline static constexpr float scale = (float)in_ele_size / out_ele_size;
+
+    inline static constexpr bool is_bool_vector =
+        Vector<InElemType> && (  std::is_same_v<element_or_scalar_t<InElemType>, bool> ||
+                                        std::is_same_v<element_or_scalar_t<OutElemType>, bool>);
+
+    inline static constexpr float scale = is_bool_vector ? 1.0f : (float)in_ele_size / out_ele_size;
 
     inline static constexpr auto in_offset_scale = scale > 1.0f ? (size_t)scale
                                                                 : (size_t)1;
