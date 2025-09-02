@@ -21,27 +21,36 @@ template <Tensor TInput, Tensor TCos, Tensor TSin, class TOut>
 void rope(const TInput &input, const TCos &cos, const TSin &sin,
           TOut &&output) {
     const auto domain = input.shape().template slice<0, TInput::rank() - 1>();
+    const auto in_strides =
+        input.strides().template slice<0, TInput::rank() - 1>();
+    const auto cos_strides = broadcast_strides<1>(cos.strides())
+                                 .template slice<0, TInput::rank() - 1>();
     const auto half_dim = input.shape().back() / 2_dim;
 
-    ntt::apply(domain, [&](const auto &index) {
-        const auto cos_sin_index = index.template slice<1>();
+    using TElem = typename TInput::element_type;
+    const TElem *NTT_RESTRICT input_p = input.elements().data();
+    const TElem *NTT_RESTRICT cos_p = cos.elements().data();
+    const TElem *NTT_RESTRICT sin_p = sin.elements().data();
+    TElem *NTT_RESTRICT output_p = output.elements().data();
 
-        // 1st half
-        ntt::loop<half_dim>([&](const auto &i) {
-            output(index.append(i)) =
-                input(index.append(i)) * cos(cos_sin_index.append(i)) +
-                -input(index.append(i + half_dim)) *
-                    sin(cos_sin_index.append(i));
-        });
+    ntt::apply(
+        domain,
+        [&](auto, auto in_offset, auto cos_offset) {
+            // 1st half
+            ntt::loop<half_dim>([&](const auto &i) {
+                output_p[in_offset + i] = ntt::mul_add(
+                    input_p[in_offset + i], cos_p[cos_offset + i],
+                    -input_p[in_offset + i + half_dim] * sin_p[cos_offset + i]);
+            });
 
-        // 2nd half
-        ntt::loop<half_dim>([&](const auto &i) {
-            output(index.append(half_dim + i)) =
-                input(index.append(half_dim + i)) *
-                    cos(cos_sin_index.append(half_dim + i)) +
-                input(index.append(i)) *
-                    sin(cos_sin_index.append(half_dim + i));
-        });
-    });
+            // 2nd half
+            ntt::loop<half_dim>([&](const auto &i) {
+                output_p[in_offset + i + half_dim] = ntt::mul_add(
+                    input_p[in_offset + i + half_dim],
+                    cos_p[cos_offset + i + half_dim],
+                    input_p[in_offset + i] * sin_p[cos_offset + i + half_dim]);
+            });
+        },
+        in_strides, cos_strides);
 }
 } // namespace nncase::ntt
