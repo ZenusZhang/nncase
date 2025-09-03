@@ -40,9 +40,9 @@ class binary_impl
 
         auto len = output.shape().length();
 
-        using TLhsElem = element_or_scalar_t<TLhs>;
-        using TRhsElem = element_or_scalar_t<TRhs>;
-        using TOutElem = element_or_scalar_t<TOut>;
+        using TLhsElem = typename TLhs::element_type;
+        using TRhsElem = typename TRhs::element_type;
+        using TOutElem = typename TOut::element_type;
         TPostOp<TOutElem> post_op;
 
         if (!is_broadcast && (lhs_conti_dims == TLhs::rank()) &&

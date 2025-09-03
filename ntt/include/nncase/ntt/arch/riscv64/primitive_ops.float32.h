@@ -24,8 +24,6 @@
 
 namespace nncase::ntt::ops {
 
-#ifdef __riscv_vector
-
 #ifndef REGISTER_RVV_KERNEL
 #define REGISTER_RVV_KERNEL(kernel)                                            \
     kernel(1, 32) kernel(2, 16) kernel(4, 8) kernel(8, 4)
@@ -1287,6 +1285,76 @@ REGISTER_RVV_CAST_ELEM_OP(int, float, cast_int32_float32)
 REGISTER_RVV_CAST_ELEM_OP(float, unsigned int, cast_float32_uint32)
 REGISTER_RVV_CAST_ELEM_OP(unsigned int, float, cast_uint32_float32)
 
+#define RVV_WHERE_OP(dtype, vl, kernel)                                        \
+    template <>                                                                \
+    struct where<ntt::vector<bool, vl>, ntt::vector<dtype, vl>,                \
+                 ntt::vector<dtype, vl>> {                                     \
+        ntt::vector<dtype, vl>                                                 \
+        operator()(const ntt::vector<bool, vl> &condition,                     \
+                   const ntt::vector<dtype, vl> &x,                            \
+                   const ntt::vector<dtype, vl> &y) const noexcept {           \
+            return kernel(condition, x, y, vl);                                \
+        }                                                                      \
+    };                                                                         \
+                                                                               \
+    template <>                                                                \
+    struct where<ntt::vector<bool, vl>, dtype, ntt::vector<dtype, vl>> {       \
+        ntt::vector<dtype, vl>                                                 \
+        operator()(const ntt::vector<bool, vl> &condition, const dtype &x,     \
+                   const ntt::vector<dtype, vl> &y) const noexcept {           \
+            return kernel(condition, x, y, vl);                                \
+        }                                                                      \
+    };                                                                         \
+                                                                               \
+    template <>                                                                \
+    struct where<ntt::vector<bool, vl>, ntt::vector<dtype, vl>, dtype> {       \
+        ntt::vector<dtype, vl>                                                 \
+        operator()(const ntt::vector<bool, vl> &condition,                     \
+                   const ntt::vector<dtype, vl> &x,                            \
+                   const dtype &y) const noexcept {                            \
+            return kernel(condition, x, y, vl);                                \
+        }                                                                      \
+    };                                                                         \
+                                                                               \
+    template <>                                                                \
+    struct where<bool, ntt::vector<dtype, vl>, ntt::vector<dtype, vl>> {       \
+        ntt::vector<dtype, vl>                                                 \
+        operator()(const bool &condition, const ntt::vector<dtype, vl> &x,     \
+                   const ntt::vector<dtype, vl> &y) const noexcept {           \
+            return kernel(condition, x, y, vl);                                \
+        }                                                                      \
+    };                                                                         \
+                                                                               \
+    template <> struct where<ntt::vector<bool, vl>, dtype, dtype> {            \
+        ntt::vector<dtype, vl>                                                 \
+        operator()(const ntt::vector<bool, vl> &condition, const dtype &x,     \
+                   const dtype &y) const noexcept {                            \
+            return kernel(condition, x, y, vl);                                \
+        }                                                                      \
+    };                                                                         \
+                                                                               \
+    template <> struct where<bool, dtype, ntt::vector<dtype, vl>> {            \
+        ntt::vector<dtype, vl>                                                 \
+        operator()(const bool &condition, const dtype &x,                      \
+                   const ntt::vector<dtype, vl> &y) const noexcept {           \
+            return kernel(condition, x, y, vl);                                \
+        }                                                                      \
+    };                                                                         \
+                                                                               \
+    template <> struct where<bool, ntt::vector<dtype, vl>, dtype> {            \
+        ntt::vector<dtype, vl> operator()(const bool &condition,               \
+                                          const ntt::vector<dtype, vl> &x,     \
+                                          const dtype &y) const noexcept {     \
+            return kernel(condition, x, y, vl);                                \
+        }                                                                      \
+    };
+
+#define REGISTER_RVV_WHERE_OP(dtype, kernel)                                   \
+    RVV_WHERE_OP(dtype, NTT_VL(sizeof(dtype) * 8, *, 1), kernel)               \
+    RVV_WHERE_OP(dtype, NTT_VL(sizeof(dtype) * 8, *, 2), kernel)               \
+    RVV_WHERE_OP(dtype, NTT_VL(sizeof(dtype) * 8, *, 4), kernel)               \
+    RVV_WHERE_OP(dtype, NTT_VL(sizeof(dtype) * 8, *, 8), kernel)
+
 #if !defined(__clang__) || __riscv_v_fixed_vlen >= 256
 // cast float to bool
 template <>
@@ -1384,76 +1452,6 @@ struct cast_elem<ntt::vector<bool, NTT_VL(sizeof(float) * 8, *, 1)>,
             __riscv_vmsne_vx_u8m##lmul2##_b##mlen(cond_brct, 0.f, vl);         \
         return __riscv_vmerge_vvm_f32m##lmul1(y, x, mask, vl);                 \
     }
-
-#define RVV_WHERE_OP(dtype, vl, kernel)                                        \
-    template <>                                                                \
-    struct where<ntt::vector<bool, vl>, ntt::vector<dtype, vl>,                \
-                 ntt::vector<dtype, vl>> {                                     \
-        ntt::vector<dtype, vl>                                                 \
-        operator()(const ntt::vector<bool, vl> &condition,                     \
-                   const ntt::vector<dtype, vl> &x,                            \
-                   const ntt::vector<dtype, vl> &y) const noexcept {           \
-            return kernel(condition, x, y, vl);                                \
-        }                                                                      \
-    };                                                                         \
-                                                                               \
-    template <>                                                                \
-    struct where<ntt::vector<bool, vl>, dtype, ntt::vector<dtype, vl>> {       \
-        ntt::vector<dtype, vl>                                                 \
-        operator()(const ntt::vector<bool, vl> &condition, const dtype &x,     \
-                   const ntt::vector<dtype, vl> &y) const noexcept {           \
-            return kernel(condition, x, y, vl);                                \
-        }                                                                      \
-    };                                                                         \
-                                                                               \
-    template <>                                                                \
-    struct where<ntt::vector<bool, vl>, ntt::vector<dtype, vl>, dtype> {       \
-        ntt::vector<dtype, vl>                                                 \
-        operator()(const ntt::vector<bool, vl> &condition,                     \
-                   const ntt::vector<dtype, vl> &x,                            \
-                   const dtype &y) const noexcept {                            \
-            return kernel(condition, x, y, vl);                                \
-        }                                                                      \
-    };                                                                         \
-                                                                               \
-    template <>                                                                \
-    struct where<bool, ntt::vector<dtype, vl>, ntt::vector<dtype, vl>> {       \
-        ntt::vector<dtype, vl>                                                 \
-        operator()(const bool &condition, const ntt::vector<dtype, vl> &x,     \
-                   const ntt::vector<dtype, vl> &y) const noexcept {           \
-            return kernel(condition, x, y, vl);                                \
-        }                                                                      \
-    };                                                                         \
-                                                                               \
-    template <> struct where<ntt::vector<bool, vl>, dtype, dtype> {            \
-        ntt::vector<dtype, vl>                                                 \
-        operator()(const ntt::vector<bool, vl> &condition, const dtype &x,     \
-                   const dtype &y) const noexcept {                            \
-            return kernel(condition, x, y, vl);                                \
-        }                                                                      \
-    };                                                                         \
-                                                                               \
-    template <> struct where<bool, dtype, ntt::vector<dtype, vl>> {            \
-        ntt::vector<dtype, vl>                                                 \
-        operator()(const bool &condition, const dtype &x,                      \
-                   const ntt::vector<dtype, vl> &y) const noexcept {           \
-            return kernel(condition, x, y, vl);                                \
-        }                                                                      \
-    };                                                                         \
-                                                                               \
-    template <> struct where<bool, ntt::vector<dtype, vl>, dtype> {            \
-        ntt::vector<dtype, vl> operator()(const bool &condition,               \
-                                          const ntt::vector<dtype, vl> &x,     \
-                                          const dtype &y) const noexcept {     \
-            return kernel(condition, x, y, vl);                                \
-        }                                                                      \
-    };
-
-#define REGISTER_RVV_WHERE_OP(dtype, kernel)                                   \
-    RVV_WHERE_OP(dtype, NTT_VL(sizeof(dtype) * 8, *, 1), kernel)               \
-    RVV_WHERE_OP(dtype, NTT_VL(sizeof(dtype) * 8, *, 2), kernel)               \
-    RVV_WHERE_OP(dtype, NTT_VL(sizeof(dtype) * 8, *, 4), kernel)               \
-    RVV_WHERE_OP(dtype, NTT_VL(sizeof(dtype) * 8, *, 8), kernel)
 
 REGISTER_RVV_KERNEL_4_1(WHERE_FLOAT32)
 REGISTER_RVV_WHERE_OP(float, where_float32)
@@ -1608,6 +1606,5 @@ REGISTER_RVV_COMPARE_OP(greater, float, greater_float32)
 
 REGISTER_RVV_KERNEL_4_1(GREATER_OR_EQUAL_FLOAT32)
 REGISTER_RVV_COMPARE_OP(greater_or_equal, float, greater_or_equal_float32)
-#endif
 #endif
 } // namespace nncase::ntt::ops
