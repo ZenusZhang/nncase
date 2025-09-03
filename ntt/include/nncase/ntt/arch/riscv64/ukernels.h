@@ -595,7 +595,9 @@ template <> struct u_cast_policy<true> {
     };
 
 DEFINE_U_CAST_2_1(float, 32, half, 16, float, _Float16, f32, f16)
+#if defined(NNCASE_XPU_MODULE) && defined(SYS_MODE)
 DEFINE_U_CAST_2_1(half, 16, float_e4m3_t, 8, _Float16, int8_t, f16, i8)
+#endif
 
 #define DEFINE_U_CAST_1_2(IN_ELEM, IN_BW, OUT_ELEM, OUT_BW, IN_BUILTIN_ELEM,             \
                           OUT_BUILTIN_ELEM, IN_INTRINSIC_ELEM,                           \
@@ -710,7 +712,9 @@ DEFINE_U_CAST_2_1(half, 16, float_e4m3_t, 8, _Float16, int8_t, f16, i8)
     };
 
 DEFINE_U_CAST_1_2(half, 16, float, 32, _Float16, float, f16, f32)
+#if defined(NNCASE_XPU_MODULE) && defined(SYS_MODE)
 DEFINE_U_CAST_1_2(float_e4m3_t, 8, half, 16, int8_t, _Float16, i8, f16)
+#endif
 
 // matmul
 template <>
