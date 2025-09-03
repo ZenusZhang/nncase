@@ -222,8 +222,8 @@ void gather(const TA &input, const TB &indices, TC &&output,
 }
 
 template <ShardedTensor TA, Tensor TB, class TC, FixedDimension TAxis>
-void __attribute__((noinline)) gather(const TA &input, const TB &indices,
-                                      TC &&output, const TAxis &axis) noexcept {
+void gather(const TA &input, const TB &indices, TC &&output,
+            const TAxis &axis) noexcept {
     detail::distributed_gather_impl<TA, TB, std::decay_t<TC>> impl;
     impl(input, indices, output, axis);
 }

@@ -1083,7 +1083,7 @@ REGISTER_RVV_FP32_FP16_MUL_ADD_OP(mul_add_float16)
                                                                                \
     inline vfloat16m##lmul1##_t where_float16(                                 \
         const vbool##mlen##_t &condition, const vfloat16m##lmul1##_t &x,       \
-        const float &y, const size_t vl) {                                     \
+        const half &y, const size_t vl) {                                      \
         auto y_broadcast = __riscv_vfmv_v_f_f16m##lmul1(y, vl);                \
         return __riscv_vmerge_vvm_f16m##lmul1(y_broadcast, x, condition, vl);  \
     }                                                                          \
