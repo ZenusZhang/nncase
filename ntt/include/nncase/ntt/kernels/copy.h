@@ -16,8 +16,20 @@
 #include "unary.h"
 
 namespace nncase::ntt {
+namespace detail {
+template <class TIn, class TOut, bool Arch> class copy_impl;
+
+template <class TIn, class TOut, bool Arch> class copy_impl {
+  public:
+    void operator()(const TIn &input, TOut &output) {
+        nncase::ntt::template unary<ops::copy>(input, output);
+    }
+};
+} // namespace detail
+
 template <class TIn, class TOut>
 void tensor_copy(const TIn &input, TOut &&output) noexcept {
-    unary<ops::copy>(input, output);
+    detail::copy_impl<TIn, TOut, true> impl;
+    impl(input, output);
 }
 } // namespace nncase::ntt
