@@ -384,6 +384,7 @@ SPECIALIZE_U_BINARY(floor_mod, 8)
                                                                                \
                 __riscv_vse32_v_f32m8((float *)output, v16, vl);               \
                 output += output_stride * lmul;                                \
+                count -= unroll;                                               \
             }                                                                  \
                                                                                \
             for (size_t i = 0; i < count; i++) {                               \
@@ -478,8 +479,242 @@ template <reduce_op Op, class T> struct u_reduce_policy<Op, T, true> {
 
 // cast
 template <> struct u_cast_policy<true> {
-    static constexpr size_t unroll = 4;
+    static constexpr size_t unroll = 8;
 };
+
+#define DEFINE_U_CAST_2_1(IN_ELEM, IN_BW, OUT_ELEM, OUT_BW, IN_BUILTIN_ELEM,           \
+                          OUT_BUILTIN_ELEM, IN_INTRINSIC_ELEM,                         \
+                          OUT_INTRINSIC_ELEM)                                          \
+    template <template <class> class TPostOps>                                         \
+    struct u_cast<true, 2, 1, vector<IN_ELEM, NTT_VLEN / IN_BW>,                       \
+                  vector<OUT_ELEM, NTT_VLEN / OUT_BW>, TPostOps> {                     \
+      public:                                                                          \
+        using T2Elem = OUT_ELEM;                                                       \
+        using T1 = vector<IN_ELEM, NTT_VLEN / IN_BW>;                                  \
+        using T2 = vector<OUT_ELEM, NTT_VLEN / OUT_BW>;                                \
+        constexpr static size_t in_offset_scale = 2;                                   \
+                                                                                       \
+        constexpr void operator()(const T1 *input, size_t input_stride,                \
+                                  T2 *output,                                          \
+                                  [[maybe_unused]] size_t output_stride,               \
+                                  size_t count) noexcept {                             \
+            using policy_t = u_cast_policy<true>;                                      \
+            constexpr auto unroll = policy_t::unroll;                                  \
+                                                                                       \
+            while (count / unroll) {                                                   \
+                constexpr auto lmul = 8;                                               \
+                constexpr auto vl_in = NTT_VLEN / IN_BW * lmul;                        \
+                constexpr auto vl_out = NTT_VLEN / OUT_BW * lmul;                      \
+                                                                                       \
+                prepend_lanes_t<vector<IN_ELEM, vl_in>, 2> in_temp{};                  \
+                auto in0 = __riscv_vle##IN_BW##_v_##IN_INTRINSIC_ELEM##m8(             \
+                    (const IN_BUILTIN_ELEM *)input, vl_in);                            \
+                auto in1 = __riscv_vle##IN_BW##_v_##IN_INTRINSIC_ELEM##m8(             \
+                    (const IN_BUILTIN_ELEM *)(input + input_stride), vl_in);           \
+                auto in0_t0 =                                                          \
+                    __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        in0, 0);                                                       \
+                auto in0_t1 =                                                          \
+                    __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        in0, 1);                                                       \
+                auto in0_t2 =                                                          \
+                    __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        in0, 2);                                                       \
+                auto in0_t3 =                                                          \
+                    __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        in0, 3);                                                       \
+                auto in0_t4 =                                                          \
+                    __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        in0, 4);                                                       \
+                auto in0_t5 =                                                          \
+                    __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        in0, 5);                                                       \
+                auto in0_t6 =                                                          \
+                    __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        in0, 6);                                                       \
+                auto in0_t7 =                                                          \
+                    __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        in0, 7);                                                       \
+                                                                                       \
+                auto in1_t0 =                                                          \
+                    __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        in1, 0);                                                       \
+                auto in1_t1 =                                                          \
+                    __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        in1, 1);                                                       \
+                auto in1_t2 =                                                          \
+                    __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        in1, 2);                                                       \
+                auto in1_t3 =                                                          \
+                    __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        in1, 3);                                                       \
+                auto in1_t4 =                                                          \
+                    __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        in1, 4);                                                       \
+                auto in1_t5 =                                                          \
+                    __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        in1, 5);                                                       \
+                auto in1_t6 =                                                          \
+                    __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        in1, 6);                                                       \
+                auto in1_t7 =                                                          \
+                    __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        in1, 7);                                                       \
+                                                                                       \
+                in_temp(0) =                                                           \
+                    __riscv_vcreate_v_##IN_INTRINSIC_ELEM##m1_##IN_INTRINSIC_ELEM##m8( \
+                        in0_t0, in1_t0, in0_t1, in1_t1, in0_t2, in1_t2,                \
+                        in0_t3, in1_t3);                                               \
+                                                                                       \
+                in_temp(1) =                                                           \
+                    __riscv_vcreate_v_##IN_INTRINSIC_ELEM##m1_##IN_INTRINSIC_ELEM##m8( \
+                        in0_t4, in1_t4, in0_t5, in1_t5, in0_t6, in1_t6,                \
+                        in0_t7, in1_t7);                                               \
+                                                                                       \
+                auto v16 = ntt::cast_elem<T2Elem>(in_temp);                            \
+                auto v24 = TPostOps<vector<OUT_ELEM, vl_out>>()(v16);                  \
+                __riscv_vse##OUT_BW##_v_##OUT_INTRINSIC_ELEM##m8(                      \
+                    (OUT_BUILTIN_ELEM *)output, v24, vl_out);                          \
+                output += unroll;                                                      \
+                input += unroll;                                                       \
+                count -= unroll;                                                       \
+            }                                                                          \
+                                                                                       \
+            for (size_t i = 0; i < count; i++) {                                       \
+                prepend_lanes_t<T1, in_offset_scale> in_temp{};                        \
+                auto in_ptr = input;                                                   \
+                ntt::loop<in_offset_scale>([&](auto s) {                               \
+                    in_temp(s) = *(in_ptr + s * input_stride);                         \
+                });                                                                    \
+                *output = ntt::cast_elem<T2Elem>(in_temp);                             \
+                (*output) = TPostOps<T2>()(*output);                                   \
+                output += 1;                                                           \
+                input += input_stride == 1 ? in_offset_scale : 1;                      \
+            }                                                                          \
+        }                                                                              \
+    };
+
+DEFINE_U_CAST_2_1(float, 32, half, 16, float, _Float16, f32, f16)
+#if defined(NNCASE_XPU_MODULE) && defined(SYS_MODE)
+DEFINE_U_CAST_2_1(half, 16, float_e4m3_t, 8, _Float16, int8_t, f16, i8)
+#endif
+
+#define DEFINE_U_CAST_1_2(IN_ELEM, IN_BW, OUT_ELEM, OUT_BW, IN_BUILTIN_ELEM,             \
+                          OUT_BUILTIN_ELEM, IN_INTRINSIC_ELEM,                           \
+                          OUT_INTRINSIC_ELEM)                                            \
+    template <template <class> class TPostOps>                                           \
+    struct u_cast<true, 1, 2, vector<IN_ELEM, NTT_VLEN / IN_BW>,                         \
+                  vector<OUT_ELEM, NTT_VLEN / OUT_BW>, TPostOps> {                       \
+        constexpr void                                                                   \
+        operator()(const vector<IN_ELEM, NTT_VLEN / IN_BW> *input,                       \
+                   [[maybe_unused]] size_t input_stride,                                 \
+                   vector<OUT_ELEM, NTT_VLEN / OUT_BW> *output,                          \
+                   size_t output_stride, size_t count) noexcept {                        \
+            using policy_t = u_cast_policy<true>;                                        \
+            constexpr auto unroll = policy_t::unroll;                                    \
+                                                                                         \
+            using T2Elem = OUT_ELEM;                                                     \
+            using T1 = vector<IN_ELEM, NTT_VLEN / IN_BW>;                                \
+            using T2 = vector<OUT_ELEM, NTT_VLEN / OUT_BW>;                              \
+            [[maybe_unused]] constexpr static size_t out_offset_scale = 2;               \
+                                                                                         \
+            while (count / unroll) {                                                     \
+                constexpr auto lmul = 8;                                                 \
+                constexpr auto vl_in = NTT_VLEN / IN_BW * lmul;                          \
+                constexpr auto vl_out = NTT_VLEN / OUT_BW * lmul;                        \
+                vector<IN_ELEM, vl_in> in_temp;                                          \
+                in_temp = __riscv_vle##IN_BW##_v_##IN_INTRINSIC_ELEM##m8(                \
+                    (const IN_BUILTIN_ELEM *)input, vl_in);                              \
+                auto tmp_output = ntt::cast_elem<T2Elem>(in_temp);                       \
+                auto out_ptr = output;                                                   \
+                                                                                         \
+                auto in0_t0 =                                                            \
+                    __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
+                        tmp_output(0), 0);                                               \
+                auto in0_t1 =                                                            \
+                    __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
+                        tmp_output(0), 1);                                               \
+                auto in0_t2 =                                                            \
+                    __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
+                        tmp_output(0), 2);                                               \
+                auto in0_t3 =                                                            \
+                    __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
+                        tmp_output(0), 3);                                               \
+                auto in0_t4 =                                                            \
+                    __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
+                        tmp_output(0), 4);                                               \
+                auto in0_t5 =                                                            \
+                    __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
+                        tmp_output(0), 5);                                               \
+                auto in0_t6 =                                                            \
+                    __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
+                        tmp_output(0), 6);                                               \
+                auto in0_t7 =                                                            \
+                    __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
+                        tmp_output(0), 7);                                               \
+                                                                                         \
+                auto in1_t0 =                                                            \
+                    __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
+                        tmp_output(1), 0);                                               \
+                auto in1_t1 =                                                            \
+                    __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
+                        tmp_output(1), 1);                                               \
+                auto in1_t2 =                                                            \
+                    __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
+                        tmp_output(1), 2);                                               \
+                auto in1_t3 =                                                            \
+                    __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
+                        tmp_output(1), 3);                                               \
+                auto in1_t4 =                                                            \
+                    __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
+                        tmp_output(1), 4);                                               \
+                auto in1_t5 =                                                            \
+                    __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
+                        tmp_output(1), 5);                                               \
+                auto in1_t6 =                                                            \
+                    __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
+                        tmp_output(1), 6);                                               \
+                auto in1_t7 =                                                            \
+                    __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
+                        tmp_output(1), 7);                                               \
+                                                                                         \
+                auto in_temp0 =                                                          \
+                    __riscv_vcreate_v_##OUT_INTRINSIC_ELEM##m1_##OUT_INTRINSIC_ELEM##m8( \
+                        in0_t0, in0_t2, in0_t4, in0_t6, in1_t0, in1_t2,                  \
+                        in1_t4, in1_t6);                                                 \
+                auto in_temp1 =                                                          \
+                    __riscv_vcreate_v_##OUT_INTRINSIC_ELEM##m1_##OUT_INTRINSIC_ELEM##m8( \
+                        in0_t1, in0_t3, in0_t5, in0_t7, in1_t1, in1_t3,                  \
+                        in1_t5, in1_t7);                                                 \
+                                                                                         \
+                __riscv_vse##OUT_BW##_v_##OUT_INTRINSIC_ELEM##m8(                        \
+                    (OUT_BUILTIN_ELEM *)out_ptr, in_temp0, vl_out);                      \
+                __riscv_vse##OUT_BW##_v_##OUT_INTRINSIC_ELEM##m8(                        \
+                    (OUT_BUILTIN_ELEM *)(out_ptr + output_stride), in_temp1,             \
+                    vl_out);                                                             \
+                output += unroll;                                                        \
+                input += unroll;                                                         \
+                count -= unroll;                                                         \
+            }                                                                            \
+                                                                                         \
+            for (size_t i = 0; i < count; i++) {                                         \
+                auto tmp_output = ntt::cast_elem<T2Elem>(*input);                        \
+                auto out_ptr = output;                                                   \
+                ntt::loop<out_offset_scale>([&](auto s) {                                \
+                    *out_ptr = tmp_output(s);                                            \
+                    (*out_ptr) = TPostOps<T2>()(*out_ptr);                               \
+                    out_ptr += output_stride;                                            \
+                });                                                                      \
+                output += 1;                                                             \
+                input += 1;                                                              \
+            }                                                                            \
+        }                                                                                \
+    };
+
+DEFINE_U_CAST_1_2(half, 16, float, 32, _Float16, float, f16, f32)
+#if defined(NNCASE_XPU_MODULE) && defined(SYS_MODE)
+DEFINE_U_CAST_1_2(float_e4m3_t, 8, half, 16, int8_t, _Float16, i8, f16)
+#endif
 
 // matmul
 template <>
@@ -1041,110 +1276,126 @@ class u_pack2d<true, TIn, TOut, float,
                         while (count2 / unroll2) {
                             // load input1 + input2
                             asm volatile(
-                                "vlse32.v v1, (%[input1]), %[in_high_strides]\n"
-                                "add %[input1], %[input1], %[in_low_strides]\n"
+                                "vlse32.v v1, (%[input1]), "
+                                "%[in_high_strides]\n"
+                                "add %[input1], %[input1], "
+                                "%[in_low_strides]\n"
                                 : [input1] "+r"(input1)
                                 : [in_high_strides] "r"(in_high_strides),
                                   [in_low_strides] "r"(in_low_strides));
 
                             asm volatile(
-                                "vlse32.v v5, (%[input2]), %[in_high_strides]\n"
-                                "add %[input2], %[input2], %[in_low_strides]\n"
+                                "vlse32.v v5, (%[input2]), "
+                                "%[in_high_strides]\n"
+                                "add %[input2], %[input2], "
+                                "%[in_low_strides]\n"
                                 : [input2] "+r"(input2)
                                 : [in_high_strides] "r"(in_high_strides),
                                   [in_low_strides] "r"(in_low_strides));
 
                             asm volatile(
-                                "vlse32.v v2, (%[input1]), %[in_high_strides]\n"
-                                "add %[input1], %[input1], %[in_low_strides]\n"
+                                "vlse32.v v2, (%[input1]), "
+                                "%[in_high_strides]\n"
+                                "add %[input1], %[input1], "
+                                "%[in_low_strides]\n"
                                 : [input1] "+r"(input1)
                                 : [in_high_strides] "r"(in_high_strides),
                                   [in_low_strides] "r"(in_low_strides));
 
                             asm volatile(
-                                "vlse32.v v6, (%[input2]), %[in_high_strides]\n"
-                                "add %[input2], %[input2], %[in_low_strides]\n"
+                                "vlse32.v v6, (%[input2]), "
+                                "%[in_high_strides]\n"
+                                "add %[input2], %[input2], "
+                                "%[in_low_strides]\n"
                                 : [input2] "+r"(input2)
                                 : [in_high_strides] "r"(in_high_strides),
                                   [in_low_strides] "r"(in_low_strides));
 
                             asm volatile(
-                                "vlse32.v v3, (%[input1]), %[in_high_strides]\n"
-                                "add %[input1], %[input1], %[in_low_strides]\n"
+                                "vlse32.v v3, (%[input1]), "
+                                "%[in_high_strides]\n"
+                                "add %[input1], %[input1], "
+                                "%[in_low_strides]\n"
                                 : [input1] "+r"(input1)
                                 : [in_high_strides] "r"(in_high_strides),
                                   [in_low_strides] "r"(in_low_strides));
 
                             asm volatile(
-                                "vlse32.v v7, (%[input2]), %[in_high_strides]\n"
-                                "add %[input2], %[input2], %[in_low_strides]\n"
+                                "vlse32.v v7, (%[input2]), "
+                                "%[in_high_strides]\n"
+                                "add %[input2], %[input2], "
+                                "%[in_low_strides]\n"
                                 : [input2] "+r"(input2)
                                 : [in_high_strides] "r"(in_high_strides),
                                   [in_low_strides] "r"(in_low_strides));
 
                             asm volatile(
-                                "vlse32.v v4, (%[input1]), %[in_high_strides]\n"
-                                "add %[input1], %[input1], %[in_low_strides]\n"
+                                "vlse32.v v4, (%[input1]), "
+                                "%[in_high_strides]\n"
+                                "add %[input1], %[input1], "
+                                "%[in_low_strides]\n"
                                 : [input1] "+r"(input1)
                                 : [in_high_strides] "r"(in_high_strides),
                                   [in_low_strides] "r"(in_low_strides));
 
                             asm volatile(
-                                "vlse32.v v8, (%[input2]), %[in_high_strides]\n"
-                                "add %[input2], %[input2], %[in_low_strides]\n"
+                                "vlse32.v v8, (%[input2]), "
+                                "%[in_high_strides]\n"
+                                "add %[input2], %[input2], "
+                                "%[in_low_strides]\n"
                                 : [input2] "+r"(input2)
                                 : [in_high_strides] "r"(in_high_strides),
                                   [in_low_strides] "r"(in_low_strides));
 
                             // store output1 + output2
-                            asm volatile(
-                                "vse32.v v1, (%[output1])\n"
-                                "add %[output1], %[output1], %[out_strides]\n"
-                                : [output1] "+r"(output1)
-                                : [out_strides] "r"(out_strides));
+                            asm volatile("vse32.v v1, (%[output1])\n"
+                                         "add %[output1], %[output1], "
+                                         "%[out_strides]\n"
+                                         : [output1] "+r"(output1)
+                                         : [out_strides] "r"(out_strides));
                             count2 -= unroll2;
 
-                            asm volatile(
-                                "vse32.v v5, (%[output2])\n"
-                                "add %[output2], %[output2], %[out_strides]\n"
-                                : [output2] "+r"(output2)
-                                : [out_strides] "r"(out_strides));
+                            asm volatile("vse32.v v5, (%[output2])\n"
+                                         "add %[output2], %[output2], "
+                                         "%[out_strides]\n"
+                                         : [output2] "+r"(output2)
+                                         : [out_strides] "r"(out_strides));
 
-                            asm volatile(
-                                "vse32.v v2, (%[output1])\n"
-                                "add %[output1], %[output1], %[out_strides]\n"
-                                : [output1] "+r"(output1)
-                                : [out_strides] "r"(out_strides));
+                            asm volatile("vse32.v v2, (%[output1])\n"
+                                         "add %[output1], %[output1], "
+                                         "%[out_strides]\n"
+                                         : [output1] "+r"(output1)
+                                         : [out_strides] "r"(out_strides));
 
-                            asm volatile(
-                                "vse32.v v6, (%[output2])\n"
-                                "add %[output2], %[output2], %[out_strides]\n"
-                                : [output2] "+r"(output2)
-                                : [out_strides] "r"(out_strides));
+                            asm volatile("vse32.v v6, (%[output2])\n"
+                                         "add %[output2], %[output2], "
+                                         "%[out_strides]\n"
+                                         : [output2] "+r"(output2)
+                                         : [out_strides] "r"(out_strides));
 
-                            asm volatile(
-                                "vse32.v v3, (%[output1])\n"
-                                "add %[output1], %[output1], %[out_strides]\n"
-                                : [output1] "+r"(output1)
-                                : [out_strides] "r"(out_strides));
+                            asm volatile("vse32.v v3, (%[output1])\n"
+                                         "add %[output1], %[output1], "
+                                         "%[out_strides]\n"
+                                         : [output1] "+r"(output1)
+                                         : [out_strides] "r"(out_strides));
 
-                            asm volatile(
-                                "vse32.v v7, (%[output2])\n"
-                                "add %[output2], %[output2], %[out_strides]\n"
-                                : [output2] "+r"(output2)
-                                : [out_strides] "r"(out_strides));
+                            asm volatile("vse32.v v7, (%[output2])\n"
+                                         "add %[output2], %[output2], "
+                                         "%[out_strides]\n"
+                                         : [output2] "+r"(output2)
+                                         : [out_strides] "r"(out_strides));
 
-                            asm volatile(
-                                "vse32.v v4, (%[output1])\n"
-                                "add %[output1], %[output1], %[out_strides]\n"
-                                : [output1] "+r"(output1)
-                                : [out_strides] "r"(out_strides));
+                            asm volatile("vse32.v v4, (%[output1])\n"
+                                         "add %[output1], %[output1], "
+                                         "%[out_strides]\n"
+                                         : [output1] "+r"(output1)
+                                         : [out_strides] "r"(out_strides));
 
-                            asm volatile(
-                                "vse32.v v8, (%[output2])\n"
-                                "add %[output2], %[output2], %[out_strides]\n"
-                                : [output2] "+r"(output2)
-                                : [out_strides] "r"(out_strides));
+                            asm volatile("vse32.v v8, (%[output2])\n"
+                                         "add %[output2], %[output2], "
+                                         "%[out_strides]\n"
+                                         : [output2] "+r"(output2)
+                                         : [out_strides] "r"(out_strides));
                         }
 
                         in_ptr += unroll1;
@@ -1156,17 +1407,19 @@ class u_pack2d<true, TIn, TOut, float,
                     for (size_t i = 0; i < count1; i++) {
                         for (size_t j = 0; j < vl; j++) {
                             asm volatile(
-                                "vlse32.v v1, (%[in_ptr]), %[in_high_strides]\n"
-                                "add %[in_ptr], %[in_ptr], %[in_low_strides]\n"
+                                "vlse32.v v1, (%[in_ptr]), "
+                                "%[in_high_strides]\n"
+                                "add %[in_ptr], %[in_ptr], "
+                                "%[in_low_strides]\n"
                                 : [in_ptr] "+r"(in_ptr)
                                 : [in_high_strides] "r"(in_high_strides),
                                   [in_low_strides] "r"(in_low_strides));
 
-                            asm volatile(
-                                "vse32.v v1, (%[out_ptr])\n"
-                                "add %[out_ptr], %[out_ptr], %[out_strides]\n"
-                                : [out_ptr] "+r"(out_ptr)
-                                : [out_strides] "r"(out_strides));
+                            asm volatile("vse32.v v1, (%[out_ptr])\n"
+                                         "add %[out_ptr], %[out_ptr], "
+                                         "%[out_strides]\n"
+                                         : [out_ptr] "+r"(out_ptr)
+                                         : [out_strides] "r"(out_strides));
                         }
                     }
 
@@ -1190,101 +1443,109 @@ class u_pack2d<true, TIn, TOut, float,
                             // load input1 + input2
                             asm volatile(
                                 "vl1re32.v v1, (%[input1])\n"
-                                "add %[input1], %[input1], %[in_low_strides]\n"
+                                "add %[input1], %[input1], "
+                                "%[in_low_strides]\n"
                                 : [input1] "+r"(input1)
                                 : [in_low_strides] "r"(in_low_strides));
 
                             asm volatile(
                                 "vl1re32.v v5, (%[input2])\n"
-                                "add %[input2], %[input2], %[in_low_strides]\n"
+                                "add %[input2], %[input2], "
+                                "%[in_low_strides]\n"
                                 : [input2] "+r"(input2)
                                 : [in_low_strides] "r"(in_low_strides));
 
                             asm volatile(
                                 "vl1re32.v v2, (%[input1])\n"
-                                "add %[input1], %[input1], %[in_low_strides]\n"
+                                "add %[input1], %[input1], "
+                                "%[in_low_strides]\n"
                                 : [input1] "+r"(input1)
                                 : [in_low_strides] "r"(in_low_strides));
 
                             asm volatile(
                                 "vl1re32.v v6, (%[input2])\n"
-                                "add %[input2], %[input2], %[in_low_strides]\n"
+                                "add %[input2], %[input2], "
+                                "%[in_low_strides]\n"
                                 : [input2] "+r"(input2)
                                 : [in_low_strides] "r"(in_low_strides));
 
                             asm volatile(
                                 "vl1re32.v v3, (%[input1])\n"
-                                "add %[input1], %[input1], %[in_low_strides]\n"
+                                "add %[input1], %[input1], "
+                                "%[in_low_strides]\n"
                                 : [input1] "+r"(input1)
                                 : [in_low_strides] "r"(in_low_strides));
 
                             asm volatile(
                                 "vl1re32.v v7, (%[input2])\n"
-                                "add %[input2], %[input2], %[in_low_strides]\n"
+                                "add %[input2], %[input2], "
+                                "%[in_low_strides]\n"
                                 : [input2] "+r"(input2)
                                 : [in_low_strides] "r"(in_low_strides));
 
                             asm volatile(
                                 "vl1re32.v v4, (%[input1])\n"
-                                "add %[input1], %[input1], %[in_low_strides]\n"
+                                "add %[input1], %[input1], "
+                                "%[in_low_strides]\n"
                                 : [input1] "+r"(input1)
                                 : [in_low_strides] "r"(in_low_strides));
 
                             asm volatile(
                                 "vl1re32.v v8, (%[input2])\n"
-                                "add %[input2], %[input2], %[in_low_strides]\n"
+                                "add %[input2], %[input2], "
+                                "%[in_low_strides]\n"
                                 : [input2] "+r"(input2)
                                 : [in_low_strides] "r"(in_low_strides));
 
                             // store output1 + output2
-                            asm volatile(
-                                "vs1r.v v1, (%[output1])\n"
-                                "add %[output1], %[output1], %[out_strides]\n"
-                                : [output1] "+r"(output1)
-                                : [out_strides] "r"(out_strides));
+                            asm volatile("vs1r.v v1, (%[output1])\n"
+                                         "add %[output1], %[output1], "
+                                         "%[out_strides]\n"
+                                         : [output1] "+r"(output1)
+                                         : [out_strides] "r"(out_strides));
                             count2 -= unroll2;
 
-                            asm volatile(
-                                "vs1r.v v5, (%[output2])\n"
-                                "add %[output2], %[output2], %[out_strides]\n"
-                                : [output2] "+r"(output2)
-                                : [out_strides] "r"(out_strides));
+                            asm volatile("vs1r.v v5, (%[output2])\n"
+                                         "add %[output2], %[output2], "
+                                         "%[out_strides]\n"
+                                         : [output2] "+r"(output2)
+                                         : [out_strides] "r"(out_strides));
 
-                            asm volatile(
-                                "vs1r.v v2, (%[output1])\n"
-                                "add %[output1], %[output1], %[out_strides]\n"
-                                : [output1] "+r"(output1)
-                                : [out_strides] "r"(out_strides));
+                            asm volatile("vs1r.v v2, (%[output1])\n"
+                                         "add %[output1], %[output1], "
+                                         "%[out_strides]\n"
+                                         : [output1] "+r"(output1)
+                                         : [out_strides] "r"(out_strides));
 
-                            asm volatile(
-                                "vs1r.v v6, (%[output2])\n"
-                                "add %[output2], %[output2], %[out_strides]\n"
-                                : [output2] "+r"(output2)
-                                : [out_strides] "r"(out_strides));
+                            asm volatile("vs1r.v v6, (%[output2])\n"
+                                         "add %[output2], %[output2], "
+                                         "%[out_strides]\n"
+                                         : [output2] "+r"(output2)
+                                         : [out_strides] "r"(out_strides));
 
-                            asm volatile(
-                                "vs1r.v v3, (%[output1])\n"
-                                "add %[output1], %[output1], %[out_strides]\n"
-                                : [output1] "+r"(output1)
-                                : [out_strides] "r"(out_strides));
+                            asm volatile("vs1r.v v3, (%[output1])\n"
+                                         "add %[output1], %[output1], "
+                                         "%[out_strides]\n"
+                                         : [output1] "+r"(output1)
+                                         : [out_strides] "r"(out_strides));
 
-                            asm volatile(
-                                "vs1r.v v7, (%[output2])\n"
-                                "add %[output2], %[output2], %[out_strides]\n"
-                                : [output2] "+r"(output2)
-                                : [out_strides] "r"(out_strides));
+                            asm volatile("vs1r.v v7, (%[output2])\n"
+                                         "add %[output2], %[output2], "
+                                         "%[out_strides]\n"
+                                         : [output2] "+r"(output2)
+                                         : [out_strides] "r"(out_strides));
 
-                            asm volatile(
-                                "vs1r.v v4, (%[output1])\n"
-                                "add %[output1], %[output1], %[out_strides]\n"
-                                : [output1] "+r"(output1)
-                                : [out_strides] "r"(out_strides));
+                            asm volatile("vs1r.v v4, (%[output1])\n"
+                                         "add %[output1], %[output1], "
+                                         "%[out_strides]\n"
+                                         : [output1] "+r"(output1)
+                                         : [out_strides] "r"(out_strides));
 
-                            asm volatile(
-                                "vs1r.v v8, (%[output2])\n"
-                                "add %[output2], %[output2], %[out_strides]\n"
-                                : [output2] "+r"(output2)
-                                : [out_strides] "r"(out_strides));
+                            asm volatile("vs1r.v v8, (%[output2])\n"
+                                         "add %[output2], %[output2], "
+                                         "%[out_strides]\n"
+                                         : [output2] "+r"(output2)
+                                         : [out_strides] "r"(out_strides));
                         }
 
                         in_ptr += unroll1 * vl;
@@ -1297,9 +1558,11 @@ class u_pack2d<true, TIn, TOut, float,
                         for (size_t j = 0; j < vl; j++) {
                             asm volatile(
                                 "vl1re32.v v1, (%[in_ptr])\n"
-                                "add %[in_ptr], %[in_ptr], %[in_low_strides]\n"
+                                "add %[in_ptr], %[in_ptr], "
+                                "%[in_low_strides]\n"
                                 "vs1r.v v1, (%[out_ptr])\n"
-                                "add %[out_ptr], %[out_ptr], %[out_strides]\n"
+                                "add %[out_ptr], %[out_ptr], "
+                                "%[out_strides]\n"
                                 : [in_ptr] "+r"(in_ptr), [out_ptr] "+r"(out_ptr)
                                 : [in_low_strides] "r"(in_low_strides),
                                   [out_strides] "r"(out_strides));

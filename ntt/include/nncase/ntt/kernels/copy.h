@@ -14,6 +14,7 @@
  */
 #pragma once
 #include "unary.h"
+#include <type_traits>
 
 namespace nncase::ntt {
 namespace detail {
@@ -31,5 +32,17 @@ template <class TIn, class TOut>
 void tensor_copy(const TIn &input, TOut &&output) noexcept {
     detail::copy_impl<TIn, TOut, true> impl;
     impl(input, output);
+}
+
+namespace detail {
+template <Tensor TTensor, bool Arch> struct tensor_zero_impl {
+    constexpr void operator()(TTensor &tensor) noexcept {
+        ntt::apply(tensor.shape(), [&](auto index) { tensor(index) = {}; });
+    }
+};
+} // namespace detail
+
+template <class TOut> void tensor_zero(TOut &&output) noexcept {
+    detail::tensor_zero_impl<std::decay_t<TOut>, true>()(output);
 }
 } // namespace nncase::ntt

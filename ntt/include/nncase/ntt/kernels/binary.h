@@ -40,9 +40,9 @@ class binary_impl
 
         auto len = output.shape().length();
 
-        using TLhsElem = element_or_scalar_t<TLhs>;
-        using TRhsElem = element_or_scalar_t<TRhs>;
-        using TOutElem = element_or_scalar_t<TOut>;
+        using TLhsElem = typename TLhs::element_type;
+        using TRhsElem = typename TRhs::element_type;
+        using TOutElem = typename TOut::element_type;
         TPostOp<TOutElem> post_op;
 
         if (!is_broadcast && (lhs_conti_dims == TLhs::rank()) &&
@@ -51,10 +51,17 @@ class binary_impl
             ntt::u_binary<TOp, TPostOp, TLhsElem, TRhsElem, TOutElem>(
                 op, addr_lhs, 1, addr_rhs, 1, addr_output_element, 1, len);
         } else {
-            ntt::apply(output.shape(), [&](auto index) {
-                output(index) = op(lhs(index), rhs(index));
-                output(index) = post_op(output(index));
-            });
+            const TLhsElem *NTT_RESTRICT lhs_p = lhs.elements().data();
+            const TRhsElem *NTT_RESTRICT rhs_p = rhs.elements().data();
+            TOutElem *NTT_RESTRICT output_p = output.elements().data();
+            ntt::apply(
+                output.shape(),
+                [&](auto, auto lhs_offset, auto rhs_offset,
+                    auto output_offset) {
+                    auto value = op(lhs_p[lhs_offset], rhs_p[rhs_offset]);
+                    output_p[output_offset] = post_op(value);
+                },
+                lhs.strides(), rhs.strides(), output.strides());
         }
     }
 };
@@ -63,7 +70,7 @@ class binary_impl
 template <template <class T1, class T2> class TOp,
           template <class> class TPostOp = DefaultPostOp, Tensor TLhs,
           Tensor TRhs, class TOut>
-__attribute__((noinline)) void binary(const TLhs &lhs, const TRhs &rhs, TOut &&output) {
+void binary(const TLhs &lhs, const TRhs &rhs, TOut &&output) {
     const TOp<std::remove_cv_t<typename TLhs::element_type>,
               std::remove_cv_t<typename TRhs::element_type>>
         op;

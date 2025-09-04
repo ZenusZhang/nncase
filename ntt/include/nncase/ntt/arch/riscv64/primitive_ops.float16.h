@@ -30,6 +30,11 @@ namespace nncase::ntt::ops {
     kernel(1, 16) kernel(2, 8) kernel(4, 4) kernel(8, 2)
 #endif
 
+#ifndef REGISTER_RVV_KERNEL_2_1
+#define REGISTER_RVV_KERNEL_2_1(kernel)                                        \
+    kernel(1, f4, 16) kernel(2, f2, 8) kernel(4, 1, 4) kernel(8, 2, 2)
+#endif
+
 #ifndef REGISTER_RVV_FP16_x2_KERNEL
 #define REGISTER_RVV_FP16_x2_KERNEL(kernel)                                    \
     kernel(1, 2, 16) kernel(2, 4, 8) kernel(4, 8, 4)
@@ -1035,4 +1040,63 @@ REGISTER_RVV_FP16_x2_KERNEL(MUL_ADD_FLOAT32_FLOAT16);
     RVV_FP32_FP16_MUL_ADD_OP(NTT_VL(sizeof(half) * 8, *, 4), kernel)
 
 REGISTER_RVV_FP32_FP16_MUL_ADD_OP(mul_add_float16)
+
+// where
+#define WHERE_FLOAT16(lmul1, lmul2, mlen)                                      \
+    inline vfloat16m##lmul1##_t where_float16(                                 \
+        const vbool##mlen##_t &condition, const half &x, const half &y,        \
+        const size_t vl) {                                                     \
+        auto y_broadcast = __riscv_vfmv_v_f_f16m##lmul1(y, vl);                \
+        return __riscv_vfmerge_vfm_f16m##lmul1(y_broadcast, x, condition, vl); \
+    }                                                                          \
+                                                                               \
+    inline vfloat16m##lmul1##_t where_float16(                                 \
+        const bool &condition, const half &x, const vfloat16m##lmul1##_t &y,   \
+        const size_t vl) {                                                     \
+        auto cond_brct = __riscv_vmv_v_x_i16m##lmul1(condition, vl);           \
+        vbool##mlen##_t mask =                                                 \
+            __riscv_vmsne_vx_i16m##lmul1##_b##mlen(cond_brct, 0, vl);          \
+        return __riscv_vfmerge_vfm_f16m##lmul1(y, x, mask, vl);                \
+    }                                                                          \
+                                                                               \
+    inline vfloat16m##lmul1##_t where_float16(                                 \
+        const bool &condition, const vfloat16m##lmul1##_t &x, const half &y,   \
+        const size_t vl) {                                                     \
+        auto cond_brct = __riscv_vmv_v_x_i16m##lmul1(condition, vl);           \
+        vbool##mlen##_t mask =                                                 \
+            __riscv_vmsne_vx_i16m##lmul1##_b##mlen(cond_brct, 0, vl);          \
+        auto y_broadcast = __riscv_vfmv_v_f_f16m##lmul1(y, vl);                \
+        return __riscv_vmerge_vvm_f16m##lmul1(y_broadcast, x, mask, vl);       \
+    }                                                                          \
+                                                                               \
+    inline vfloat16m##lmul1##_t where_float16(                                 \
+        const vbool##mlen##_t &condition, const vfloat16m##lmul1##_t &x,       \
+        const vfloat16m##lmul1##_t &y, const size_t vl) {                      \
+        return __riscv_vmerge_vvm_f16m##lmul1(y, x, condition, vl);            \
+    }                                                                          \
+                                                                               \
+    inline vfloat16m##lmul1##_t where_float16(                                 \
+        const vbool##mlen##_t &condition, const half &x,                       \
+        const vfloat16m##lmul1##_t &y, const size_t vl) {                      \
+        return __riscv_vfmerge_vfm_f16m##lmul1(y, x, condition, vl);           \
+    }                                                                          \
+                                                                               \
+    inline vfloat16m##lmul1##_t where_float16(                                 \
+        const vbool##mlen##_t &condition, const vfloat16m##lmul1##_t &x,       \
+        const half &y, const size_t vl) {                                      \
+        auto y_broadcast = __riscv_vfmv_v_f_f16m##lmul1(y, vl);                \
+        return __riscv_vmerge_vvm_f16m##lmul1(y_broadcast, x, condition, vl);  \
+    }                                                                          \
+                                                                               \
+    inline vfloat16m##lmul1##_t where_float16(                                 \
+        const bool &condition, const vfloat16m##lmul1##_t &x,                  \
+        const vfloat16m##lmul1##_t &y, const size_t vl) {                      \
+        auto cond_brct = __riscv_vmv_v_x_i16m##lmul1(condition, vl);           \
+        vbool##mlen##_t mask =                                                 \
+            __riscv_vmsne_vx_i16m##lmul1##_b##mlen(cond_brct, 0, vl);          \
+        return __riscv_vmerge_vvm_f16m##lmul1(y, x, mask, vl);                 \
+    }
+
+REGISTER_RVV_KERNEL_2_1(WHERE_FLOAT16)
+REGISTER_RVV_WHERE_OP(half, where_float16)
 } // namespace nncase::ntt::ops
