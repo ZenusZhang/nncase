@@ -240,8 +240,8 @@ static inline __m256 log256_ps(__m256 x) {
     return y;
 }
 
-_PS256_CONST(exp_hi, 88.3762626647949f);
-_PS256_CONST(exp_lo, -88.3762626647949f);
+_PS256_CONST(exp_hi, 88.0f);
+_PS256_CONST(exp_lo, -88.0f);
 
 _PS256_CONST(cephes_LOG2EF, 1.44269504088896341f);
 _PS256_CONST(cephes_exp_C1, 0.693359375f);

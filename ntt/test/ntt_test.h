@@ -223,30 +223,28 @@ bool are_close(T a, T b,[[maybe_unused]] float ulp_tlrce = 1, double abs_tol = 1
         return true;
     }
 
-    
     // ULP check for all non-integer types (including float, half, double, etc.)
     if constexpr (!std::is_integral_v<T>) {
         // std::cout << "std::fabs(a-b) " << std::fabs((a-b))  <<std::endl;
         // std::cout << "ulp(b):" <<ulp(b) << "   ulp(a)" << ulp(a) << std::endl;
-        if(std::isinf(double(a)) != std::isinf(double(b)))
+        if(std::isinf(double(a)) != std::isinf(double(b))){
+            // Special handling for float type: if a is float_max_from_exp and b is greater than float_max_from_exp, return true
+            if constexpr (std::is_same_v<T, float>) {
+                float a_abs = std::abs(a);
+                const T float_max_from_exp = 1.65164e+38f;
+                // Using relative tolerance for floating-point comparison to handle precision issues
+                if (std::abs(a_abs - float_max_from_exp) <= std::max(abs_tol, rel_tol * std::max(a_abs, std::abs(float_max_from_exp)))) {
+                    return true;
+                }
+            }
             return false;
+        }
         if (std::fabs(double(a - b)) <= ulp_tlrce*double(ulp(b)) || std::fabs(double(a - b)) <= ulp_tlrce*double(ulp(a))) {
             return true;
         }
-        std::cout << "a(ntt_result): " << double(a) <<" b (golden_result): " << double(b) <<std::endl;
-        std::cout << "std::fabs(a-b) " << std::fabs((double)(a-b))  <<std::endl;
-        std::cout << "ulp(a):" <<(double)ulp(a) << "   ulp(b):" << (double)ulp(b) << std::endl;
-        std::cout << "ulp tolerance:" << ulp_tlrce* double(ulp(a)) << std::endl;
     }
     
-    // Special handling for float type: if a is float_max_from_exp and b is greater than float_max_from_exp, return true
-    if constexpr (std::is_same_v<T, float>) {
-        const T float_max_from_exp = 1.65164e+38f;
-        // Using relative tolerance for floating-point comparison to handle precision issues
-        if (std::abs(a - float_max_from_exp) <= std::max(abs_tol, rel_tol * std::max(std::abs(a), std::abs(float_max_from_exp))) && b > float_max_from_exp) {
-            return true;
-        } 
-    }
+
 
 
     return std::abs(double(a - b)) <= std::max(abs_tol, rel_tol * std::max(std::abs(double(a)), std::abs(double(b))));
