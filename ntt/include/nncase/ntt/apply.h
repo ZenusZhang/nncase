@@ -60,8 +60,7 @@ constexpr void apply(const TShape &shape, Callable &&callable,
                               std::forward_as_tuple(strides...));
     } else {
         if constexpr (sizeof...(TStrides)) {
-            callable(fixed_shape_v<>,
-                     make_repeat_shape<sizeof...(TStrides)>(0));
+            callable(fixed_shape_v<>, (strides, (dim_t)0)...);
         } else {
             callable(fixed_shape_v<>);
         }
