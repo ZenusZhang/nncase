@@ -92,6 +92,7 @@ class BaseTestGenerator:
         }
 
         self.ort_custom_function = {}
+        self.ntt_op_str = ""
 
 
     def _generate_ort_custom_op(self, datatype, custom_op_name):
@@ -141,6 +142,15 @@ class BaseTestGenerator:
             dim_strs = [str(d) for d in dim_spec]
             return f"ntt::make_shape({', '.join(dim_strs)})"
 
+    def _get_allow_zr(self, var_name ):
+        ans = "true"
+        if(self.is_div_operation() and "rhs" in var_name):
+            ans = "false"
+        if(self.ntt_op_str == "pow" and "lhs" in var_name):
+            ans = "false"
+
+        return ans
+
 #shape_type: str: "dynamic" or "fixed"
 #shape_type: bool: True (is_dynamic) or False (is_fixed)
 #dim_spec: dim_names(list[str]) or dim_spec(list[int])
@@ -153,7 +163,7 @@ class BaseTestGenerator:
 
         if continuity.is_contiguous:
             code.append(f"auto {var_name} = ntt::make_tensor<{element_cpp_type}>({shape_expr});")
-            allow_zr = "false" if self.is_div_operation() and "rhs" in var_name else "true"
+            allow_zr = self._get_allow_zr(var_name)
             integer_only_str = "true" if integer_only else "false"
             code.append(f"NttTest::init_tensor({var_name}, {datatype.min_val}, {datatype.max_val}, {allow_zr}, {integer_only_str});")
         else:  # non-contiguous
@@ -168,7 +178,7 @@ class BaseTestGenerator:
 
             code.append(f"// Create non-contiguous tensor (on dimension {dim_to_change})")
             code.append(f"auto big_tensor{name_suffix} = ntt::make_tensor<{element_cpp_type}>({big_shape_expr});")
-            allow_zr = "false" if self.is_div_operation() else "true"
+            allow_zr = self._get_allow_zr(var_name)
             integer_only_str = "true" if integer_only else "false"
             code.append(f"NttTest::init_tensor(big_tensor{name_suffix}, {datatype.min_val}, {datatype.max_val}, {allow_zr}, {integer_only_str});")
             code.append(f"")

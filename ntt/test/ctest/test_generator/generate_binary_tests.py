@@ -743,12 +743,11 @@ class BinaryTestGenerator(BaseTestGenerator):
         assert lhs_datatype.cpp_type == rhs_datatype.cpp_type
         
         datatype = lhs_datatype
-        self.ntt_op_str = ntt_op_str  # Store operation type for is_div_operation check
-        
+        self.ntt_op_str = ntt_op_str  # Store operation type for allow_zr check
 
-        test_name = self.generate_test_name(datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape, 
-            lhs_dims_spec, rhs_dims_spec, 
-            lhs_vector_rank, rhs_vector_rank, 
+        test_name = self.generate_test_name(datatype, lhs_is_dynamic_shape, rhs_is_dynamic_shape,
+            lhs_dims_spec, rhs_dims_spec,
+            lhs_vector_rank, rhs_vector_rank,
             lhs_continuity, rhs_continuity, test_name_suffix)
 
 
