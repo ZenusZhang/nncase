@@ -237,8 +237,8 @@ public sealed class BoxingEvaluator : ITypeInferencer<Boxing>, ICostEvaluator<Bo
                 {
                     var fullLoadStore = new Cost()
                     {
-                        [CostFactorNames.MemoryStore] = CostUtility.GetMemoryAccess(a) * (UInt128)a.TensorType.DType.SizeInBytes * 8,
-                        [CostFactorNames.MemoryLoad] = CostUtility.GetMemoryAccess(b) * (UInt128)b.TensorType.DType.SizeInBytes * 8,
+                        [CostFactorNames.MemoryStore] = CostUtility.GetMemoryAccess(a) * (UInt128)a.TensorType.DType.SizeInBytes,
+                        [CostFactorNames.MemoryLoad] = CostUtility.GetMemoryAccess(b) * (UInt128)b.TensorType.DType.SizeInBytes,
                         [CostFactorNames.Synchronization] = synchronizeCost,
                     };
 
