@@ -156,7 +156,7 @@ public sealed class NTTTIRSelectionPass : TIRSelectionPass
             case IR.Tensors.GetItem getItem:
                 return TIR.F.NTT.GetItem((Expr)arguments[0], arguments[1], output);
             case IR.Tensors.Reshape:
-                return TIR.F.NTT.Reshape((Expr)arguments[0], output);
+                return GenerateReshape((Expr)arguments[0], ref output);
             case IR.Tensors.ScatterND scatterND:
                 return TIR.F.NTT.ScatterND((Expr)arguments[0], (Expr)arguments[1], (Expr)arguments[2], output);
             case IR.Tensors.Stack stack:
@@ -196,6 +196,36 @@ public sealed class NTTTIRSelectionPass : TIRSelectionPass
                 return TIR.F.NTT.VectorizedSoftmax((Expr)arguments[0], output, softmax.Axis, softmax.VectorizedAxes);
             default:
                 throw new NotSupportedException($"Not supported: {op}");
+        }
+    }
+
+    private Expr GenerateReshape(Expr input, ref Expr output)
+    {
+        if (input is not TIR.Buffer inBuffer)
+        {
+            throw new NotSupportedException("Reshape only support buffer input");
+        }
+
+        var outBuffer = (TIR.Buffer)output;
+
+        var bitcast = outBuffer.DistributedType is DistributedType ? false : true;
+        if (!bitcast)
+        {
+            var minLen = System.Math.Min(inBuffer.DistributedType!.TensorType.Shape.Rank, outBuffer.DistributedType!.TensorType.Shape.Rank);
+            if (inBuffer.DistributedType!.AxisPolicies.Take(minLen).SequenceEqual(outBuffer.DistributedType!.AxisPolicies.Take(minLen)))
+            {
+                bitcast = true;
+            }
+        }
+
+        if (bitcast)
+        {
+            output = inBuffer.With(name: outBuffer.Name, elemType: outBuffer.ElemType, dimensions: outBuffer.Dimensions.ToArray(), strides: outBuffer.Strides.ToArray(), distributedType: outBuffer.DistributedType);
+            return T.Nop();
+        }
+        else
+        {
+            return TIR.F.NTT.Reshape(input, output);
         }
     }
 
