@@ -61,7 +61,7 @@ if(${CMAKE_SYSTEM_PROCESSOR} MATCHES
        #add_compile_options(-mcpu=c908v -mrvv-vector-bits=zvl -std=c++2b)
        add_compile_options(-march=rv64gcv_zvl128b_zvfh -mrvv-vector-bits=zvl -std=c++2b)
    elseif(ENABLE_K80_RUNTIME)
-       add_compile_options(-mcpu=c908x -mrvv-vector-bits=zvl -std=c++2b)
+       add_compile_options(-mcpu=c908x -mrvv-vector-bits=zvl -std=c++2b -fbracket-depth=1024)
    else()
        message(FATAL_ERROR "Unsupported riscv64 target")
    endif()
