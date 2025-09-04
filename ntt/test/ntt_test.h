@@ -485,7 +485,7 @@ void print_tensor(TTensor &tensor, std::string name) {
             auto value = tensor(index);
             using value_type = decltype(value);
             if constexpr (std::is_integral_v<value_type> && !std::is_same_v<value_type, bool>) {
-                printf("%ld ", static_cast<int64_t>(value));
+                printf("%lld ", static_cast<long long int>(value));
             } else {
                 if constexpr (requires { typename decltype(value)::element_type; }) {
                     // value is a proxy, extract the element
