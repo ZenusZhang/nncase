@@ -18,10 +18,10 @@
 #include "../post_ops.h"
 #include "../tensor_ops.h"
 #include "../ukernels.h"
-#include <cassert>
-#include <stdio.h>
 #include "../utility.h"
 #include "nncase/ntt/shape.h"
+#include <cassert>
+#include <stdio.h>
 
 namespace nncase::ntt {
 namespace detail {
@@ -29,24 +29,27 @@ template <Tensor TIn, Tensor TOut, FixedDimensions VectorizedAxes,
           template <class> class TPostOp>
 class cast_impl {
     inline static constexpr size_t rank = TIn::rank();
-    // !! For vector<bool>, the element counts must be same as the other cast oprand.
+    // !! For vector<bool>, the element counts must be same as the other cast
+    // oprand.
     using InElemType = element_or_scalar_t<TIn>;
     using OutElemType = element_or_scalar_t<TOut>;
     static_assert((Vector<InElemType> && Vector<OutElemType>) ||
                       (Scalar<InElemType> && Scalar<OutElemType>),
                   "input & output must have the same type.");
     inline static constexpr auto in_ele_size =
-        sizeof(std::conditional_t<Vector<InElemType>,  //if vector
+        sizeof(std::conditional_t<Vector<InElemType>, // if vector
                                   element_or_scalar_t<InElemType>, size_t>);
     inline static constexpr auto out_ele_size =
         sizeof(std::conditional_t<Vector<OutElemType>,
                                   element_or_scalar_t<OutElemType>, size_t>);
 
     inline static constexpr bool is_bool_vector =
-        Vector<InElemType> && (  std::is_same_v<element_or_scalar_t<InElemType>, bool> ||
-                                        std::is_same_v<element_or_scalar_t<OutElemType>, bool>);
+        Vector<InElemType> &&
+        (std::is_same_v<element_or_scalar_t<InElemType>, bool> ||
+         std::is_same_v<element_or_scalar_t<OutElemType>, bool>);
 
-    inline static constexpr float scale = is_bool_vector ? 1.0f : (float)in_ele_size / out_ele_size;
+    inline static constexpr float scale =
+        is_bool_vector ? 1.0f : (float)in_ele_size / out_ele_size;
 
     inline static constexpr auto in_offset_scale = scale > 1.0f ? (size_t)scale
                                                                 : (size_t)1;
@@ -88,19 +91,18 @@ class cast_impl {
 
             if constexpr (in_offset_scale > 1 && out_offset_scale == 1) {
 
-                dynamic_shape_t<rank> apply_out_shape;
-                ntt::loop<rank>([&](auto j) {
-                    if (j > rank - apply_dim - 1)
-                        apply_out_shape[j] = 1;
+                auto apply_out_shape = generate_shape<rank>([&](auto i) {
+                    if (i > rank - apply_dim - 1)
+                        return (dim_t)1;
                     else
-                        apply_out_shape[j] = output.shape()[j];
+                        return (dim_t)output.shape()[i];
                 });
-                dynamic_shape_t<rank> inner_out_shape;
-                ntt::loop<rank>([&](auto j) {
-                    if (j > rank - apply_dim - 1)
-                        inner_out_shape[j] = output.shape()[j];
+
+                auto inner_out_shape = generate_shape<rank>([&](auto i) {
+                    if (i > rank - apply_dim - 1)
+                        return (dim_t)output.shape()[i];
                     else
-                        inner_out_shape[j] = 1;
+                        return (dim_t)1_dim;
                 });
 
                 ntt::apply(apply_out_shape, [&](auto index) {
@@ -117,19 +119,18 @@ class cast_impl {
 
             } else if constexpr (in_offset_scale == 1 && out_offset_scale > 1) {
 
-                dynamic_shape_t<rank> apply_in_shape;
-                ntt::loop<rank>([&](auto j) {
-                    if (j > rank - apply_dim - 1)
-                        apply_in_shape[j] = 1;
+                auto apply_in_shape = generate_shape<rank>([&](auto i) {
+                    if (i > rank - apply_dim - 1)
+                        return (dim_t)1;
                     else
-                        apply_in_shape[j] = input.shape()[j];
+                        return (dim_t)input.shape()[i];
                 });
-                dynamic_shape_t<rank> inner_in_shape;
-                ntt::loop<rank>([&](auto j) {
-                    if (j > rank - apply_dim - 1)
-                        inner_in_shape[j] = input.shape()[j];
+
+                auto inner_in_shape = generate_shape<rank>([&](auto i) {
+                    if (i > rank - apply_dim - 1)
+                        return (dim_t)input.shape()[i];
                     else
-                        inner_in_shape[j] = 1;
+                        return (dim_t)1_dim;
                 });
 
                 ntt::apply(apply_in_shape, [&](auto index) {
@@ -145,20 +146,21 @@ class cast_impl {
                         in_ptr, input_stride, out_ptr, output_stride, len);
                 });
             } else {
-                dynamic_shape_t<rank> apply_out_shape;
-                ntt::loop<rank>([&](auto j) {
-                    if (j > rank - apply_dim - 1)
-                        apply_out_shape[j] = 1;
+
+                auto apply_out_shape = generate_shape<rank>([&](auto i) {
+                    if (i > rank - apply_dim - 1)
+                        return (dim_t)1;
                     else
-                        apply_out_shape[j] = output.shape()[j];
+                        return (dim_t)output.shape()[i];
                 });
-                dynamic_shape_t<rank> inner_out_shape;
-                ntt::loop<rank>([&](auto j) {
-                    if (j > rank - apply_dim - 1)
-                        inner_out_shape[j] = output.shape()[j];
+
+                auto inner_out_shape = generate_shape<rank>([&](auto i) {
+                    if (i > rank - apply_dim - 1)
+                        return (dim_t)output.shape()[i];
                     else
-                        inner_out_shape[j] = 1;
+                        return (dim_t)1_dim;
                 });
+
                 ntt::apply(apply_out_shape, [&](auto index) {
                     auto in_index = index;
                     if constexpr (vectorizedAxes.rank() == 1)

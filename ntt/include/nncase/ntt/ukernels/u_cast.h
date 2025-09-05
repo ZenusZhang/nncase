@@ -26,13 +26,13 @@ template <bool Arch> struct u_cast_policy {
 };
 
 template <bool Arch, size_t in_offset_scale, size_t out_offset_scale, class T1,
-          class T2, template <class> class TPostOps>
+          class T2, template <class> class TPostOps, class Stride>
 struct u_cast {
   public:
     using T2Elem = element_or_scalar_t<T2>;
 
-    constexpr void operator()(const T1 *input, size_t input_stride, T2 *output,
-                              size_t output_stride, size_t count) noexcept {
+    constexpr void operator()(const T1 *input, Stride input_stride, T2 *output,
+                              Stride output_stride, size_t count) noexcept {
         using policy_t = u_cast_policy<Arch>;
         constexpr auto unroll = policy_t::unroll;
 
@@ -47,7 +47,7 @@ struct u_cast {
                     *output = ntt::cast_elem<T2Elem>(in_temp);
                     (*output) = TPostOps<T2>()(*output);
                     output += 1;
-                    input += input_stride == 1 ? in_offset_scale : 1;
+                    input += ntt::where(input_stride == 1, in_offset_scale, 1);
                     count--;
                 }
             }
@@ -60,7 +60,7 @@ struct u_cast {
                 *output = ntt::cast_elem<T2Elem>(in_temp);
                 (*output) = TPostOps<T2>()(*output);
                 output += 1;
-                input += input_stride == 1 ? in_offset_scale : 1;
+                input += ntt::where(input_stride == 1, in_offset_scale, 1);
             }
 
         } else if constexpr (in_offset_scale == 1 && out_offset_scale > 1) {
@@ -75,7 +75,8 @@ struct u_cast {
                         (*out_ptr) = TPostOps<T2>()(*out_ptr);
                         out_ptr += output_stride;
                     });
-                    output += output_stride == 1 ? out_offset_scale : 1;
+                    output +=
+                        ntt::where(output_stride == 1, out_offset_scale, 1);
                     input += 1;
                     count--;
                 }
@@ -89,7 +90,7 @@ struct u_cast {
                     (*out_ptr) = TPostOps<T2>()(*out_ptr);
                     out_ptr += output_stride;
                 });
-                output += output_stride == 1 ? out_offset_scale : 1;
+                output += ntt::where(output_stride == 1, out_offset_scale, 1);
                 input += 1;
             }
 
@@ -116,10 +117,12 @@ struct u_cast {
 } // namespace ukernels
 
 template <size_t in_offset_scale, size_t out_offset_scale,
-          template <class> class TPostOp = DefaultPostOp, class T1, class T2>
-constexpr void u_cast(const T1 *input, size_t input_stride, T2 *output,
-                      size_t output_stride, size_t count) noexcept {
-    ukernels::u_cast<true, in_offset_scale, out_offset_scale, T1, T2, TPostOp>
+          template <class> class TPostOp = DefaultPostOp, class T1, class T2,
+          class Stride>
+constexpr void u_cast(const T1 *input, Stride input_stride, T2 *output,
+                      Stride output_stride, size_t count) noexcept {
+    ukernels::u_cast<true, in_offset_scale, out_offset_scale, T1, T2, TPostOp,
+                     Stride>
         impl;
     impl(input, input_stride, output, output_stride, count);
 }

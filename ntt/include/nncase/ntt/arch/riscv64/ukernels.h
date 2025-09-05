@@ -485,18 +485,18 @@ template <> struct u_cast_policy<true> {
 #define DEFINE_U_CAST_2_1(IN_ELEM, IN_BW, OUT_ELEM, OUT_BW, IN_BUILTIN_ELEM,               \
                           OUT_BUILTIN_ELEM, IN_INTRINSIC_ELEM,                             \
                           OUT_INTRINSIC_ELEM)                                              \
-    template <template <class> class TPostOps>                                             \
+    template <template <class> class TPostOps, class Stride>                               \
     struct u_cast<true, 2, 1, vector<IN_ELEM, NTT_VLEN / IN_BW>,                           \
-                  vector<OUT_ELEM, NTT_VLEN / OUT_BW>, TPostOps> {                         \
+                  vector<OUT_ELEM, NTT_VLEN / OUT_BW>, TPostOps, Stride> {                 \
       public:                                                                              \
         using T2Elem = OUT_ELEM;                                                           \
         using T1 = vector<IN_ELEM, NTT_VLEN / IN_BW>;                                      \
         using T2 = vector<OUT_ELEM, NTT_VLEN / OUT_BW>;                                    \
         constexpr static size_t in_offset_scale = 2;                                       \
                                                                                            \
-        constexpr void operator()(const T1 *input, size_t input_stride,                    \
+        constexpr void operator()(const T1 *input, Stride input_stride,                    \
                                   T2 *output,                                              \
-                                  [[maybe_unused]] size_t output_stride,                   \
+                                  [[maybe_unused]] Stride output_stride,                   \
                                   size_t count) noexcept {                                 \
             using policy_t = u_cast_policy<true>;                                          \
             constexpr auto unroll = policy_t::unroll;                                      \
@@ -588,8 +588,8 @@ template <> struct u_cast_policy<true> {
                 __riscv_vse##OUT_BW##_v_##OUT_INTRINSIC_ELEM##m8(                          \
                     (OUT_BUILTIN_ELEM *)output, v24, vl_out);                              \
                 output += unroll;                                                          \
-                input +=                                                                   \
-                    input_stride == 1 ? in_offset_scale * unroll : unroll;                 \
+                input += ntt::where(input_stride == 1,                                     \
+                                    in_offset_scale * unroll, unroll);                     \
                 count -= unroll;                                                           \
             }                                                                              \
                                                                                            \
@@ -602,7 +602,7 @@ template <> struct u_cast_policy<true> {
                 *output = ntt::cast_elem<T2Elem>(in_temp);                                 \
                 (*output) = TPostOps<T2>()(*output);                                       \
                 output += 1;                                                               \
-                input += input_stride == 1 ? in_offset_scale : 1;                          \
+                input += ntt::where(input_stride == 1, in_offset_scale, 1);                \
             }                                                                              \
         }                                                                                  \
     };
@@ -615,14 +615,14 @@ DEFINE_U_CAST_2_1(half, 16, float_e4m3_t, 8, _Float16, int8_t, f16, i8)
 #define DEFINE_U_CAST_1_2(IN_ELEM, IN_BW, OUT_ELEM, OUT_BW, IN_BUILTIN_ELEM,                 \
                           OUT_BUILTIN_ELEM, IN_INTRINSIC_ELEM,                               \
                           OUT_INTRINSIC_ELEM)                                                \
-    template <template <class> class TPostOps>                                               \
+    template <template <class> class TPostOps, class Stride>                                 \
     struct u_cast<true, 1, 2, vector<IN_ELEM, NTT_VLEN / IN_BW>,                             \
-                  vector<OUT_ELEM, NTT_VLEN / OUT_BW>, TPostOps> {                           \
+                  vector<OUT_ELEM, NTT_VLEN / OUT_BW>, TPostOps, Stride> {                   \
         constexpr void                                                                       \
         operator()(const vector<IN_ELEM, NTT_VLEN / IN_BW> *input,                           \
-                   [[maybe_unused]] size_t input_stride,                                     \
+                   [[maybe_unused]] Stride input_stride,                                     \
                    vector<OUT_ELEM, NTT_VLEN / OUT_BW> *output,                              \
-                   size_t output_stride, size_t count) noexcept {                            \
+                   Stride output_stride, size_t count) noexcept {                            \
             using policy_t = u_cast_policy<true>;                                            \
             constexpr auto unroll = policy_t::unroll;                                        \
                                                                                              \
@@ -716,8 +716,8 @@ DEFINE_U_CAST_2_1(half, 16, float_e4m3_t, 8, _Float16, int8_t, f16, i8)
                         (OUT_BUILTIN_ELEM *)(out_ptr + output_stride),                       \
                         in_temp1, vl_out);                                                   \
                 }                                                                            \
-                output +=                                                                    \
-                    output_stride == 1 ? out_offset_scale * unroll : unroll;                 \
+                output += ntt::where(output_stride == 1,                                     \
+                                     out_offset_scale * unroll, unroll);                     \
                 input += unroll;                                                             \
                 count -= unroll;                                                             \
             }                                                                                \
@@ -730,7 +730,7 @@ DEFINE_U_CAST_2_1(half, 16, float_e4m3_t, 8, _Float16, int8_t, f16, i8)
                     (*out_ptr) = TPostOps<T2>()(*out_ptr);                                   \
                     out_ptr += output_stride;                                                \
                 });                                                                          \
-                output += output_stride == 1 ? out_offset_scale : 1;                         \
+                output += ntt::where(output_stride == 1, out_offset_scale, 1);               \
                 input += 1;                                                                  \
             }                                                                                \
         }                                                                                    \
