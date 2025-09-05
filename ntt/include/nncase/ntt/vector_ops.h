@@ -366,7 +366,7 @@ template <Vector TVector, class T2> struct mul_add<TVector, T2, TVector> {
 
     constexpr auto operator()(const TVector &v1, const T2 &v2,
                               const TVector &v3) const noexcept {
-        TVector value;
+        TVector value{};
         if constexpr (Vector<T2>) {
             ntt::apply(v1.shape(), [&](auto index) {
                 value(index) = op_(v1(index), v2(index), v3(index));
@@ -389,7 +389,7 @@ struct mul_add<TScalar, TVector, TVector> {
 
     constexpr auto operator()(const TScalar &s1, const TVector &v2,
                               const TVector &v3) const noexcept {
-        TVector value;
+        TVector value{};
         ntt::apply(v3.shape(), [&](auto index) {
             value(index) = op_(s1, v2(index), v3(index));
         });
@@ -428,7 +428,7 @@ template <class T1, Scalar T2, Vector TVector> struct where<T1, T2, TVector> {
 
     constexpr auto operator()(const T1 &condition, const T2 &v1,
                               const TVector &v2) const noexcept {
-        TVector value;
+        TVector value{};
         ntt::apply(v2.shape(), [&](auto index) {
             value(index) = op_(condition(index), v1, v2(index));
         });
@@ -445,7 +445,7 @@ template <class T1, Vector TVector, Scalar T2> struct where<T1, TVector, T2> {
 
     constexpr auto operator()(const T1 &condition, const TVector &v1,
                               const T2 &v2) const noexcept {
-        TVector value;
+        TVector value{};
         ntt::apply(v1.shape(), [&](auto index) {
             value(index) = op_(condition(index), v1(index), v2);
         });
@@ -463,7 +463,7 @@ template <Vector T1, Scalar T2, Scalar T3> struct where<T1, T2, T3> {
     using element_type = TOut::element_type;
     constexpr auto operator()(const T1 &condition, const T2 &v1,
                               const T3 &v2) const noexcept {
-        TOut value;
+        TOut value{};
         ntt::apply(condition.shape(), [&](auto index) {
             value(index) = op_(condition(index), v1, v2);
         });
@@ -479,7 +479,7 @@ template <Scalar T1, Scalar T2, Vector T3> struct where<T1, T2, T3> {
     using element_type = typename T3::element_type;
     constexpr auto operator()(const T1 &condition, const T2 &v1,
                               const T3 &v2) const noexcept {
-        T3 value;
+        T3 value{};
         ntt::apply(v2.shape(), [&](auto index) {
             value(index) = op_(condition, v1, v2(index));
         });
@@ -495,7 +495,7 @@ template <Scalar T1, Vector T2, Scalar T3> struct where<T1, T2, T3> {
     using element_type = typename T2::element_type;
     constexpr auto operator()(const T1 &condition, const T2 &v1,
                               const T3 &v2) const noexcept {
-        T2 value;
+        T2 value{};
         ntt::apply(v1.shape(), [&](auto index) {
             value(index) = op_(condition, v1(index), v2);
         });
@@ -559,7 +559,7 @@ struct cast_elem<TFromVector, TTo> {
                     std::remove_cv_t<decltype(TToInnerVector::shape().prepend(
                         domain))>;
 
-                basic_vector<TTo, to_shape_t> tos;
+                basic_vector<TTo, to_shape_t> tos{};
                 ntt::loop<domain>([&](auto outer_index) {
                     tos(outer_index) = ntt::cast_elem<TTo>(froms(outer_index));
                 });
@@ -567,7 +567,7 @@ struct cast_elem<TFromVector, TTo> {
             } else {
                 constexpr auto lanes = TFromVector::shape().front();
 
-                vector<TTo, lanes> tos;
+                vector<TTo, lanes> tos{};
                 ops::cast_elem<bool, TTo> cast_op;
                 ntt::loop<lanes>(
                     [&](auto lane) { tos(lane) = cast_op(froms(lane)); });
@@ -593,7 +593,7 @@ template <Vector TFromVector> struct cast_elem<TFromVector, bool> {
                     std::remove_cv_t<decltype(TToInnerVector::shape().prepend(
                         domain))>;
 
-                basic_vector<bool, to_shape_t> tos;
+                basic_vector<bool, to_shape_t> tos{};
                 ntt::loop<domain>([&](auto outer_index) {
                     tos(outer_index) = ntt::cast_elem<bool>(froms(outer_index));
                 });
@@ -601,7 +601,7 @@ template <Vector TFromVector> struct cast_elem<TFromVector, bool> {
             } else {
                 constexpr auto lanes = TFromVector::shape().front();
 
-                vector<bool, lanes> tos;
+                vector<bool, lanes> tos{};
                 ops::cast_elem<TFromElem, bool> cast_op;
                 ntt::loop<lanes>(
                     [&](auto lane) { tos(lane) = cast_op(froms(lane)); });
@@ -631,7 +631,7 @@ struct cast_elem<TFromVector, TTo> {
                     std::remove_cv_t<decltype(TToInnerVector::shape().prepend(
                         domain))>;
 
-                basic_vector<TTo, to_shape_t> tos;
+                basic_vector<TTo, to_shape_t> tos{};
                 ntt::loop<domain>([&](auto outer_index) {
                     tos(outer_index) = ntt::cast_elem<TTo>(froms(outer_index));
                 });
@@ -639,7 +639,7 @@ struct cast_elem<TFromVector, TTo> {
             } else {
                 constexpr auto lanes = TFromVector::shape().front();
 
-                vector<TTo, lanes> tos;
+                vector<TTo, lanes> tos{};
                 ops::cast_elem<TFromElem, TTo> cast_op;
                 ntt::loop<lanes>(
                     [&](auto lane) { tos(lane) = cast_op(froms(lane)); });
@@ -659,7 +659,7 @@ struct cast_elem<TFromVector, TTo> {
                 std::remove_cv_t<decltype(TToInnerVector::shape().prepend(
                     domain))>;
 
-            basic_vector<TTo, to_shape_t> tos;
+            basic_vector<TTo, to_shape_t> tos{};
             ntt::loop<domain>([&](auto outer_index) {
                 tos(outer_index) = ntt::cast_elem<TTo>(froms(outer_index));
             });
@@ -669,7 +669,7 @@ struct cast_elem<TFromVector, TTo> {
             static_assert(N == sizeof(TFromElem) / sizeof(TTo));
             constexpr auto lanes = TFromVector::shape().back();
 
-            vector<TTo, N * lanes> tos;
+            vector<TTo, N * lanes> tos{};
             ops::cast_elem<TFromElem, TTo> cast_op;
             ntt::loop<N>([&](auto n) {
                 ntt::loop<lanes>([&](auto lane) {
