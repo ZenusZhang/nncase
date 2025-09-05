@@ -542,6 +542,41 @@ template <Vector TVector, Scalar TScalar> struct clamp<TVector, TScalar> {
   private:
     ops::clamp<element_type, TScalar> op_;
 };
+
+template <Vector TFromVector, Scalar TTo>
+    requires(std::is_same_v<typename TFromVector::element_type, bool>)
+struct cast_elem<TFromVector, TTo> {
+    constexpr auto operator()(const TFromVector &froms) const noexcept {
+        if constexpr (std::is_same_v<TTo, bool>) {
+            return froms; // No cast needed
+        } else {
+            if constexpr (TFromVector::rank() > 1) {
+                constexpr auto domain = TFromVector::shape().front();
+                using TToInnerVector =
+                    std::remove_cv_t<decltype(ntt::cast_elem<TTo>(
+                        froms(0_dim)))>;
+                using to_shape_t =
+                    std::remove_cv_t<decltype(TToInnerVector::shape().prepend(
+                        domain))>;
+
+                basic_vector<TTo, to_shape_t> tos;
+                ntt::loop<domain>([&](auto outer_index) {
+                    tos(outer_index) = ntt::cast_elem<TTo>(froms(outer_index));
+                });
+                return tos;
+            } else {
+                constexpr auto lanes = TFromVector::shape().front();
+
+                vector<TTo, lanes> tos;
+                ops::cast_elem<bool, TTo> cast_op;
+                ntt::loop<lanes>(
+                    [&](auto lane) { tos(lane) = cast_op(froms(lane)); });
+                return tos;
+            }
+        }
+    }
+};
+
 template <Vector TFromVector> struct cast_elem<TFromVector, bool> {
     using TFromElem = typename TFromVector::element_type;
 
@@ -576,7 +611,9 @@ template <Vector TFromVector> struct cast_elem<TFromVector, bool> {
     }
 };
 
-template <Vector TFromVector, Scalar TTo> struct cast_elem<TFromVector, TTo> {
+template <Vector TFromVector, Scalar TTo>
+    requires(!std::is_same_v<typename TFromVector::element_type, bool>)
+struct cast_elem<TFromVector, TTo> {
     using TFromElem = typename TFromVector::element_type;
 
     constexpr auto operator()(const TFromVector &froms) const noexcept
