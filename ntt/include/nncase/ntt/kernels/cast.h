@@ -74,59 +74,102 @@ class cast_impl {
                                  ? output.strides()[vectorizedAxes.at(0)]
                                  : 1;
 
-        if (Vector<InElemType> && Vector<OutElemType> &&
-            (input_conti_dims == TIn::rank()) &&
-            (output_conti_dims == TOut::rank())) {
+        constexpr auto rank = TIn::rank();
+        auto pack_dims = rank + 1;
+        if (vectorizedAxes.rank() != 0)
+            pack_dims = rank - vectorizedAxes.at(0) - 1;
+        auto conti_dims = std::min(input_conti_dims, output_conti_dims);
 
-            constexpr auto rank = TIn::rank();
-            auto input_domain_before_axis =
-                input.shape().template slice<0, axis + 1>();
-            auto input_domain_after_axis =
-                input.shape().template slice<axis + 1, rank - axis - 1>();
+        bool opted = (conti_dims >= pack_dims) ||
+                     (pack_dims == 0_dim && conti_dims > 0_dim);
+        auto apply_dim = pack_dims == 0_dim ? conti_dims : pack_dims;
 
-            auto output_domain_before_axis =
-                output.shape().template slice<0, axis + 1>();
-            auto output_domain_after_axis =
-                output.shape().template slice<axis + 1, rank - axis - 1>();
-            dynamic_shape_t<rank> src_index;
-            ntt::loop<rank>([&](auto &i) { src_index[i] = 0; });
+        if (opted) {
 
             if constexpr (in_offset_scale > 1 && out_offset_scale == 1) {
 
-                ntt::apply(output_domain_before_axis, [&](auto index) {
-                    loop<axis + 1>([&](auto j) { src_index[j] = index[j]; });
-                    auto in_index = src_index;
+                dynamic_shape_t<rank> apply_out_shape;
+                ntt::loop<rank>([&](auto j) {
+                    if (j > rank - apply_dim - 1)
+                        apply_out_shape[j] = 1;
+                    else
+                        apply_out_shape[j] = output.shape()[j];
+                });
+                dynamic_shape_t<rank> inner_out_shape;
+                ntt::loop<rank>([&](auto j) {
+                    if (j > rank - apply_dim - 1)
+                        inner_out_shape[j] = output.shape()[j];
+                    else
+                        inner_out_shape[j] = 1;
+                });
+
+                ntt::apply(apply_out_shape, [&](auto index) {
+                    auto in_index = index;
                     if constexpr (vectorizedAxes.rank() == 1)
                         in_index[fixed_dim_v<vectorizedAxes.at(0)>] *=
                             in_offset_scale;
                     auto in_ptr = &input(in_index);
-                    auto out_ptr = &output(src_index);
-                    auto len = output_domain_after_axis.length();
+                    auto out_ptr = &output(index);
+                    auto len = inner_out_shape.length();
                     ntt::u_cast<in_offset_scale, out_offset_scale, TPostOp>(
                         in_ptr, input_stride, out_ptr, output_stride, len);
                 });
 
             } else if constexpr (in_offset_scale == 1 && out_offset_scale > 1) {
 
-                ntt::apply(input_domain_before_axis, [&](auto index) {
-                    loop<axis + 1>([&](auto j) { src_index[j] = index[j]; });
-                    auto out_index = src_index;
+                dynamic_shape_t<rank> apply_in_shape;
+                ntt::loop<rank>([&](auto j) {
+                    if (j > rank - apply_dim - 1)
+                        apply_in_shape[j] = 1;
+                    else
+                        apply_in_shape[j] = input.shape()[j];
+                });
+                dynamic_shape_t<rank> inner_in_shape;
+                ntt::loop<rank>([&](auto j) {
+                    if (j > rank - apply_dim - 1)
+                        inner_in_shape[j] = input.shape()[j];
+                    else
+                        inner_in_shape[j] = 1;
+                });
+
+                ntt::apply(apply_in_shape, [&](auto index) {
+                    auto out_index = index;
                     if constexpr (vectorizedAxes.rank() == 1)
                         out_index[fixed_dim_v<vectorizedAxes.at(0)>] *=
                             out_offset_scale;
 
-                    auto in_ptr = &input(src_index);
+                    auto in_ptr = &input(index);
                     auto out_ptr = &output(out_index);
-                    auto len = input_domain_after_axis.length();
+                    auto len = inner_in_shape.length();
                     ntt::u_cast<in_offset_scale, out_offset_scale, TPostOp>(
                         in_ptr, input_stride, out_ptr, output_stride, len);
                 });
             } else {
-                auto in_ptr = input.elements().data();
-                auto out_ptr = output.elements().data();
-                auto len = input.shape().length();
-                ntt::u_cast<in_offset_scale, out_offset_scale, TPostOp>(
-                    in_ptr, 1, out_ptr, 1, len);
+                dynamic_shape_t<rank> apply_out_shape;
+                ntt::loop<rank>([&](auto j) {
+                    if (j > rank - apply_dim - 1)
+                        apply_out_shape[j] = 1;
+                    else
+                        apply_out_shape[j] = output.shape()[j];
+                });
+                dynamic_shape_t<rank> inner_out_shape;
+                ntt::loop<rank>([&](auto j) {
+                    if (j > rank - apply_dim - 1)
+                        inner_out_shape[j] = output.shape()[j];
+                    else
+                        inner_out_shape[j] = 1;
+                });
+                ntt::apply(apply_out_shape, [&](auto index) {
+                    auto in_index = index;
+                    if constexpr (vectorizedAxes.rank() == 1)
+                        in_index[fixed_dim_v<vectorizedAxes.at(0)>] *=
+                            in_offset_scale;
+                    auto in_ptr = &input(in_index);
+                    auto out_ptr = &output(index);
+                    auto len = inner_out_shape.length();
+                    ntt::u_cast<in_offset_scale, out_offset_scale, TPostOp>(
+                        in_ptr, 1, out_ptr, 1, len);
+                });
             }
         } else {
             if constexpr (in_offset_scale > 1 && out_offset_scale == 1) {

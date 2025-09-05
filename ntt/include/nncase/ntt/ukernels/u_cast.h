@@ -47,7 +47,7 @@ struct u_cast {
                     *output = ntt::cast_elem<T2Elem>(in_temp);
                     (*output) = TPostOps<T2>()(*output);
                     output += 1;
-                    input += 1;
+                    input += input_stride == 1 ? in_offset_scale : 1;
                     count--;
                 }
             }
@@ -75,7 +75,7 @@ struct u_cast {
                         (*out_ptr) = TPostOps<T2>()(*out_ptr);
                         out_ptr += output_stride;
                     });
-                    output += 1;
+                    output += output_stride == 1 ? out_offset_scale : 1;
                     input += 1;
                     count--;
                 }
@@ -89,7 +89,7 @@ struct u_cast {
                     (*out_ptr) = TPostOps<T2>()(*out_ptr);
                     out_ptr += output_stride;
                 });
-                output += 1;
+                output += output_stride == 1 ? out_offset_scale : 1;
                 input += 1;
             }
 
