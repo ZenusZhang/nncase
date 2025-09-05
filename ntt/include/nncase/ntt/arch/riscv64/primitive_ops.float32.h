@@ -1012,26 +1012,6 @@ REGISTER_RVV_KERNEL(INNER_PRODUCT_FLOAT32)
 REGISTER_RVV_INNER_PRODUCT_OP(float, inner_product_float32)
 
 // register mul_add kernel
-#if 0
-#define MUL_ADD_FLOAT32(lmul, mlen)                                            \
-    inline vfloat32m##lmul##_t mul_add_float32(                                \
-        const vfloat32m##lmul##_t &v1, const vfloat32m##lmul##_t &v2,          \
-        const vfloat32m##lmul##_t &v3, const size_t vl) {                      \
-        return __riscv_vfmadd_vv_f32m##lmul(v1, v2, v3, vl);                   \
-    }                                                                          \
-                                                                               \
-    inline vfloat32m##lmul##_t mul_add_float32(                                \
-        const vfloat32m##lmul##_t &v1, const float &s2,                        \
-        const vfloat32m##lmul##_t &v3, const size_t vl) {                      \
-        return __riscv_vfmadd_vf_f32m##lmul(v1, s2, v3, vl);                   \
-    }                                                                          \
-                                                                               \
-    inline vfloat32m##lmul##_t mul_add_float32(                                \
-        const float &s1, const vfloat32m##lmul##_t &v2,                        \
-        const vfloat32m##lmul##_t &v3, const size_t vl) {                      \
-        return __riscv_vfmadd_vf_f32m##lmul(v2, s1, v3, vl);                   \
-    }
-#else
 #define MUL_ADD_FLOAT32(lmul, mlen)                                            \
     inline vfloat32m##lmul##_t mul_add_float32(                                \
         const vfloat32m##lmul##_t &v1, const vfloat32m##lmul##_t &v2,          \
@@ -1050,7 +1030,6 @@ REGISTER_RVV_INNER_PRODUCT_OP(float, inner_product_float32)
         const vfloat32m##lmul##_t &v3, const size_t vl) {                      \
         return __riscv_vfmacc_vf_f32m##lmul(v3, s1, v2, vl);                   \
     }
-#endif
 
 REGISTER_RVV_KERNEL(MUL_ADD_FLOAT32)
 
@@ -1092,6 +1071,67 @@ REGISTER_RVV_KERNEL(MUL_ADD_FLOAT32)
     RVV_MUL_ADD_OP(dtype, NTT_VL(sizeof(dtype) * 8, *, 8), kernel)
 
 REGISTER_RVV_MUL_ADD_OP(float, mul_add_float32)
+
+// register mul_sub kernel
+#define MUL_SUB_FLOAT32(lmul, mlen)                                            \
+    inline vfloat32m##lmul##_t mul_sub_float32(                                \
+        const vfloat32m##lmul##_t &v1, const vfloat32m##lmul##_t &v2,          \
+        const vfloat32m##lmul##_t &v3, const size_t vl) {                      \
+        return __riscv_vfmsac_vv_f32m##lmul(v3, v1, v2, vl);                   \
+    }                                                                          \
+                                                                               \
+    inline vfloat32m##lmul##_t mul_sub_float32(                                \
+        const vfloat32m##lmul##_t &v1, const float &s2,                        \
+        const vfloat32m##lmul##_t &v3, const size_t vl) {                      \
+        return __riscv_vfmsac_vf_f32m##lmul(v3, s2, v1, vl);                   \
+    }                                                                          \
+                                                                               \
+    inline vfloat32m##lmul##_t mul_sub_float32(                                \
+        const float &s1, const vfloat32m##lmul##_t &v2,                        \
+        const vfloat32m##lmul##_t &v3, const size_t vl) {                      \
+        return __riscv_vfmsac_vf_f32m##lmul(v3, s1, v2, vl);                   \
+    }
+
+REGISTER_RVV_KERNEL(MUL_SUB_FLOAT32)
+
+// register mul_sub op
+#define RVV_MUL_SUB_OP(dtype, vl, kernel)                                      \
+    template <>                                                                \
+    struct mul_sub<ntt::vector<dtype, vl>, ntt::vector<dtype, vl>,             \
+                   ntt::vector<dtype, vl>> {                                   \
+        ntt::vector<dtype, vl>                                                 \
+        operator()(const ntt::vector<dtype, vl> &v1,                           \
+                   const ntt::vector<dtype, vl> &v2,                           \
+                   const ntt::vector<dtype, vl> &v3) const noexcept {          \
+            return kernel(v1, v2, v3, vl);                                     \
+        }                                                                      \
+    };                                                                         \
+                                                                               \
+    template <>                                                                \
+    struct mul_sub<ntt::vector<dtype, vl>, dtype, ntt::vector<dtype, vl>> {    \
+        ntt::vector<dtype, vl>                                                 \
+        operator()(const ntt::vector<dtype, vl> &v1, const dtype &s2,          \
+                   const ntt::vector<dtype, vl> &v3) const noexcept {          \
+            return kernel(v1, s2, v3, vl);                                     \
+        }                                                                      \
+    };                                                                         \
+                                                                               \
+    template <>                                                                \
+    struct mul_sub<dtype, ntt::vector<dtype, vl>, ntt::vector<dtype, vl>> {    \
+        ntt::vector<dtype, vl>                                                 \
+        operator()(const dtype &s1, const ntt::vector<dtype, vl> &v2,          \
+                   const ntt::vector<dtype, vl> &v3) const noexcept {          \
+            return kernel(s1, v2, v3, vl);                                     \
+        }                                                                      \
+    };
+
+#define REGISTER_RVV_MUL_SUB_OP(dtype, kernel)                                 \
+    RVV_MUL_SUB_OP(dtype, NTT_VL(sizeof(dtype) * 8, *, 1), kernel)             \
+    RVV_MUL_SUB_OP(dtype, NTT_VL(sizeof(dtype) * 8, *, 2), kernel)             \
+    RVV_MUL_SUB_OP(dtype, NTT_VL(sizeof(dtype) * 8, *, 4), kernel)             \
+    RVV_MUL_SUB_OP(dtype, NTT_VL(sizeof(dtype) * 8, *, 8), kernel)
+
+REGISTER_RVV_MUL_SUB_OP(float, mul_sub_float32)
 
 // register reduce_sum kernel
 #define REDUCE_ADD_FLOAT32(lmul, mlen)                                         \

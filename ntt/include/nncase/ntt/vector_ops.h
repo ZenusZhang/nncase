@@ -400,6 +400,45 @@ struct mul_add<TScalar, TVector, TVector> {
     ops::mul_add<element_type, element_type, element_type> op_;
 };
 
+template <Vector TVector, class T2> struct mul_sub<TVector, T2, TVector> {
+    using element_type = typename TVector::element_type;
+
+    constexpr auto operator()(const TVector &v1, const T2 &v2,
+                              const TVector &v3) const noexcept {
+        TVector value{};
+        if constexpr (Vector<T2>) {
+            ntt::apply(v1.shape(), [&](auto index) {
+                value(index) = op_(v1(index), v2(index), v3(index));
+            });
+        } else {
+            ntt::apply(v1.shape(), [&](auto index) {
+                value(index) = op_(v1(index), v2, v3(index));
+            });
+        }
+        return value;
+    }
+
+  private:
+    ops::mul_sub<element_type, element_type, element_type> op_;
+};
+
+template <Scalar TScalar, Vector TVector>
+struct mul_sub<TScalar, TVector, TVector> {
+    using element_type = typename TVector::element_type;
+
+    constexpr auto operator()(const TScalar &s1, const TVector &v2,
+                              const TVector &v3) const noexcept {
+        TVector value{};
+        ntt::apply(v3.shape(), [&](auto index) {
+            value(index) = op_(s1, v2(index), v3(index));
+        });
+        return value;
+    }
+
+  private:
+    ops::mul_sub<element_type, element_type, element_type> op_;
+};
+
 template <class T1, Vector T2, Vector T3> struct where<T1, T2, T3> {
     using element_type = typename T2::element_type;
 
