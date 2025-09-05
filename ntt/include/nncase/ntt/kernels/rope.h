@@ -18,11 +18,16 @@
 namespace nncase::ntt {
 
 template <Tensor TInput, Tensor TCos, Tensor TSin, class TOut>
-void __attribute__((noinline)) rope(const TInput &input, const TCos &cos, const TSin &sin,
-          TOut &&output) {
+void __attribute__((noinline)) rope(const TInput &input, const TCos &cos,
+                                    const TSin &sin, TOut &&output) {
     constexpr auto head_axis = 1_dim;
     const auto half_dim = input.shape().back() / 2_dim;
     const auto num_heads = input.shape()[head_axis];
+    const auto domain = cos.shape().template slice<0, TInput::rank() - 1>();
+    const auto in_strides =
+        input.strides().template slice<0, TInput::rank() - 1>();
+    const auto cos_strides =
+        cos.strides().template slice<0, TInput::rank() - 1>();
 
     using TElem = typename TInput::element_type;
     const TElem *NTT_RESTRICT input_p = input.elements().data();
@@ -32,7 +37,7 @@ void __attribute__((noinline)) rope(const TInput &input, const TCos &cos, const 
 
     // [seq, 1, dim]
     ntt::apply(
-        cos.shape(),
+        domain,
         [&](auto, auto inout_offset, auto sincos_offset) {
             for (size_t i = 0; i < half_dim; i++) {
                 const auto cos_0 = cos_p[sincos_offset + i];
@@ -43,7 +48,6 @@ void __attribute__((noinline)) rope(const TInput &input, const TCos &cos, const 
                 auto input_hp = input_p;
                 auto output_hp = output_p;
                 for (size_t h = 0; h < num_heads; h++) {
-
                     const auto input_0 = input_hp[inout_offset + i];
                     const auto input_1 = input_hp[inout_offset + half_dim + i];
 
@@ -60,6 +64,6 @@ void __attribute__((noinline)) rope(const TInput &input, const TCos &cos, const 
                 }
             }
         },
-        input.strides(), sin.strides());
+        in_strides, cos_strides);
 }
 } // namespace nncase::ntt
