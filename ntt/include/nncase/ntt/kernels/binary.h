@@ -34,22 +34,39 @@ class binary_impl
         auto output_conti_dims =
             contiguous_dims(output.shape(), output.strides());
 
-        auto addr_lhs = lhs.elements().data();
-        auto addr_rhs = rhs.elements().data();
-        auto addr_output_element = output.elements().data();
+        constexpr auto rank = TOut::rank();
+        auto conti_dims = std::min(lhs_conti_dims, rhs_conti_dims);
+        conti_dims = std::min(conti_dims, output_conti_dims);
 
-        auto len = output.shape().length();
+        auto apply_shape = generate_shape<rank>([&](auto i) {
+            if (i > rank - conti_dims - 1)
+                return (dim_t)1;
+            else
+                return (dim_t)lhs.shape()[i];
+        });
+        auto inner_shape = generate_shape<rank>([&](auto i) {
+            if (i > rank - conti_dims - 1)
+                return (dim_t)lhs.shape()[i];
+            else
+                return (dim_t)1_dim;
+        });
+
+        auto len = inner_shape.length();
 
         using TLhsElem = typename TLhs::element_type;
         using TRhsElem = typename TRhs::element_type;
         using TOutElem = typename TOut::element_type;
         TPostOp<TOutElem> post_op;
 
-        if (!is_broadcast && (lhs_conti_dims == TLhs::rank()) &&
-            (rhs_conti_dims == TRhs::rank()) &&
-            (output_conti_dims == TOut::rank())) {
-            ntt::u_binary<TOp, TPostOp, TLhsElem, TRhsElem, TOutElem>(
-                op, addr_lhs, 1, addr_rhs, 1, addr_output_element, 1, len);
+        if (!is_broadcast) {
+            ntt::apply(apply_shape, [&](auto index) {
+                auto addr_lhs = &lhs(index);
+                auto addr_rhs = &rhs(index);
+                auto addr_output_element = &output(index);
+                ntt::u_binary<TOp, TPostOp, TLhsElem, TRhsElem, TOutElem>(
+                    op, addr_lhs, 1, addr_rhs, 1, addr_output_element, 1, len);
+            });
+
         } else {
             const TLhsElem *NTT_RESTRICT lhs_p = lhs.elements().data();
             const TRhsElem *NTT_RESTRICT rhs_p = rhs.elements().data();
