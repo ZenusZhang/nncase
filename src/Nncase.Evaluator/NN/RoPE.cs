@@ -101,7 +101,6 @@ public class RoPEEvaluator : IEvaluator<RoPE>, ITypeInferencer<RoPE>, ICostEvalu
     {
         var invalid = new InvalidType($"{input}, {scale}, {bias} not support");
         if (input.Placement != scale.Placement || scale.Placement != bias.Placement
-            || input.AxisPolicies[^1] is not SBPBroadCast
             || !scale.AxisPolicies.SequenceEqual(bias.AxisPolicies))
         {
             return invalid;
@@ -110,16 +109,18 @@ public class RoPEEvaluator : IEvaluator<RoPE>, ITypeInferencer<RoPE>, ICostEvalu
         if (scale.AxisPolicies.Count == 2)
         {
             // [head, seq, dim]
-            if (!input.AxisPolicies[1..].SequenceEqual(scale.AxisPolicies))
+            if (!input.AxisPolicies[1..].SequenceEqual(scale.AxisPolicies)
+                || input.AxisPolicies[2] is not SBPBroadCast)
             {
                 return invalid;
             }
         }
         else if (scale.AxisPolicies.Count == 3)
         {
-            // [seq, head, dim]
+            // [seq, dim, head]
             if (input.AxisPolicies[0] != scale.AxisPolicies[0]
-                || input.AxisPolicies[2] != scale.AxisPolicies[2])
+                || input.AxisPolicies[1] != scale.AxisPolicies[1]
+                || input.AxisPolicies[1] is not SBPBroadCast)
             {
                 return invalid;
             }

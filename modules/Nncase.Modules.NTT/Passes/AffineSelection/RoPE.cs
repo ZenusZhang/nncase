@@ -26,7 +26,9 @@ public partial class NTTAffineSelectionPass
         var domains = IR.F.Affine.Domains(rank);
         var inOutResults = domains.Select(x => new AffineRange(x.Offset, x.Extent)).ToArray();
         var inOutMap = new AffineMap(domains, default, inOutResults);
-        var sinCosResults = cos.CheckedShape.Rank == 2 ? inOutResults[1..] : [inOutResults[0], new AffineRange(0, 1), inOutResults[2]];
+
+        // [seq, dim, head]
+        var sinCosResults = cos.CheckedShape.Rank == 2 ? inOutResults[1..] : [inOutResults[0], inOutResults[1], new AffineRange(0, 1)];
         var sinCosMap = new AffineMap(domains, default, sinCosResults);
 
         return IR.F.Affine.Grid()

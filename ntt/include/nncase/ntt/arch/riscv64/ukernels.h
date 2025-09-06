@@ -18,6 +18,7 @@
 #include "nncase/ntt/compiler_defs.h"
 #include "nncase/ntt/dimension.h"
 #include "nncase/ntt/vector.h"
+#include "ukernels/u_rope.h"
 #include <cstddef>
 #include <riscv_vector.h>
 
