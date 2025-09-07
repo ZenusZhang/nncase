@@ -19,7 +19,7 @@
 #include <riscv_vector.h>
 
 namespace nncase::ntt::ukernels {
-#if 0
+#if 1
 template <size_t NumHeads, size_t HalfDim>
 struct u_rope<vector<half, NTT_VLEN / 16>, NumHeads, HalfDim, true> {
   public:
