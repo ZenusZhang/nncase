@@ -480,7 +480,7 @@ template <reduce_op Op, class T> struct u_reduce_policy<Op, T, true> {
 
 // cast
 template <> struct u_cast_policy<true> {
-    static constexpr size_t unroll = 8;
+    static constexpr size_t unroll = 4;
 };
 
 #define DEFINE_U_CAST_2_1(IN_ELEM, IN_BW, OUT_ELEM, OUT_BW, IN_BUILTIN_ELEM,               \
@@ -503,90 +503,64 @@ template <> struct u_cast_policy<true> {
             constexpr auto unroll = policy_t::unroll;                                      \
                                                                                            \
             while (count / unroll) {                                                       \
-                constexpr auto lmul = 8;                                                   \
+                constexpr auto lmul = 4;                                                   \
                 constexpr auto vl_in = NTT_VLEN / IN_BW * lmul;                            \
                 constexpr auto vl_out = NTT_VLEN / OUT_BW * lmul;                          \
                                                                                            \
                 prepend_lanes_t<vector<IN_ELEM, vl_in>, 2> in_temp{};                      \
                                                                                            \
                 if (input_stride == 1) {                                                   \
-                    auto in0 = __riscv_vle##IN_BW##_v_##IN_INTRINSIC_ELEM##m8(             \
+                    auto in0 = __riscv_vle##IN_BW##_v_##IN_INTRINSIC_ELEM##m4(             \
                         (const IN_BUILTIN_ELEM *)input, vl_in);                            \
-                    auto in1 = __riscv_vle##IN_BW##_v_##IN_INTRINSIC_ELEM##m8(             \
+                    auto in1 = __riscv_vle##IN_BW##_v_##IN_INTRINSIC_ELEM##m4(             \
                         (const IN_BUILTIN_ELEM *)(input + unroll), vl_in);                 \
-                    in_temp(0) = in0;                                                      \
-                    in_temp(1) = in1;                                                      \
+                    in_temp(0_dim) = in0;                                                  \
+                    in_temp(1_dim) = in1;                                                  \
                 } else {                                                                   \
-                    auto in0 = __riscv_vle##IN_BW##_v_##IN_INTRINSIC_ELEM##m8(             \
+                    auto in0 = __riscv_vle##IN_BW##_v_##IN_INTRINSIC_ELEM##m4(             \
                         (const IN_BUILTIN_ELEM *)input, vl_in);                            \
-                    auto in1 = __riscv_vle##IN_BW##_v_##IN_INTRINSIC_ELEM##m8(             \
+                    auto in1 = __riscv_vle##IN_BW##_v_##IN_INTRINSIC_ELEM##m4(             \
                         (const IN_BUILTIN_ELEM *)(input + input_stride),                   \
                         vl_in);                                                            \
                                                                                            \
                     auto in0_t0 =                                                          \
-                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m4_##IN_INTRINSIC_ELEM##m1(    \
                             in0, 0);                                                       \
                     auto in0_t1 =                                                          \
-                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m4_##IN_INTRINSIC_ELEM##m1(    \
                             in0, 1);                                                       \
                     auto in0_t2 =                                                          \
-                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m4_##IN_INTRINSIC_ELEM##m1(    \
                             in0, 2);                                                       \
                     auto in0_t3 =                                                          \
-                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m4_##IN_INTRINSIC_ELEM##m1(    \
                             in0, 3);                                                       \
-                    auto in0_t4 =                                                          \
-                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
-                            in0, 4);                                                       \
-                    auto in0_t5 =                                                          \
-                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
-                            in0, 5);                                                       \
-                    auto in0_t6 =                                                          \
-                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
-                            in0, 6);                                                       \
-                    auto in0_t7 =                                                          \
-                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
-                            in0, 7);                                                       \
                                                                                            \
                     auto in1_t0 =                                                          \
-                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m4_##IN_INTRINSIC_ELEM##m1(    \
                             in1, 0);                                                       \
                     auto in1_t1 =                                                          \
-                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m4_##IN_INTRINSIC_ELEM##m1(    \
                             in1, 1);                                                       \
                     auto in1_t2 =                                                          \
-                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m4_##IN_INTRINSIC_ELEM##m1(    \
                             in1, 2);                                                       \
                     auto in1_t3 =                                                          \
-                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
+                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m4_##IN_INTRINSIC_ELEM##m1(    \
                             in1, 3);                                                       \
-                    auto in1_t4 =                                                          \
-                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
-                            in1, 4);                                                       \
-                    auto in1_t5 =                                                          \
-                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
-                            in1, 5);                                                       \
-                    auto in1_t6 =                                                          \
-                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
-                            in1, 6);                                                       \
-                    auto in1_t7 =                                                          \
-                        __riscv_vget_v_##IN_INTRINSIC_ELEM##m8_##IN_INTRINSIC_ELEM##m1(    \
-                            in1, 7);                                                       \
                                                                                            \
-                    in_temp(0) =                                                           \
-                        __riscv_vcreate_v_##IN_INTRINSIC_ELEM##m1_##IN_INTRINSIC_ELEM##m8( \
-                            in0_t0, in1_t0, in0_t1, in1_t1, in0_t2, in1_t2,                \
-                            in0_t3, in1_t3);                                               \
+                    in_temp(0_dim) =                                                       \
+                        __riscv_vcreate_v_##IN_INTRINSIC_ELEM##m1_##IN_INTRINSIC_ELEM##m4( \
+                            in0_t0, in1_t0, in0_t1, in1_t1);                               \
                                                                                            \
-                    in_temp(1) =                                                           \
-                        __riscv_vcreate_v_##IN_INTRINSIC_ELEM##m1_##IN_INTRINSIC_ELEM##m8( \
-                            in0_t4, in1_t4, in0_t5, in1_t5, in0_t6, in1_t6,                \
-                            in0_t7, in1_t7);                                               \
+                    in_temp(1_dim) =                                                       \
+                        __riscv_vcreate_v_##IN_INTRINSIC_ELEM##m1_##IN_INTRINSIC_ELEM##m4( \
+                            in0_t2, in1_t2, in0_t3, in1_t3);                               \
                 }                                                                          \
                                                                                            \
                 auto v16 = ntt::cast_elem<T2Elem>(in_temp);                                \
                 auto v24 = TPostOps<vector<OUT_ELEM, vl_out>>()(v16);                      \
-                __riscv_vse##OUT_BW##_v_##OUT_INTRINSIC_ELEM##m8(                          \
+                __riscv_vse##OUT_BW##_v_##OUT_INTRINSIC_ELEM##m4(                          \
                     (OUT_BUILTIN_ELEM *)output, v24, vl_out);                              \
                 output += unroll;                                                          \
                 input += ntt::where(input_stride == 1,                                     \
@@ -633,87 +607,62 @@ DEFINE_U_CAST_2_1(half, 16, float_e4m3_t, 8, _Float16, int8_t, f16, i8)
             [[maybe_unused]] constexpr static size_t out_offset_scale = 2;                   \
                                                                                              \
             while (count / unroll) {                                                         \
-                constexpr auto lmul = 8;                                                     \
+                constexpr auto lmul = 4;                                                     \
                 constexpr auto vl_in = NTT_VLEN / IN_BW * lmul;                              \
                 constexpr auto vl_out = NTT_VLEN / OUT_BW * lmul;                            \
                 vector<IN_ELEM, vl_in> in_temp;                                              \
-                in_temp = __riscv_vle##IN_BW##_v_##IN_INTRINSIC_ELEM##m8(                    \
+                in_temp = __riscv_vle##IN_BW##_v_##IN_INTRINSIC_ELEM##m4(                    \
                     (const IN_BUILTIN_ELEM *)input, vl_in);                                  \
                 auto tmp_output = ntt::cast_elem<T2Elem>(in_temp);                           \
                 auto out_ptr = output;                                                       \
                                                                                              \
                 if (input_stride == 1) {                                                     \
                                                                                              \
-                    __riscv_vse##OUT_BW##_v_##OUT_INTRINSIC_ELEM##m8(                        \
-                        (OUT_BUILTIN_ELEM *)out_ptr, tmp_output(0), vl_out);                 \
-                    __riscv_vse##OUT_BW##_v_##OUT_INTRINSIC_ELEM##m8(                        \
-                        (OUT_BUILTIN_ELEM *)(out_ptr + unroll), tmp_output(1),               \
-                        vl_out);                                                             \
+                    __riscv_vse##OUT_BW##_v_##OUT_INTRINSIC_ELEM##m4(                        \
+                        (OUT_BUILTIN_ELEM *)out_ptr,                                         \
+                        ntt::unwrap_proxy(tmp_output(0_dim)), vl_out);                       \
+                    __riscv_vse##OUT_BW##_v_##OUT_INTRINSIC_ELEM##m4(                        \
+                        (OUT_BUILTIN_ELEM *)(out_ptr + unroll),                              \
+                        ntt::unwrap_proxy(tmp_output(1_dim)), vl_out);                       \
                                                                                              \
                 } else {                                                                     \
                                                                                              \
                     auto in0_t0 =                                                            \
-                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
-                            tmp_output(0), 0);                                               \
+                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m4_##OUT_INTRINSIC_ELEM##m1(    \
+                            ntt::unwrap_proxy(tmp_output(0_dim)), 0);                        \
                     auto in0_t1 =                                                            \
-                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
-                            tmp_output(0), 1);                                               \
+                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m4_##OUT_INTRINSIC_ELEM##m1(    \
+                            ntt::unwrap_proxy(tmp_output(0_dim)), 1);                        \
                     auto in0_t2 =                                                            \
-                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
-                            tmp_output(0), 2);                                               \
+                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m4_##OUT_INTRINSIC_ELEM##m1(    \
+                            ntt::unwrap_proxy(tmp_output(0_dim)), 2);                        \
                     auto in0_t3 =                                                            \
-                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
-                            tmp_output(0), 3);                                               \
-                    auto in0_t4 =                                                            \
-                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
-                            tmp_output(0), 4);                                               \
-                    auto in0_t5 =                                                            \
-                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
-                            tmp_output(0), 5);                                               \
-                    auto in0_t6 =                                                            \
-                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
-                            tmp_output(0), 6);                                               \
-                    auto in0_t7 =                                                            \
-                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
-                            tmp_output(0), 7);                                               \
+                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m4_##OUT_INTRINSIC_ELEM##m1(    \
+                            ntt::unwrap_proxy(tmp_output(0_dim)), 3);                        \
                                                                                              \
                     auto in1_t0 =                                                            \
-                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
-                            tmp_output(1), 0);                                               \
+                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m4_##OUT_INTRINSIC_ELEM##m1(    \
+                            ntt::unwrap_proxy(tmp_output(1_dim)), 0);                        \
                     auto in1_t1 =                                                            \
-                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
-                            tmp_output(1), 1);                                               \
+                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m4_##OUT_INTRINSIC_ELEM##m1(    \
+                            ntt::unwrap_proxy(tmp_output(1_dim)), 1);                        \
                     auto in1_t2 =                                                            \
-                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
-                            tmp_output(1), 2);                                               \
+                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m4_##OUT_INTRINSIC_ELEM##m1(    \
+                            ntt::unwrap_proxy(tmp_output(1_dim)), 2);                        \
                     auto in1_t3 =                                                            \
-                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
-                            tmp_output(1), 3);                                               \
-                    auto in1_t4 =                                                            \
-                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
-                            tmp_output(1), 4);                                               \
-                    auto in1_t5 =                                                            \
-                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
-                            tmp_output(1), 5);                                               \
-                    auto in1_t6 =                                                            \
-                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
-                            tmp_output(1), 6);                                               \
-                    auto in1_t7 =                                                            \
-                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m8_##OUT_INTRINSIC_ELEM##m1(    \
-                            tmp_output(1), 7);                                               \
+                        __riscv_vget_v_##OUT_INTRINSIC_ELEM##m4_##OUT_INTRINSIC_ELEM##m1(    \
+                            ntt::unwrap_proxy(tmp_output(1_dim)), 3);                        \
                                                                                              \
                     auto in_temp0 =                                                          \
-                        __riscv_vcreate_v_##OUT_INTRINSIC_ELEM##m1_##OUT_INTRINSIC_ELEM##m8( \
-                            in0_t0, in0_t2, in0_t4, in0_t6, in1_t0, in1_t2,                  \
-                            in1_t4, in1_t6);                                                 \
+                        __riscv_vcreate_v_##OUT_INTRINSIC_ELEM##m1_##OUT_INTRINSIC_ELEM##m4( \
+                            in0_t0, in0_t2, in1_t0, in1_t2);                                 \
                     auto in_temp1 =                                                          \
-                        __riscv_vcreate_v_##OUT_INTRINSIC_ELEM##m1_##OUT_INTRINSIC_ELEM##m8( \
-                            in0_t1, in0_t3, in0_t5, in0_t7, in1_t1, in1_t3,                  \
-                            in1_t5, in1_t7);                                                 \
+                        __riscv_vcreate_v_##OUT_INTRINSIC_ELEM##m1_##OUT_INTRINSIC_ELEM##m4( \
+                            in0_t1, in0_t3, in1_t1, in1_t3);                                 \
                                                                                              \
-                    __riscv_vse##OUT_BW##_v_##OUT_INTRINSIC_ELEM##m8(                        \
+                    __riscv_vse##OUT_BW##_v_##OUT_INTRINSIC_ELEM##m4(                        \
                         (OUT_BUILTIN_ELEM *)out_ptr, in_temp0, vl_out);                      \
-                    __riscv_vse##OUT_BW##_v_##OUT_INTRINSIC_ELEM##m8(                        \
+                    __riscv_vse##OUT_BW##_v_##OUT_INTRINSIC_ELEM##m4(                        \
                         (OUT_BUILTIN_ELEM *)(out_ptr + output_stride),                       \
                         in_temp1, vl_out);                                                   \
                 }                                                                            \
