@@ -979,7 +979,7 @@ struct cast_elem<ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1) * 8>, float
     operator()(const ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1) * 8> &v)
         const noexcept
     {
-        return __riscv_th_vfncvt_e4_h_f8e4m1(v, 0, NTT_VL(sizeof(half) * 8, *, 1) * 2);
+        return __riscv_th_vfncvt_e4_h_f8e4m8(v, 0, NTT_VL(sizeof(half) * 8, *, 1) * 2 * 8);
     }
 };
 
