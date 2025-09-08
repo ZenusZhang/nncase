@@ -162,7 +162,7 @@ public sealed class NTTTIRSelectionPass : TIRSelectionPass
             case IR.Tensors.Stack stack:
                 return TIR.F.NTT.Stack(((IR.Tuple)arguments[0]).Fields.AsValueEnumerable().Select(x => (Expr)x).ToArray(), output, ((TensorConst)call[IR.Tensors.Stack.Axis]).Value.ToScalar<int>());
             case IR.Tensors.Unsqueeze:
-                return TIR.F.NTT.Reshape((Expr)arguments[0], output);
+                return GenerateReshape((Expr)arguments[0], ref output);
             case IR.NN.UpdatePagedAttentionKVCache upkv:
                 output = (Expr)arguments[1];
                 return TIR.F.NTT.UpdatePagedAttentionKVCache((Expr)arguments[0], (Expr)arguments[1], upkv.CacheKind, upkv.LayerId, upkv.Layout);
@@ -199,7 +199,7 @@ public sealed class NTTTIRSelectionPass : TIRSelectionPass
         }
     }
 
-    private Expr GenerateReshape(Expr input, ref Expr output)
+    private Expr GenerateReshape(Expr input, ref Expr output, bool sequeeze = false)
     {
         if (input is not TIR.Buffer inBuffer)
         {
@@ -211,14 +211,13 @@ public sealed class NTTTIRSelectionPass : TIRSelectionPass
         var bitcast = outBuffer.DistributedType is DistributedType ? false : true;
         if (!bitcast)
         {
-            var minLen = System.Math.Min(inBuffer.DistributedType!.TensorType.Shape.Rank, outBuffer.DistributedType!.TensorType.Shape.Rank);
-            if (inBuffer.DistributedType!.AxisPolicies.Take(minLen).SequenceEqual(outBuffer.DistributedType!.AxisPolicies.Take(minLen)))
+            if (inBuffer.DistributedType!.AxisPolicies.Where(sbp => sbp is not SBPBroadCast).ToArray().SequenceEqual(outBuffer.DistributedType!.AxisPolicies.Where(sbp => sbp is not SBPBroadCast).ToArray()))
             {
                 bitcast = true;
             }
         }
 
-        if (bitcast)
+        if (bitcast || sequeeze)
         {
             output = inBuffer.With(name: outBuffer.Name, elemType: outBuffer.ElemType, dimensions: outBuffer.Dimensions.ToArray(), strides: outBuffer.Strides.ToArray(), distributedType: outBuffer.DistributedType);
             return T.Nop();
