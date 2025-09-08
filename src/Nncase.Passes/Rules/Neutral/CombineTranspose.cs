@@ -12,6 +12,7 @@ using Nncase.IR.NN;
 using Nncase.IR.Shapes;
 using Nncase.IR.Tensors;
 using Nncase.PatternMatch;
+using Nncase.Utilities;
 using static Nncase.IR.F.Math;
 using static Nncase.IR.F.NN;
 using static Nncase.IR.F.Tensors;
@@ -400,35 +401,30 @@ public sealed partial class CombineTransposeReshape : IRewriteRule
         null,
         "trans",
         IsReshape(
-            IsWildcard("input") with { TypePattern = HasFixedShape() },
-            IsFixedShape("newShape")) with
-        { TypePattern = HasFixedShape() },
+            IsWildcard("input"),
+            IsRankedShape("newShape")),
         IsFixedShape("perm"));
 
-    private Expr? GetReplace(Call trans, Expr input, long[] newShape, int[] perm)
+    private Expr? GetReplace(Call trans, Expr input, RankedShape newShape, int[] perm)
     {
-        var inShape = input.CheckedShape.ToValueArray();
-        var outShape = trans.CheckedShape.ToValueArray();
-        if (!(newShape.Length == inShape.Length + 1))
+        var inShape = input.CheckedShape;
+        var outShape = trans.CheckedShape;
+        var maxInputShape = CompilerServices.GetMaxShape(inShape);
+        var maxNewShape = CompilerServices.GetMaxShape(newShape);
+        if (!IRUtility.TryGetShapeMapMatrix(maxInputShape, maxNewShape, out var mat))
         {
             return null;
         }
 
-        // check reshape is sequeeze
-        var axis = RulesUtility.FindSqueezeAxis(newShape, inShape);
-        if (axis == -1)
+        var (forwardDict, backwardDict) = IRUtility.ShapeMapMatrixAsCompleteDict(mat);
+        if (forwardDict.Any(d => d.Value.Count > 1))
         {
             return null;
         }
 
-        var newPerm = perm.ToList();
-        newPerm.Remove(axis);
-        newPerm = newPerm.Select(i => i > axis ? i - 1 : i).ToList();
+        var newPerm = perm.Select(p => backwardDict[p]).SelectMany(a => a).ToArray();
 
-        var inv = perm.Select((p, i) => (p, i)).OrderBy(tp => tp.p).ToArray();
-        var invNewShape = newPerm.Select(i => inShape[i]).ToList();
-        invNewShape.Insert(perm.ToList().IndexOf(axis), 1);
-        return Reshape(Transpose(input, newPerm.ToArray()), invNewShape.ToArray());
+        return Reshape(Transpose(input, newPerm), outShape);
     }
 }
 
