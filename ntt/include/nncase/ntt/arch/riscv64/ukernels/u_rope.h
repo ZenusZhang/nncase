@@ -19,7 +19,9 @@
 #include <riscv_vector.h>
 
 namespace nncase::ntt::ukernels {
+#if 1
 template <size_t NumHeads, size_t HalfDim>
+    requires(NumHeads % 4 == 0)
 struct u_rope<vector<half, NTT_VLEN / 16>, NumHeads, HalfDim, true> {
   public:
     using T = vector<half, NTT_VLEN / 16>;
@@ -33,6 +35,10 @@ struct u_rope<vector<half, NTT_VLEN / 16>, NumHeads, HalfDim, true> {
         constexpr auto vl = T::shape()[0_dim];
 
         asm("vsetvli zero, %[vl], e16, m4, ta, ma\n" ::[vl] "r"(vl * 4));
+        const T *NTT_RESTRICT cos_0p = cos;
+        const T *NTT_RESTRICT sin_0p = sin;
+        const T *NTT_RESTRICT cos_1p = cos + HalfDim;
+        const T *NTT_RESTRICT sin_1p = sin + HalfDim;
         const T *NTT_RESTRICT input_dp = input;
         T *NTT_RESTRICT output_dp = output;
         for (size_t i = 0; i < HalfDim; i++) {
@@ -44,10 +50,14 @@ struct u_rope<vector<half, NTT_VLEN / 16>, NumHeads, HalfDim, true> {
             // v20: input_4_1
             // v24: tmp_0
             // v28: tmp_1
-            asm volatile("vl1re16.v v0, (%[cos_0])\n"
-                         "vl1re16.v v4, (%[sin_0])\n"
-                         "vl1re16.v v8, (%[cos_1])\n"
-                         "vl1re16.v v12, (%[sin_1])\n"
+            asm volatile("vl1re16.v v0, (%[cos_0p])\n"
+                         "addi %[cos_0p], %[cos_0p], %[vl] * 2\n"
+                         "vl1re16.v v4, (%[sin_0p])\n"
+                         "addi %[sin_0p], %[sin_0p], %[vl] * 2\n"
+                         "vl1re16.v v8, (%[cos_1p])\n"
+                         "addi %[cos_1p], %[cos_1p], %[vl] * 2\n"
+                         "vl1re16.v v12, (%[sin_1p])\n"
+                         "addi %[sin_1p], %[sin_1p], %[vl] * 2\n"
                          "vmv1r.v v1, v0\n"
                          "vmv2r.v v2, v0\n"
                          "vmv1r.v v5, v4\n"
@@ -55,15 +65,15 @@ struct u_rope<vector<half, NTT_VLEN / 16>, NumHeads, HalfDim, true> {
                          "vmv1r.v v9, v8\n"
                          "vmv2r.v v10, v8\n"
                          "vmv1r.v v13, v12\n"
-                         "vmv2r.v v14, v12\n" ::[cos_0] "r"(&cos[i]),
-                         [sin_0] "r"(&sin[i]), [cos_1] "r"(&cos[HalfDim + i]),
-                         [sin_1] "r"(&sin[HalfDim + i])
+                         "vmv2r.v v14, v12\n"
+                         : [cos_0p] "+r"(cos_0p), [sin_0p] "+r"(sin_0p),
+                           [cos_1p] "+r"(cos_1p), [sin_1p] "+r"(sin_1p)
+                         : [vl] "i"((size_t)vl)
                          : "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8",
                            "v9", "v10", "v11", "v12", "v13", "v14", "v15",
                            "memory");
 
-            size_t h = 0;
-            for (; h < NumHeads; h += 4) {
+            for (size_t h = 0; h < NumHeads; h += 4) {
                 asm volatile(
                     "vl4re16.v v16, (%[input_4_0])\n"
                     "vl4re16.v v20, (%[input_4_1])\n"
@@ -83,6 +93,90 @@ struct u_rope<vector<half, NTT_VLEN / 16>, NumHeads, HalfDim, true> {
                     [input_4_1] "r"(&input_dp[h + input_dim_strides * HalfDim]),
                     [output_4_0] "r"(&output_dp[h]),
                     [output_4_1] "r"(
+                        &output_dp[h + output_dim_strides * HalfDim])
+                    : "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8",
+                      "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16",
+                      "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24",
+                      "v25", "v26", "v27", "v28", "v29", "v30", "v31",
+                      "memory");
+            }
+
+            input_dp += input_dim_strides;
+            output_dp += output_dim_strides;
+        }
+    }
+};
+#endif
+
+template <size_t NumHeads, size_t HalfDim>
+    requires(NumHeads % 4 != 0 && NumHeads % 2 == 0)
+struct u_rope<vector<half, NTT_VLEN / 16>, NumHeads, HalfDim, true> {
+  public:
+    using T = vector<half, NTT_VLEN / 16>;
+
+    template <Dimension TInputDimStrides, Dimension TOutputDimStrides>
+    constexpr void
+    operator()(const T *NTT_RESTRICT input, const T *NTT_RESTRICT cos,
+               const T *NTT_RESTRICT sin, T *NTT_RESTRICT output,
+               const TInputDimStrides &input_dim_strides,
+               const TOutputDimStrides &output_dim_strides) noexcept {
+        constexpr auto vl = T::shape()[0_dim];
+
+        asm("vsetvli zero, %[vl], e16, m2, ta, ma\n" ::[vl] "r"(vl * 2));
+        const T *NTT_RESTRICT cos_0p = cos;
+        const T *NTT_RESTRICT sin_0p = sin;
+        const T *NTT_RESTRICT cos_1p = cos + HalfDim;
+        const T *NTT_RESTRICT sin_1p = sin + HalfDim;
+        const T *NTT_RESTRICT input_dp = input;
+        T *NTT_RESTRICT output_dp = output;
+        for (size_t i = 0; i < HalfDim; i++) {
+            // v0: cos_2_0
+            // v4: sin_2_0
+            // v8: cos_2_1
+            // v12: sin_2_1
+            // v16: input_2_0
+            // v20: input_2_1
+            // v24: tmp_0
+            // v28: tmp_1
+            asm volatile("vl1re16.v v0, (%[cos_0p])\n"
+                         "addi %[cos_0p], %[cos_0p], %[vl] * 2\n"
+                         "vl1re16.v v4, (%[sin_0p])\n"
+                         "addi %[sin_0p], %[sin_0p], %[vl] * 2\n"
+                         "vl1re16.v v8, (%[cos_1p])\n"
+                         "addi %[cos_1p], %[cos_1p], %[vl] * 2\n"
+                         "vl1re16.v v12, (%[sin_1p])\n"
+                         "addi %[sin_1p], %[sin_1p], %[vl] * 2\n"
+                         "vmv1r.v v1, v0\n"
+                         "vmv1r.v v5, v4\n"
+                         "vmv1r.v v9, v8\n"
+                         "vmv1r.v v13, v12\n"
+                         : [cos_0p] "+r"(cos_0p), [sin_0p] "+r"(sin_0p),
+                           [cos_1p] "+r"(cos_1p), [sin_1p] "+r"(sin_1p)
+                         : [vl] "i"((size_t)vl)
+                         : "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8",
+                           "v9", "v10", "v11", "v12", "v13", "v14", "v15",
+                           "memory");
+
+            for (size_t h = 0; h < NumHeads; h += 2) {
+                asm volatile(
+                    "vl2re16.v v16, (%[input_2_0])\n"
+                    "vl2re16.v v20, (%[input_2_1])\n"
+                    // 1st half: output_dp[h] = ntt::mul_sub(input_0, cos_0,
+                    // input_1 * sin_0)
+                    "vfmul.vv v24, v20, v4\n"  // tmp_0 = input_1 * sin_0
+                    "vfmsac.vv v24, v16, v0\n" // tmp_0 = input_0 * cos_0 -
+                                               // tmp_0
+                    "vs2r.v v24, (%[output_2_0])\n"
+                    // 2nd half: output_dp[h + output_dim_strides * HalfDim] =
+                    // ntt::mul_add(input_1, cos_1, input_0 * sin_1)
+                    "vfmul.vv v28, v16, v12\n" // tmp_1 = input_0 * sin_1
+                    "vfmacc.vv v28, v20, v8\n" // tmp_1 = input_1 * cos_1 +
+                                               // tmp_1
+                    "vs2r.v v28, (%[output_2_1])\n" ::[input_2_0] "r"(
+                        &input_dp[h]),
+                    [input_2_1] "r"(&input_dp[h + input_dim_strides * HalfDim]),
+                    [output_2_0] "r"(&output_dp[h]),
+                    [output_2_1] "r"(
                         &output_dp[h + output_dim_strides * HalfDim])
                     : "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8",
                       "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16",
