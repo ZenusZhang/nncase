@@ -19,8 +19,8 @@
 namespace nncase::ntt {
 
 template <Tensor TInput, Tensor TCos, Tensor TSin, class TOut>
-void __attribute__((noinline)) rope(const TInput &input, const TCos &cos,
-                                    const TSin &sin, TOut &&output) {
+void rope(const TInput &input, const TCos &cos, const TSin &sin,
+          TOut &&output) {
     constexpr auto head_axis = 2_dim;
     constexpr auto dim_axis = 1_dim;
     const auto half_dim = input.shape()[dim_axis] / 2_dim;
