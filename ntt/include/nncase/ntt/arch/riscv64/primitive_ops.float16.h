@@ -971,15 +971,15 @@ struct cast_elem<ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1)>, float_e4m
     }
 };
 
-// f16 -> f8, lmul=8
+// f16 -> f8, lmul=4
 template <>
-struct cast_elem<ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1) * 8>, float_e4m3_t>
+struct cast_elem<ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1) * 4>, float_e4m3_t>
 {
-    ntt::vector<float_e4m3_t, NTT_VL(sizeof(float_e4m3_t) * 8, *, 1) * 8>
-    operator()(const ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1) * 8> &v)
+    ntt::vector<float_e4m3_t, NTT_VL(sizeof(float_e4m3_t) * 8, *, 1) * 4>
+    operator()(const ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1) * 4> &v)
         const noexcept
     {
-        return __riscv_th_vfncvt_e4_h_f8e4m8(v, 0, NTT_VL(sizeof(half) * 8, *, 1) * 2 * 8);
+        return __riscv_th_vfncvt_e4_h_f8e4m4(v, 0, NTT_VL(sizeof(half) * 8, *, 1) * 2 * 4);
     }
 };
 
