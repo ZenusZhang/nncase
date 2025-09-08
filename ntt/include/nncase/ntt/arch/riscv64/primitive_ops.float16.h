@@ -959,6 +959,7 @@ REGISTER_RVV_CAST_ELEM_OP_1_2(half, float, cast_float16_float32)
 REGISTER_RVV_CAST_ELEM_OP_2_1(float, half, cast_float32_float16)
 
 #if defined(NNCASE_XPU_MODULE)
+// f16 -> f8, lmul=1
 template <>
 struct cast_elem<ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1)>, float_e4m3_t>
 {
@@ -969,6 +970,19 @@ struct cast_elem<ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1)>, float_e4m
         return __riscv_th_vfncvt_e4_h_f8e4m1(v, 0, NTT_VL(sizeof(half) * 8, *, 1) * 2);
     }
 };
+
+// f16 -> f8, lmul=8
+template <>
+struct cast_elem<ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1) * 8>, float_e4m3_t>
+{
+    ntt::vector<float_e4m3_t, NTT_VL(sizeof(float_e4m3_t) * 8, *, 1) * 8>
+    operator()(const ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1) * 8> &v)
+        const noexcept
+    {
+        return __riscv_th_vfncvt_e4_h_f8e4m1(v, 0, NTT_VL(sizeof(half) * 8, *, 1) * 2);
+    }
+};
+
 #endif
 
 // mul_add
