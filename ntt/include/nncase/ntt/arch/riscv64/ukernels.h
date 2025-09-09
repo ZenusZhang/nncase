@@ -618,12 +618,15 @@ DEFINE_U_CAST_2_1(half, 16, float_e4m3_t, 8, _Float16, int8_t, f16, i8)
                                                                                              \
                 if (input_stride == 1) {                                                     \
                                                                                              \
+                    auto post_output0 = TPostOps<vector<OUT_ELEM, vl_out>>()(                \
+                        ntt::unwrap_proxy(tmp_output(0_dim)));                               \
+                    auto post_output1 = TPostOps<vector<OUT_ELEM, vl_out>>()(                \
+                        ntt::unwrap_proxy(tmp_output(1_dim)));                               \
                     __riscv_vse##OUT_BW##_v_##OUT_INTRINSIC_ELEM##m4(                        \
-                        (OUT_BUILTIN_ELEM *)out_ptr,                                         \
-                        ntt::unwrap_proxy(tmp_output(0_dim)), vl_out);                       \
+                        (OUT_BUILTIN_ELEM *)out_ptr, post_output0, vl_out);                  \
                     __riscv_vse##OUT_BW##_v_##OUT_INTRINSIC_ELEM##m4(                        \
-                        (OUT_BUILTIN_ELEM *)(out_ptr + unroll),                              \
-                        ntt::unwrap_proxy(tmp_output(1_dim)), vl_out);                       \
+                        (OUT_BUILTIN_ELEM *)(out_ptr + unroll), post_output1,                \
+                        vl_out);                                                             \
                                                                                              \
                 } else {                                                                     \
                                                                                              \
@@ -659,6 +662,9 @@ DEFINE_U_CAST_2_1(half, 16, float_e4m3_t, 8, _Float16, int8_t, f16, i8)
                     auto in_temp1 =                                                          \
                         __riscv_vcreate_v_##OUT_INTRINSIC_ELEM##m1_##OUT_INTRINSIC_ELEM##m4( \
                             in0_t1, in0_t3, in1_t1, in1_t3);                                 \
+                                                                                             \
+                    in_temp0 = TPostOps<vector<OUT_ELEM, vl_out>>()(in_temp0);               \
+                    in_temp1 = TPostOps<vector<OUT_ELEM, vl_out>>()(in_temp1);               \
                                                                                              \
                     __riscv_vse##OUT_BW##_v_##OUT_INTRINSIC_ELEM##m4(                        \
                         (OUT_BUILTIN_ELEM *)out_ptr, in_temp0, vl_out);                      \
