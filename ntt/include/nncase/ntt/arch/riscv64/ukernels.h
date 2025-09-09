@@ -39,7 +39,7 @@ SPECIALIZE_U_UNARY(asin, 16)
 SPECIALIZE_U_UNARY(asinh, 16)
 SPECIALIZE_U_UNARY(ceil, 16)
 SPECIALIZE_U_UNARY(copy, 16)
-SPECIALIZE_U_UNARY(cos, 8)
+SPECIALIZE_U_UNARY(cos, 4)
 SPECIALIZE_U_UNARY(cosh, 16)
 SPECIALIZE_U_UNARY(erf, 16)
 SPECIALIZE_U_UNARY(exp, 16)
@@ -51,7 +51,7 @@ SPECIALIZE_U_UNARY(sign, 16)
 SPECIALIZE_U_UNARY(square, 16)
 SPECIALIZE_U_UNARY(sqrt, 16)
 SPECIALIZE_U_UNARY(rsqrt, 16)
-SPECIALIZE_U_UNARY(sin, 8)
+SPECIALIZE_U_UNARY(sin, 4)
 SPECIALIZE_U_UNARY(sinh, 16)
 SPECIALIZE_U_UNARY(swish, 16)
 SPECIALIZE_U_UNARY(tanh, 16)
@@ -151,7 +151,7 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
         }                                                                      \
     };
 
-#define DEFINE_U_UNARY_F32_8V(OP)                                              \
+#define DEFINE_U_UNARY_F32_4V(OP, LMUL)                                        \
     template <>                                                                \
     struct u_unary<ntt::ops::OP<vector<float, NTT_VLEN / 32>>,                 \
                    vector<float, NTT_VLEN / 32>, true> {                       \
@@ -165,15 +165,15 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
                 u_unary_policy<ntt::ops::OP<vector<float, NTT_VLEN / 32>>,     \
                                vector<float, NTT_VLEN / 32>, true>;            \
             constexpr auto unroll = policy_t::unroll;                          \
-            constexpr auto lmul = 8;                                           \
+            constexpr auto lmul = LMUL;                                        \
             constexpr auto vl = NTT_VLEN / 32 * lmul;                          \
                                                                                \
             while (count / unroll) {                                           \
                 ntt::vector<float, vl> v0 =                                    \
-                    __riscv_vle32_v_f32m8((const float *)input, vl);           \
+                    __riscv_vle32_v_f32m##LMUL((const float *)input, vl);      \
                 input += in_stride * lmul;                                     \
                 v0 = nncase::ntt::OP(v0);                                      \
-                __riscv_vse32_v_f32m8((float *)output, v0, vl);                \
+                __riscv_vse32_v_f32m##LMUL((float *)output, v0, vl);           \
                 output += out_stride * lmul;                                   \
                 count -= unroll;                                               \
             }                                                                  \
@@ -268,7 +268,7 @@ DEFINE_U_UNARY_F32_16V(acosh)
 DEFINE_U_UNARY_F32_16V(asin)
 DEFINE_U_UNARY_F32_16V(asinh)
 DEFINE_U_UNARY_F32_16V(ceil)
-DEFINE_U_UNARY_F32_8V(cos)
+DEFINE_U_UNARY_F32_4V(cos, 4)
 DEFINE_U_UNARY_F32_16V(cosh)
 DEFINE_U_UNARY_F32_16V(erf)
 DEFINE_U_UNARY_F32_16V(exp)
@@ -280,7 +280,7 @@ DEFINE_U_UNARY_F32_16V(sign)
 DEFINE_U_UNARY_F32_16V(square)
 DEFINE_U_UNARY_F32_16V(sqrt)
 DEFINE_U_UNARY_F32_16V(rsqrt)
-DEFINE_U_UNARY_F32_8V(sin)
+DEFINE_U_UNARY_F32_4V(sin, 4)
 DEFINE_U_UNARY_F32_16V(sinh)
 DEFINE_U_UNARY_F32_16V(swish)
 DEFINE_U_UNARY_F32_16V(tanh)
