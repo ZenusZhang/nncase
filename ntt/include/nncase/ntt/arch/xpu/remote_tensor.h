@@ -17,25 +17,24 @@
 #include "../../tensor.h"
 #include "../../vector.h"
 
-#if defined(NNCASE_XPU_MODULE) && defined(SYS_MODE)
-#define PREFIX __device__
-#else
-#define PREFIX
+#if defined(SYS_MODE)
+#include "module_topology_def.h"
 #endif
 
 namespace nncase::ntt::distributed {
 namespace detail {
-PREFIX extern decltype(nncase::ntt::make_tensor<
-                       nncase::ntt::vector<uintptr_t, 2>>(
+#if not defined(SYS_MODE)
+extern decltype(nncase::ntt::make_tensor<nncase::ntt::vector<uintptr_t, 2>>(
     nncase::ntt::distributed::topology_shape)) global_local_data_ptr;
 
-PREFIX extern decltype(nncase::ntt::make_tensor<
-                       nncase::ntt::vector<uintptr_t, 2>>(
+extern decltype(nncase::ntt::make_tensor<nncase::ntt::vector<uintptr_t, 2>>(
     nncase::ntt::distributed::topology_shape)) global_thread_local_rdata_ptr;
 
-PREFIX extern decltype(nncase::ntt::make_tensor<
-                       nncase::ntt::vector<uintptr_t, 2>>(
+extern decltype(nncase::ntt::make_tensor<nncase::ntt::vector<uintptr_t, 2>>(
     nncase::ntt::distributed::topology_shape)) global_block_local_rdata_ptr;
+#else
+extern size_t global_data_pool_size;
+#endif
 
 template <class T, topology RemoteScope, topology TensorScope,
           ScopedProgramIds<TensorScope> TLocalProgramIds,
@@ -43,6 +42,7 @@ template <class T, topology RemoteScope, topology TensorScope,
 static auto get_remote_address(const TLocalProgramIds &local_program_ids,
                                const TRemoteProgramIds &remote_program_ids,
                                T *local_address) {
+#if not defined(SYS_MODE)
     auto start = global_local_data_ptr(local_program_ids)(0_dim);
     auto end = global_local_data_ptr(local_program_ids)(1_dim);
     auto remote_address = global_local_data_ptr(remote_program_ids)(0_dim);
@@ -60,6 +60,16 @@ static auto get_remote_address(const TLocalProgramIds &local_program_ids,
     }
 
     return local_address - (T *)start + (T *)remote_address;
+#else
+    auto remote_block_id = linear_offset(
+        remote_program_ids.template slice<0, (size_t)topology::count__ - 1>(),
+        topology_shape.template slice<0, (size_t)topology::count__ - 1>());
+    return (T *)((char *)uniform_ptr_global_to_global((void *)local_address,
+                                                      remote_block_id) +
+                 (remote_program_ids[(size_t)topology::count__ - 1] -
+                  local_program_ids[(size_t)topology::count__ - 1]) *
+                     global_data_pool_size);
+#endif
 }
 } // namespace detail
 
