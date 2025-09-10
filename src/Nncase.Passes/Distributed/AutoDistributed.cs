@@ -371,6 +371,35 @@ internal sealed class AutoDistributedRewriter : ExprVisitor<Unit, Unit>
             var newExprs = BuildEquivalentCalls(expr.Target, tempArgs);
             foreach (var (newExpr, used) in newExprs)
             {
+                // input of CustomOp must split on threads.
+                if (expr.Target.GetType().FullName!.Contains("CustomNTT.MatMul", StringComparison.Ordinal))
+                {
+                    if (combBuckets.First().Vertices.First().Expr is not Boxing)
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        if (_rootSearchGraph.TryGetOutEdges(combBuckets.First().Vertices.First(), out var edges))
+                        {
+                            if (edges.All(e => e.Target.IRType is DistributedType dt &&
+                                    !dt.AxisPolicies.Any(sbp => sbp is SBPSplit s && s.Axes.Contains(dt.Placement.Rank - 1))))
+                            {
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                if (expr.Users.Any(u => u is Call call && call.Target.GetType().FullName!.Contains("CustomNTT.MatMul", StringComparison.Ordinal)))
+                {
+                    if (newExpr.CheckedType is DistributedType dt1
+                        && !dt1.AxisPolicies.Any(sbp => sbp is SBPSplit s && s.Axes.Contains(dt1.Placement.Rank - 1)))
+                    {
+                        continue;
+                    }
+                }
+
                 if (!newExpr.InferenceType(_inferencer_cache) || newExpr.CheckedType is InvalidType)
                 {
                     continue;
@@ -426,7 +455,9 @@ internal sealed class AutoDistributedRewriter : ExprVisitor<Unit, Unit>
         var addedBuckets = bucketMemo.Values.ToArray();
         foreach (var nType in GetLeafCandidateDistTypes(expr.CheckedTensorType, Placements, _moduleKind, TargetOptions))
         {
-            if (!bucketMemo.TryGetValue(nType, out var bucket))
+            if (!bucketMemo.TryGetValue(nType, out var bucket)
+                || expr.Users.Any(u => u is Call call && call.Target.GetType().FullName!.Contains("CustomNTT.MatMul", StringComparison.Ordinal))
+                || expr.Target.GetType().FullName!.Contains("CustomNTT.MatMul", StringComparison.Ordinal))
             {
                 bucket = callCluster.CreateCluster<DistributedSearchGraph>(SearchGraphKind.Bucket);
                 var linked = false;
