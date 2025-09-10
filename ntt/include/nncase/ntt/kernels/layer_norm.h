@@ -29,11 +29,13 @@ template <bool UseMean, Tensor TIn, Tensor TScale, Tensor TBias, typename TOut,
 void within_axis_vectorize_impl(const TIn &input, const TScale &scale,
                                 const TBias &bias, TOut &output,
                                 const float &epsilon, const VectorizedAxes &,
-                                const PadedNums &, const TAxis &) {
+                                const PadedNums &padedNums, const TAxis &axis) {
 
     using TElem = typename TIn::element_type;
     using TScaleElem = typename TScale::element_type;
     using TAccElem = decltype(ntt::cast_elem<float>(std::declval<TElem>()));
+
+    constexpr auto rank = TIn::rank();
 
     auto input_shape = input.shape();
     auto input_strides = input.strides();
@@ -63,97 +65,121 @@ void within_axis_vectorize_impl(const TIn &input, const TScale &scale,
     const TScaleElem *NTT_RESTRICT bias_p = bias.elements().data();
     TElem *NTT_RESTRICT output_p = output.elements().data();
 
-    ntt::apply(
-        domain,
-        [&](auto, auto offset) {
-            if constexpr (UseVectorReduce) {
-                auto mean = (TElemScalar)0;
-                auto extended_sum = (TAccElem)0;
-                if constexpr (UseMean) {
-                    auto extended_mean = (TAccElem)0;
-                    for (size_t i = 0; i < inner_size; i++)
-                        extended_mean += input_p[offset + i];
-                    extended_mean *= norm_factor;
-                    auto extended_mean_s = reduce_sum(extended_mean);
+    auto input_conti_dims = contiguous_dims(input.shape(), input.strides());
+    auto output_conti_dims = contiguous_dims(output.shape(), output.strides());
+    auto conti_dims = std::min(input_conti_dims, output_conti_dims);
+    auto addr_scale = scale.elements().data();
+    auto addr_bias = bias.elements().data();
+    auto to_be_opted = UseVectorReduce && conti_dims >= rank - axis_value;
+    if (to_be_opted) {
+        auto apply_shape = generate_shape<rank>([&](auto i) {
+            if (i >= axis_value)
+                return (dim_t)1;
+            else
+                return (dim_t)input.shape()[i];
+        });
+        ntt::apply(apply_shape, [&](auto index) {
+            auto addr_input = &input(index);
 
-                    for (auto i = 0; i < inner_size; i++) {
-                        const auto val = ntt::square(
-                            ntt::cast_elem<float>(input_p[offset + i]) -
-                            extended_mean_s);
-                        extended_sum += val;
-                    }
-                    mean = (TElemScalar)extended_mean_s;
-                } else {
-                    for (auto i = 0; i < inner_size; i++) {
-                        const auto input_val = input_p[offset + i];
-                        extended_sum =
-                            ntt::mul_add(input_val, input_val, extended_sum);
-                    }
-                }
+            auto addr_output = &output(index);
+            ntt::u_layer_norm<UseMean>(
+                addr_input, addr_scale, addr_bias, addr_output, epsilon,
+                vectorized_axes_temp, padedNums, axis, inner_size, norm_factor);
+        });
 
-                const auto extended_sum_s =
-                    reduce_sum(extended_sum) * norm_factor;
-                auto extended_add = extended_sum_s + epsilon;
-                auto rsqrt =
-                    ntt::cast_elem<TElemScalar>(ntt::rsqrt(extended_add));
+    } else {
+        ntt::apply(
+            domain,
+            [&](auto, auto offset) {
+                if constexpr (UseVectorReduce) {
+                    auto mean = (TElemScalar)0;
+                    auto extended_sum = (TAccElem)0;
+                    if constexpr (UseMean) {
+                        auto extended_mean = (TAccElem)0;
+                        for (size_t i = 0; i < inner_size; i++)
+                            extended_mean += input_p[offset + i];
+                        extended_mean *= norm_factor;
+                        auto extended_mean_s = reduce_sum(extended_mean);
 
-                if constexpr (UseMean) {
-                    for (auto i = 0; i < inner_size; i++) {
-                        auto val = (input_p[offset + i] - mean) * rsqrt;
-                        output_p[offset + i] =
-                            ntt::mul_add(val, scale_p[i], bias_p[i]);
+                        for (auto i = 0; i < inner_size; i++) {
+                            const auto val = ntt::square(
+                                ntt::cast_elem<float>(input_p[offset + i]) -
+                                extended_mean_s);
+                            extended_sum += val;
+                        }
+                        mean = (TElemScalar)extended_mean_s;
+                    } else {
+                        for (auto i = 0; i < inner_size; i++) {
+                            const auto input_val = input_p[offset + i];
+                            extended_sum = ntt::mul_add(input_val, input_val,
+                                                        extended_sum);
+                        }
                     }
-                } else {
-                    for (auto i = 0; i < inner_size; i++) {
-                        auto val = input_p[offset + i] * rsqrt;
-                        output_p[offset + i] =
-                            val * scale_p[i]; // RMSNorm doesn't need bias
-                    }
-                }
-            } else {
-                auto mean = (TElem)0;
-                auto extended_sum = (TAccElem)0;
-                if constexpr (UseMean) {
-                    auto extended_mean = (TAccElem)0;
-                    for (size_t i = 0; i < inner_size; i++)
-                        extended_mean += input_p[offset + i];
-                    extended_mean *= norm_factor;
 
-                    for (auto i = 0; i < inner_size; i++) {
-                        const auto val = ntt::square(
-                            ntt::cast_elem<float>(input_p[offset + i]) -
-                            extended_mean);
-                        extended_sum += val;
-                    }
-                    mean = ntt::cast_elem<TElemScalar>(extended_mean);
-                } else {
-                    for (auto i = 0; i < inner_size; i++) {
-                        const auto val = ntt::square(
-                            ntt::cast_elem<float>(input_p[offset + i]));
-                        extended_sum += val;
-                    }
-                }
+                    const auto extended_sum_s =
+                        reduce_sum(extended_sum) * norm_factor;
+                    auto extended_add = extended_sum_s + epsilon;
+                    auto rsqrt =
+                        ntt::cast_elem<TElemScalar>(ntt::rsqrt(extended_add));
 
-                extended_sum *= norm_factor;
-                auto extended_add = extended_sum + epsilon;
-                auto rsqrt =
-                    ntt::cast_elem<TElemScalar>(ntt::rsqrt(extended_add));
-
-                if constexpr (UseMean) {
-                    for (auto i = 0; i < inner_size; i++) {
-                        auto val = (input_p[offset + i] - mean) * rsqrt;
-                        output_p[offset + i] =
-                            ntt::mul_add(val, scale_p[i], bias_p[i]);
+                    if constexpr (UseMean) {
+                        for (auto i = 0; i < inner_size; i++) {
+                            auto val = (input_p[offset + i] - mean) * rsqrt;
+                            output_p[offset + i] =
+                                ntt::mul_add(val, scale_p[i], bias_p[i]);
+                        }
+                    } else {
+                        for (auto i = 0; i < inner_size; i++) {
+                            auto val = input_p[offset + i] * rsqrt;
+                            output_p[offset + i] =
+                                val * scale_p[i]; // RMSNorm doesn't need bias
+                        }
                     }
                 } else {
-                    for (auto i = 0; i < inner_size; i++) {
-                        auto val = input_p[offset + i] * rsqrt;
-                        output_p[offset + i] = val * scale_p[i];
+                    auto mean = (TElem)0;
+                    auto extended_sum = (TAccElem)0;
+                    if constexpr (UseMean) {
+                        auto extended_mean = (TAccElem)0;
+                        for (size_t i = 0; i < inner_size; i++)
+                            extended_mean += input_p[offset + i];
+                        extended_mean *= norm_factor;
+
+                        for (auto i = 0; i < inner_size; i++) {
+                            const auto val = ntt::square(
+                                ntt::cast_elem<float>(input_p[offset + i]) -
+                                extended_mean);
+                            extended_sum += val;
+                        }
+                        mean = ntt::cast_elem<TElemScalar>(extended_mean);
+                    } else {
+                        for (auto i = 0; i < inner_size; i++) {
+                            const auto val = ntt::square(
+                                ntt::cast_elem<float>(input_p[offset + i]));
+                            extended_sum += val;
+                        }
+                    }
+
+                    extended_sum *= norm_factor;
+                    auto extended_add = extended_sum + epsilon;
+                    auto rsqrt =
+                        ntt::cast_elem<TElemScalar>(ntt::rsqrt(extended_add));
+
+                    if constexpr (UseMean) {
+                        for (auto i = 0; i < inner_size; i++) {
+                            auto val = (input_p[offset + i] - mean) * rsqrt;
+                            output_p[offset + i] =
+                                ntt::mul_add(val, scale_p[i], bias_p[i]);
+                        }
+                    } else {
+                        for (auto i = 0; i < inner_size; i++) {
+                            auto val = input_p[offset + i] * rsqrt;
+                            output_p[offset + i] = val * scale_p[i];
+                        }
                     }
                 }
-            }
-        },
-        strides);
+            },
+            strides);
+    }
 }
 
 } // namespace vectorized_layer_norm_detail
