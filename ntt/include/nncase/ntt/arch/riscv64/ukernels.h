@@ -42,7 +42,7 @@ SPECIALIZE_U_UNARY(copy, 16)
 SPECIALIZE_U_UNARY(cos, 4)
 SPECIALIZE_U_UNARY(cosh, 16)
 SPECIALIZE_U_UNARY(erf, 16)
-SPECIALIZE_U_UNARY(exp, 16)
+SPECIALIZE_U_UNARY(exp, 4)
 SPECIALIZE_U_UNARY(floor, 16)
 SPECIALIZE_U_UNARY(log, 16)
 SPECIALIZE_U_UNARY(neg, 16)
@@ -53,7 +53,7 @@ SPECIALIZE_U_UNARY(sqrt, 16)
 SPECIALIZE_U_UNARY(rsqrt, 16)
 SPECIALIZE_U_UNARY(sin, 4)
 SPECIALIZE_U_UNARY(sinh, 16)
-SPECIALIZE_U_UNARY(swish, 16)
+SPECIALIZE_U_UNARY(swish, 4)
 SPECIALIZE_U_UNARY(tanh, 16)
 
 #undef SPECIALIZE_U_UNARY
@@ -262,6 +262,40 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
         }                                                                      \
     };
 
+#define DEFINE_U_UNARY_HALF_4V(OP, LMUL)                                       \
+    template <>                                                                \
+    struct u_unary<ntt::ops::OP<vector<half, NTT_VLEN / 16>>,                  \
+                   vector<half, NTT_VLEN / 16>, true> {                        \
+      public:                                                                  \
+        void operator()(const ntt::ops::OP<vector<half, NTT_VLEN / 16>> &op,   \
+                        const vector<half, NTT_VLEN / 16> *input,              \
+                        size_t in_stride, vector<half, NTT_VLEN / 16> *output, \
+                        size_t out_stride, size_t count) noexcept {            \
+            using policy_t =                                                   \
+                u_unary_policy<ntt::ops::OP<vector<half, NTT_VLEN / 16>>,      \
+                               vector<half, NTT_VLEN / 16>, true>;             \
+            constexpr auto unroll = policy_t::unroll;                          \
+            constexpr auto lmul = 4;                                           \
+            constexpr auto vl = NTT_VLEN / 16 * lmul;                          \
+                                                                               \
+            while (count / unroll) {                                           \
+                ntt::vector<half, vl> v0 =                                     \
+                    __riscv_vle16_v_f16m4((const _Float16 *)input, vl);        \
+                input += in_stride * lmul;                                     \
+                v0 = nncase::ntt::OP(v0);                                      \
+                __riscv_vse16_v_f16m4((_Float16 *)output, v0, vl);             \
+                output += out_stride * lmul;                                   \
+                count -= unroll;                                               \
+            }                                                                  \
+                                                                               \
+            for (size_t i = 0; i < count; i++) {                               \
+                *output = op(*input);                                          \
+                input += in_stride;                                            \
+                output += out_stride;                                          \
+            }                                                                  \
+        }                                                                      \
+    };
+
 DEFINE_U_UNARY_F32_16V(abs)
 DEFINE_U_UNARY_F32_16V(acos)
 DEFINE_U_UNARY_F32_16V(acosh)
@@ -271,7 +305,7 @@ DEFINE_U_UNARY_F32_16V(ceil)
 DEFINE_U_UNARY_F32_4V(cos, 4)
 DEFINE_U_UNARY_F32_16V(cosh)
 DEFINE_U_UNARY_F32_16V(erf)
-DEFINE_U_UNARY_F32_16V(exp)
+DEFINE_U_UNARY_F32_4V(exp, 4)
 DEFINE_U_UNARY_F32_16V(floor)
 DEFINE_U_UNARY_F32_16V(log)
 DEFINE_U_UNARY_F32_16V(neg)
@@ -282,7 +316,7 @@ DEFINE_U_UNARY_F32_16V(sqrt)
 DEFINE_U_UNARY_F32_16V(rsqrt)
 DEFINE_U_UNARY_F32_4V(sin, 4)
 DEFINE_U_UNARY_F32_16V(sinh)
-DEFINE_U_UNARY_F32_16V(swish)
+DEFINE_U_UNARY_F32_4V(swish, 4)
 DEFINE_U_UNARY_F32_16V(tanh)
 
 DEFINE_U_UNARY_HALF_16V(abs)
@@ -291,10 +325,10 @@ DEFINE_U_UNARY_HALF_16V(acosh)
 DEFINE_U_UNARY_HALF_16V(asin)
 DEFINE_U_UNARY_HALF_16V(asinh)
 DEFINE_U_UNARY_HALF_16V(ceil)
-DEFINE_U_UNARY_HALF_8V(cos)
+DEFINE_U_UNARY_HALF_4V(cos, 4)
 DEFINE_U_UNARY_HALF_16V(cosh)
 DEFINE_U_UNARY_HALF_16V(erf)
-DEFINE_U_UNARY_HALF_16V(exp)
+DEFINE_U_UNARY_HALF_4V(exp, 4)
 DEFINE_U_UNARY_HALF_16V(floor)
 DEFINE_U_UNARY_HALF_16V(log)
 DEFINE_U_UNARY_HALF_16V(neg)
@@ -303,9 +337,9 @@ DEFINE_U_UNARY_HALF_16V(sign)
 DEFINE_U_UNARY_HALF_16V(square)
 DEFINE_U_UNARY_HALF_16V(sqrt)
 DEFINE_U_UNARY_HALF_16V(rsqrt)
-DEFINE_U_UNARY_HALF_8V(sin)
+DEFINE_U_UNARY_HALF_4V(sin, 4)
 DEFINE_U_UNARY_HALF_16V(sinh)
-DEFINE_U_UNARY_HALF_16V(swish)
+DEFINE_U_UNARY_HALF_4V(swish, 4)
 DEFINE_U_UNARY_HALF_16V(tanh)
 
 // binary
