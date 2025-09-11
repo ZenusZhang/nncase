@@ -205,9 +205,10 @@ template <class T1, class T2> struct floor_mod {
 };
 
 template <typename T>
-    requires(std::is_same_v<T, float_e4m3_t> || std::is_same_v<T, float_e5m2_t>)
+requires (std::is_same_v<T, float_e4m3_t> || std::is_same_v<T, float_e5m2_t>)
 struct floor_mod<T, T> {
-    constexpr auto operator()(T v1, T v2) const noexcept {
+    constexpr auto operator()(T v1,
+                              T v2) const noexcept {
 
         return T(v1 - (std::floor(float(v1) / float(v2)) * v2));
     }
@@ -235,10 +236,12 @@ template <class T1, class T2> struct mod {
 };
 
 template <typename T>
-    requires(std::is_same_v<T, float_e4m3_t> || std::is_same_v<T, float_e5m2_t>)
+requires (std::is_same_v<T, float_e4m3_t> || std::is_same_v<T, float_e5m2_t>)
 struct mod<T, T> {
-    constexpr auto operator()(T v1, T v2) const noexcept {
-        return T(std::fmod(static_cast<float>(v1), static_cast<float>(v2)));
+    constexpr auto operator()(T v1,
+                              T v2) const noexcept {
+        return T(
+            std::fmod(static_cast<float>(v1), static_cast<float>(v2)));
     }
 };
 
@@ -256,7 +259,7 @@ template <class T1, class T2> struct max {
 
 template <class T1, class T2> struct pow {
     constexpr auto operator()(const T1 &v1, const T2 &v2) const noexcept {
-        return (T1)std::pow((float)v1, (float)v2);
+        return (T1)std::pow((double)v1, (double)v2);
     }
 };
 
@@ -328,6 +331,14 @@ template <class T1, class T2> struct clamp {
     constexpr T1 operator()(const T1 &v, const T2 &min,
                             const T2 &max) const noexcept {
         return std::min(std::max(v, min), max);
+    }
+};
+
+template <class T1, class T2> struct cast {
+    constexpr T2 operator()(const T1 &v) const noexcept {
+        // printf("cast from %f to %f\n", (double)(float)v, (double)static_cast<T2>(v));
+        return static_cast<T2>(v);
+        
     }
 };
 
@@ -411,6 +422,11 @@ NTT_DEFINE_UNARY_FUNC_IMPL(swish)
 NTT_DEFINE_BINARY_FUNC_IMPL(add)
 NTT_DEFINE_BINARY_FUNC_IMPL(sub)
 NTT_DEFINE_BINARY_FUNC_IMPL(mul)
+template <ScalarOrVector T1, class T2>
+requires std::is_same_v<T2, std::nullptr_t> constexpr auto
+mul(const T1 &v1, const T2 &) noexcept {
+    return v1;
+}
 NTT_DEFINE_BINARY_FUNC_IMPL(ceil_div)
 NTT_DEFINE_BINARY_FUNC_IMPL(div)
 NTT_DEFINE_BINARY_FUNC_IMPL(floor_mod)
