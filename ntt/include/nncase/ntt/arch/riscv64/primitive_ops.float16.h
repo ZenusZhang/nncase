@@ -66,6 +66,11 @@ namespace nncase::ntt::ops {
     RVV_UNARY_FP16_OP(OP, dtype, NTT_VL(sizeof(dtype) * 8, *, 4), kernel)      \
     RVV_UNARY_FP16_OP(OP, dtype, NTT_VL(sizeof(dtype) * 8, *, 8), kernel)
 
+#define REGISTER_RVV_UNARY_FP16_x2_OP(OP, dtype, kernel)                       \
+    RVV_UNARY_FP16_OP(OP, dtype, NTT_VL(sizeof(dtype) * 8, *, 1), kernel)      \
+    RVV_UNARY_FP16_OP(OP, dtype, NTT_VL(sizeof(dtype) * 8, *, 2), kernel)      \
+    RVV_UNARY_FP16_OP(OP, dtype, NTT_VL(sizeof(dtype) * 8, *, 4), kernel)
+
 // abs
 #define ABS_FLOAT16(lmul, mlen)                                                \
     inline vfloat16m##lmul##_t abs_float16(const vfloat16m##lmul##_t &v,       \
@@ -487,6 +492,7 @@ REGISTER_RVV_UNARY_FP16_OP(tanh, half, tanh_float16)
 
 // swish
 // swish(v) = v / (exp(-v) + 1)
+#if not defined(NNCASE_XPU_MODULE)
 #define SWISH_FLOAT16(lmul, mlen)                                              \
     inline vfloat16m##lmul##_t swish_float16(const vfloat16m##lmul##_t &v,     \
                                              const size_t vl) {                \
@@ -494,9 +500,20 @@ REGISTER_RVV_UNARY_FP16_OP(tanh, half, tanh_float16)
         return __riscv_vfdiv_vv_f16m##lmul(                                    \
             v, __riscv_vfadd_vf_f16m##lmul(tmp, 1.f16, vl), vl);               \
     }
-
 REGISTER_RVV_FP16_KERNEL(SWISH_FLOAT16)
 REGISTER_RVV_UNARY_FP16_OP(swish, half, swish_float16)
+#else
+#define SWISH_FLOAT16(lmul, lmulx2, mlen)                                      \
+    inline vfloat16m##lmul##_t swish_float16(const vfloat16m##lmul##_t &v,     \
+                                             const size_t vl) {                \
+        auto v_w = __riscv_vfwcvt_f_f_v_f32m##lmulx2(v, vl);                   \
+        auto v_sig = __riscv_th_vfsig_v_f32m##lmulx2(v_w, vl * 2);             \
+        auto v_n = __riscv_vfncvt_f_f_w_f16m##lmul(v_sig, vl * 2);             \
+        return __riscv_vfmul_vv_f16m##lmul(v, v_n, vl);                        \
+    }
+REGISTER_RVV_FP16_x2_KERNEL(SWISH_FLOAT16)
+REGISTER_RVV_UNARY_FP16_x2_OP(swish, half, swish_float16)
+#endif
 
 // register swishb kernel
 // swishb(v) = v / (exp(-v*beta) + 1)
@@ -961,25 +978,25 @@ REGISTER_RVV_CAST_ELEM_OP_2_1(float, half, cast_float32_float16)
 #if defined(NNCASE_XPU_MODULE)
 // f16 -> f8, lmul=1
 template <>
-struct cast_elem<ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1)>, float_e4m3_t>
-{
+struct cast_elem<ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1)>,
+                 float_e4m3_t> {
     ntt::vector<float_e4m3_t, NTT_VL(sizeof(float_e4m3_t) * 8, *, 1)>
     operator()(const ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1)> &v)
-        const noexcept
-    {
-        return __riscv_th_vfncvt_e4_h_f8e4m1(v, 0, NTT_VL(sizeof(half) * 8, *, 1) * 2);
+        const noexcept {
+        return __riscv_th_vfncvt_e4_h_f8e4m1(
+            v, 0, NTT_VL(sizeof(half) * 8, *, 1) * 2);
     }
 };
 
 // f16 -> f8, lmul=4
 template <>
-struct cast_elem<ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1) * 4>, float_e4m3_t>
-{
+struct cast_elem<ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1) * 4>,
+                 float_e4m3_t> {
     ntt::vector<float_e4m3_t, NTT_VL(sizeof(float_e4m3_t) * 8, *, 1) * 4>
-    operator()(const ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1) * 4> &v)
-        const noexcept
-    {
-        return __riscv_th_vfncvt_e4_h_f8e4m4(v, 0, NTT_VL(sizeof(half) * 8, *, 1) * 2 * 4);
+    operator()(const ntt::vector<half, 2, NTT_VL(sizeof(half) * 8, *, 1) * 4>
+                   &v) const noexcept {
+        return __riscv_th_vfncvt_e4_h_f8e4m4(
+            v, 0, NTT_VL(sizeof(half) * 8, *, 1) * 2 * 4);
     }
 };
 
