@@ -1305,10 +1305,14 @@ REGISTER_RVV_KERNEL(CAST_UINT32_FLOAT32)
     RVV_CAST_ELEM_OP_1_1(from, to, NTT_VL(sizeof(from) * 8, *, 8), kernel)
 
 #define REGISTER_RVV_CAST_ELEM_OP_1_2(from, to, kernel)                        \
-    RVV_CAST_ELEM_OP_1_2(from, to, NTT_VL(sizeof(from) * 8, *, 1), kernel)
+    RVV_CAST_ELEM_OP_1_2(from, to, NTT_VL(sizeof(from) * 8, *, 1), kernel)     \
+    RVV_CAST_ELEM_OP_1_2(from, to, NTT_VL(sizeof(from) * 8, *, 2), kernel)     \
+    RVV_CAST_ELEM_OP_1_2(from, to, NTT_VL(sizeof(from) * 8, *, 4), kernel)
 
 #define REGISTER_RVV_CAST_ELEM_OP_2_1(from, to, kernel)                        \
-    RVV_CAST_ELEM_OP_2_1(from, to, NTT_VL(sizeof(from) * 8, *, 1), kernel)
+    RVV_CAST_ELEM_OP_2_1(from, to, NTT_VL(sizeof(from) * 8, *, 1), kernel)     \
+    RVV_CAST_ELEM_OP_2_1(from, to, NTT_VL(sizeof(from) * 8, *, 2), kernel)     \
+    RVV_CAST_ELEM_OP_2_1(from, to, NTT_VL(sizeof(from) * 8, *, 4), kernel)
 
 #define REGISTER_RVV_CAST_ELEM_OP_4_1(from, to, kernel)                        \
     RVV_CAST_ELEM_OP_4_1(from, to, NTT_VL(sizeof(from) * 8, *, 1), kernel)
