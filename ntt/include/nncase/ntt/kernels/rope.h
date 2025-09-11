@@ -17,17 +17,14 @@
 #include "../ukernels/u_rope.h"
 
 namespace nncase::ntt {
-
 template <Tensor TInput, Tensor TCos, Tensor TSin, class TOut>
 void rope(const TInput &input, const TCos &cos, const TSin &sin,
           TOut &&output) {
-    constexpr auto head_axis = 2_dim;
-    constexpr auto dim_axis = 1_dim;
-    const auto half_dim = input.shape()[dim_axis] / 2_dim;
-    const auto num_heads = input.shape()[head_axis];
-    const auto domain = cos.shape().template slice<0, 1>();
-    const auto in_strides = input.strides().template slice<0, 1>();
-    const auto cos_strides = cos.strides().template slice<0, 1>();
+    using rope_layout = ukernels::rope_layout;
+    // [head, dim, seq]
+    const auto half_dim = input.shape()[rope_layout::dim_axis] / 2_dim;
+    const auto num_heads = input.shape()[rope_layout::head_axis];
+    const auto seq_len = input.shape()[rope_layout::seq_axis];
 
     using TElem = typename TInput::element_type;
     const TElem *NTT_RESTRICT input_p = input.elements().data();
@@ -35,15 +32,8 @@ void rope(const TInput &input, const TCos &cos, const TSin &sin,
     const TElem *NTT_RESTRICT sin_p = sin.elements().data();
     TElem *NTT_RESTRICT output_p = output.elements().data();
 
-    // [seq]
-    ntt::apply(
-        domain,
-        [&](auto, auto inout_offset, auto sincos_offset) {
-            ntt::u_rope<num_heads, half_dim>(
-                input_p + inout_offset, cos_p + sincos_offset,
-                sin_p + sincos_offset, output_p + inout_offset,
-                input.strides()[dim_axis], output.strides()[dim_axis]);
-        },
-        in_strides, cos_strides);
+    ntt::u_rope<num_heads, half_dim>(input_p, cos_p, sin_p, output_p, seq_len,
+                                     input.strides(), cos.strides(),
+                                     sin.strides(), output.strides());
 }
 } // namespace nncase::ntt

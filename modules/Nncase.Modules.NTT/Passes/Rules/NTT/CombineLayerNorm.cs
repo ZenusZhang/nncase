@@ -26,7 +26,7 @@ using static Nncase.PatternMatch.Utility;
 namespace Nncase.Passes.Rules.NTT;
 
 [RuleGenerator]
-public sealed partial class CombineVectorizedCastTranspose : IRewriteRule
+public sealed partial class CombineVectorizedLayerNormTranspose : IRewriteRule
 {
     /// <inheritdoc/>
     public IPattern Pattern { get; } = IsTranspose(
@@ -39,31 +39,6 @@ public sealed partial class CombineVectorizedCastTranspose : IRewriteRule
             IsWildcard("input"),
             IsWildcard("postOps")),
         IsFixedShape("perm"));
-
-    private Expr GetReplace(VectorizedCast cast, Call callee, Expr input, Expr postOps, int[] perm)
-    {
-        var newAxes = cast.VectorizeAxes.Select(a => perm.IndexOf(a)).Order().ToArray();
-        var newLanes = newAxes.Select(a => ((VectorType)cast.NewType).Lanes[cast.VectorizeAxes.IndexOf(perm[a])]).ToArray();
-        var newType = new VectorType(((VectorType)cast.NewType).ElemType, newLanes);
-
-        return IR.F.NTT.VectorizedCast(IR.F.Tensors.Transpose(input, perm), newType, cast.CastMode, newAxes, postOps).InheritMetaData(callee);
-    }
-}
-
-[RuleGenerator]
-public sealed partial class CombineTransposeVectorizedCast : IRewriteRule
-{
-    /// <inheritdoc/>
-    public IPattern Pattern { get; } = IsVectorizedCast(
-        "cast",
-        _ => true,
-        IsTranspose(
-            "transpose",
-            "callee",
-            _ => true,
-            IsWildcard("input"),
-            IsFixedShape("perm")),
-        IsWildcard("postOps"));
 
     private Expr GetReplace(VectorizedCast cast, Call callee, Expr input, Expr postOps, int[] perm)
     {

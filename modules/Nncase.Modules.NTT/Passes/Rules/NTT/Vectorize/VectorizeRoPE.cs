@@ -70,15 +70,11 @@ public sealed partial class VectorizeRoPEPropagation : RewriteRule<Pattern>
             }
         }
 
-        // [head, seq, dim] -> [seq, dim, head]
-        var inputT = IR.F.Tensors.Transpose(caller.WithArguments([(Pack.Input, input)]), [1, 2, 0]);
-        var cosU = IR.F.Tensors.Unsqueeze(IR.F.Tensors.Pack(cos, sinCosLanes.ToArray(), sinCosVectorizedAxes.ToArray()), [2]);
-        var sinU = IR.F.Tensors.Unsqueeze(IR.F.Tensors.Pack(sin, sinCosLanes.ToArray(), sinCosVectorizedAxes.ToArray()), [2]);
-        var outputT = callee.WithArguments([
-            (RoPE.Input, inputT),
-            (RoPE.Cos, cosU),
-            (RoPE.Sin, sinU),
-        ]);
-        return IR.F.Tensors.Transpose(outputT, [2, 0, 1]);
+        // [head, seq, dim] -> [head, dim, seq]
+        var inputT = IR.F.Tensors.Transpose(caller.WithArguments([(Pack.Input, input)]), [0, 2, 1]);
+        var cosT = IR.F.Tensors.Transpose(IR.F.Tensors.Pack(cos, sinCosLanes.ToArray(), sinCosVectorizedAxes.ToArray()), [1, 0]);
+        var sinT = IR.F.Tensors.Transpose(IR.F.Tensors.Pack(sin, sinCosLanes.ToArray(), sinCosVectorizedAxes.ToArray()), [1, 0]);
+        var outputT = IR.F.NTT.VectorizedRoPE(inputT, cosT, sinT);
+        return IR.F.Tensors.Transpose(outputT, [0, 2, 1]);
     }
 }
