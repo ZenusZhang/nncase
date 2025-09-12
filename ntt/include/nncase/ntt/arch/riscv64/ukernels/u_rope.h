@@ -44,7 +44,7 @@ struct u_rope<vector<half, NTT_VLEN / 16>, NumHeads, HalfDim, true> {
                 auto out_offset) {
                 const auto seq_tile = ntt::min(unroll, seq_len - index[1_dim]);
                 asm volatile(
-                    "vsetvli zero, %[vl], e32, m1, ta, ma\n" ::[vl] "r"(
+                    "vsetvli zero, %[vl], e16, m4, ta, ma\n" ::[vl] "r"(
                         seq_tile * T::size()));
                 const T *NTT_RESTRICT cos_0p = cos + cos_offset;
                 const T *NTT_RESTRICT sin_0p = sin + sin_offset;
