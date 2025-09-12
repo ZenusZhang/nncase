@@ -42,7 +42,7 @@ template <Tensor TA, Tensor TB, Tensor TC> class gather_impl {
     }
 
     template <FixedDimension TAxis>
-        requires FixedTensor<TB>
+    requires FixedTensor<TB>
     constexpr void operator()(const TA &input, const TB &indices, TC &output,
                               const TAxis &) noexcept {
 
@@ -204,11 +204,13 @@ class distributed_gather_impl {
                         .concat(make_zeros_shape<rank - axis - 1>());
                 const auto in_slice =
                     local_input.view(in_offset, in_slice_shape);
-                ntt::tensor_copy(in_slice, out_slice);
+                ntt::tensor_copy_async(in_slice, out_slice);
             } else {
                 ntt::tensor_zero(out_slice);
             }
         });
+
+        ntt::tensor_copy_wait();
     }
 };
 

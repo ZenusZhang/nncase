@@ -57,7 +57,7 @@ struct reshard_impl<SrcTensor, DestTensor> {
         const auto global_offset =
             dest.sharding().global_offset(dest.shape(), local_shard_index);
         auto local = dest.local();
-        tensor_copy(src.view(global_offset, local.shape()), local);
+        tensor_copy_sync(src.view(global_offset, local.shape()), local);
     }
 };
 
@@ -84,7 +84,7 @@ struct reshard_impl<SrcTensor, DestTensor> {
         if (shape.length() != 0) {
             // Not empty slice
             auto local = src.local().view(local_offset, shape);
-            tensor_copy(local, dest.view(global_offset, shape));
+            tensor_copy_sync(local, dest.view(global_offset, shape));
         }
         distributed::topology_synchronize();
     }

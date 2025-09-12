@@ -19,19 +19,33 @@
 namespace nncase::ntt {
 namespace detail {
 template <class TIn, class TOut, bool Arch> class copy_impl;
-
 template <class TIn, class TOut, bool Arch> class copy_impl {
   public:
     void operator()(const TIn &input, TOut &output) {
         nncase::ntt::template unary<ops::copy>(input, output);
     }
 };
+
+template <class NOUSE, bool Arch> class copy_wait_impl;
+template <class NOUSE, bool Arch> class copy_wait_impl {
+  public:
+    void operator()() {}
+};
 } // namespace detail
 
+void tensor_copy_wait() noexcept { detail::copy_wait_impl<void, true>()(); }
+
 template <class TIn, class TOut>
-void tensor_copy(const TIn &input, TOut &&output) noexcept {
+void tensor_copy_async(const TIn &input, TOut &&output) noexcept {
     detail::copy_impl<TIn, TOut, true> impl;
     impl(input, output);
+}
+
+template <class TIn, class TOut>
+void tensor_copy_sync(const TIn &input, TOut &&output) noexcept {
+    detail::copy_impl<TIn, TOut, true> impl;
+    impl(input, output);
+    tensor_copy_wait();
 }
 
 namespace detail {

@@ -444,7 +444,7 @@ internal sealed class KernelCSourceConvertVisitor : CSourceConvertVisitor, IDisp
 
                     break;
                 case TIR.Memcopy copy:
-                    WriteWithProfiler($"tensor_copy({VisitBuffer(args[1], local: true).Name}, {VisitBuffer(args[0], local: true).Name});\n");
+                    WriteWithProfiler($"tensor_copy_sync({VisitBuffer(args[1], local: true).Name}, {VisitBuffer(args[0], local: true).Name});\n");
                     break;
                 case TIR.NTT.Gather gather:
                     {
