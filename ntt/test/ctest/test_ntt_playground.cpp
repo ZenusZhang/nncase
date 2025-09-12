@@ -210,6 +210,45 @@ TEST(BinaryTestAddint, are_close_fp16_behavior) {
 }
 
 
+TEST(BinaryTestfloor_mod_Uint16, Uint16_lhs_dynamic_1D_vector_raw_tensor_rhs_fixed_scalar_raw_tensor_no_broadcast) {
+    constexpr size_t P = NTT_VLEN / (sizeof(uint16_t) * 8);
+    //---init ntt_input_lhs---
+    auto ntt_input_lhs = ntt::make_tensor<ntt::vector<uint16_t, P>>(ntt::make_shape(2, 3, 16, 16));
+    NttTest::init_tensor(ntt_input_lhs, 0, 256, true, true);
+    //---init ntt_input_rhs---
+    auto ntt_input_rhs = ntt::make_tensor<uint16_t>(ntt::fixed_shape_v<2, 3, 16, 16>);
+    NttTest::init_tensor(ntt_input_rhs, 0, 256, false, true);
+    //---generate output tensor---
+    // ------------------------------------------------------------------
+    // 2. call NTT operation to get NTT output (under test)
+    // ------------------------------------------------------------------
+    // Create output tensor
+    auto ntt_output = ntt::make_tensor<ntt::vector<uint16_t, P>>(ntt::make_shape(2, 3, 16, 16));
+    
+    // Execute binary operation
+    ntt::binary<ntt::ops::floor_mod>(ntt_input_lhs, ntt_input_rhs, ntt_output);
+    
+    
+    // ort_input_lhs, ort_input_rhs would be tensor of double in ort format
+    
+    auto [ort_input_lhs, ort_input_rhs] = NttTest::convert_and_align_to_ort(ntt_input_lhs,ntt_input_rhs, true, false);
+    // Execute Ort operation
+    auto ort_output = ortki_Sub(ort_input_lhs, ortki_Mul(ortki_Floor(ortki_Div(ort_input_lhs, ort_input_rhs)), ort_input_rhs));
+    
+    // Cast outputs from double to original datatype
+    auto ort_goldenint = ortki_Cast(ort_output, 1, ortki::DataType_INT64);
+    auto ort_golden = ortki_Cast(ort_goldenint, 1, ortki::DataType_UINT16);
+    // ------------------------------------------------------------------
+    // 3. convert ORT output back to NTT tensor (golden) 
+    // ------------------------------------------------------------------
+    auto ntt_golden = ntt::make_tensor<ntt::vector<uint16_t, P>>(ntt::make_shape(2, 3, 16, 16));
+    NttTest::ort2ntt(ort_golden, ntt_golden);
+    EXPECT_TRUE(NttTest::compare_tensor(ntt_output, ntt_golden, 1));
+    }
+    
+   
+
+
 // //fixed fixed fixed group, for demonstrate the basic test macro
 // GENERATE_BINARY_TEST(BinaryTestAddint, fixed_fixed_fixed_normal,  
 //                             (fixed_shape_v<1, 3, 16, 16>), (fixed_shape_v<1, 3, 16, 16>), (fixed_shape_v<1, 3, 16, 16>),
