@@ -57,7 +57,7 @@ struct u_layer_norm {
                 }
             }
             for (size_t i = 0; i < count; i++) {
-                extended_mean += *(inner_ptr_in++);
+                extended_mean += *(inner_ptr_in);
                 inner_ptr_in += stride_in;
                 count--;
             }
