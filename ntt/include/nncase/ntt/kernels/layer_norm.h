@@ -61,10 +61,10 @@ void within_axis_vectorize_impl(const TIn &input, const TScale &scale,
     auto stride_in = input_strides[axis_value];
     auto stride_out = output.strides()[axis_value];
     auto apply_shape = generate_shape<rank>([&](auto i) {
-        if (i == axis_value)
-            return (dim_t)1;
+        if constexpr (i == axis_value)
+            return 1_dim;
         else
-            return (dim_t)input.shape()[i];
+            return input.shape()[i];
     });
 
     auto addr_scale = scale.elements().data();
