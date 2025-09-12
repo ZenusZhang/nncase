@@ -59,7 +59,6 @@ struct u_layer_norm {
             for (size_t i = 0; i < count; i++) {
                 extended_mean += *(inner_ptr_in);
                 inner_ptr_in += stride_in;
-                count--;
             }
             extended_mean *= norm_factor;
             auto extended_mean_s = reduce_sum(extended_mean);
