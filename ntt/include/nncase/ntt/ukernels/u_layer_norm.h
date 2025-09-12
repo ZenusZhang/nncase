@@ -28,11 +28,12 @@ template <bool UseMean, class TEIn, class TEScale, class TEBias, class TEOut,
           FixedDimension TAxis, bool Arch>
 struct u_layer_norm {
   public:
-    constexpr void operator()(const TEIn *input, const TEScale *scale,
-                              const TEBias *bias, TEOut *output,
-                              const float &epsilon, const VectorizedAxes &,
-                              const PadedNums &, const TAxis &,
-                              const size_t &inner_size,
+    constexpr void operator()(const TEIn *NTT_RESTRICT input,
+                              const TEScale *NTT_RESTRICT scale,
+                              const TEBias *NTT_RESTRICT bias,
+                              TEOut *NTT_RESTRICT output, const float &epsilon,
+                              const VectorizedAxes &, const PadedNums &,
+                              const TAxis &, const size_t &inner_size,
                               const float &norm_factor, size_t stride_in,
                               size_t stride_out) noexcept {
 
