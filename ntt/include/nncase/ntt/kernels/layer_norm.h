@@ -67,95 +67,112 @@ void within_axis_vectorize_impl(const TIn &input, const TScale &scale,
             return input.shape()[i];
     });
 
-    ntt::apply(apply_shape, [&](auto index) {
-        const TElem *NTT_RESTRICT input_p = &input(index);
-        TElem *NTT_RESTRICT output_p = &output(index);
-        if constexpr (UseVectorReduce) {
-            auto mean = (TElemScalar)0;
-            auto extended_sum = (TAccElem)0;
-            if constexpr (UseMean) {
-                auto extended_mean = (TAccElem)0;
-                for (size_t i = 0; i < inner_size; i++) {
-                    extended_mean += input_p[i * stride_in];
-                }
-                extended_mean *= norm_factor;
-                auto extended_mean_s = reduce_sum(extended_mean);
+    if (0 /*UseVectorReduce*/) {
+        auto addr_scale = scale.elements().data();
+        auto addr_bias = bias.elements().data();
+        ntt::apply(apply_shape, [&](auto index) {
+            auto addr_input = &input(index);
+            auto addr_output = &output(index);
+            ntt::u_layer_norm<UseMean>(
+                addr_input, addr_scale, addr_bias, addr_output, epsilon,
+                vectorized_axes_temp, padedNums, axis, inner_size, norm_factor,
+                stride_in, stride_out);
+        });
 
-                for (auto i = 0; i < inner_size; i++) {
-                    const auto val = ntt::square(
-                        ntt::cast_elem<float>(input_p[i * stride_in]) -
-                        extended_mean_s);
-                    extended_sum += val;
-                }
-                mean = (TElemScalar)extended_mean_s;
-            } else {
-                for (auto i = 0; i < inner_size; i++) {
-                    const auto input_val = input_p[i * stride_in];
-                    extended_sum =
-                        ntt::mul_add(input_val, input_val, extended_sum);
-                }
-            }
+    } else {
+        ntt::apply(apply_shape, [&](auto index) {
+            const TElem *NTT_RESTRICT input_p = &input(index);
+            TElem *NTT_RESTRICT output_p = &output(index);
+            if constexpr (UseVectorReduce) {
+                auto mean = (TElemScalar)0;
+                auto extended_sum = (TAccElem)0;
+                if constexpr (UseMean) {
+                    auto extended_mean = (TAccElem)0;
+                    for (size_t i = 0; i < inner_size; i++) {
+                        extended_mean += input_p[i * stride_in];
+                    }
+                    extended_mean *= norm_factor;
+                    auto extended_mean_s = reduce_sum(extended_mean);
 
-            const auto extended_sum_s = reduce_sum(extended_sum) * norm_factor;
-            auto extended_add = extended_sum_s + epsilon;
-            auto rsqrt = ntt::cast_elem<TElemScalar>(ntt::rsqrt(extended_add));
+                    for (auto i = 0; i < inner_size; i++) {
+                        const auto val = ntt::square(
+                            ntt::cast_elem<float>(input_p[i * stride_in]) -
+                            extended_mean_s);
+                        extended_sum += val;
+                    }
+                    mean = (TElemScalar)extended_mean_s;
+                } else {
+                    for (auto i = 0; i < inner_size; i++) {
+                        const auto input_val = input_p[i * stride_in];
+                        extended_sum =
+                            ntt::mul_add(input_val, input_val, extended_sum);
+                    }
+                }
 
-            if constexpr (UseMean) {
-                for (auto i = 0; i < inner_size; i++) {
-                    auto val = (input_p[i * stride_in] - mean) * rsqrt;
-                    output_p[i * stride_out] =
-                        ntt::mul_add(val, scale_p[i], bias_p[i]);
-                }
-            } else {
-                for (auto i = 0; i < inner_size; i++) {
-                    auto val = input_p[i * stride_in] * rsqrt;
-                    output_p[i * stride_out] =
-                        val * scale_p[i]; // RMSNorm doesn't need bias
-                }
-            }
-        } else {
-            auto mean = (TElem)0;
-            auto extended_sum = (TAccElem)0;
-            if constexpr (UseMean) {
-                auto extended_mean = (TAccElem)0;
-                for (size_t i = 0; i < inner_size; i++) {
-                    extended_mean += input_p[i * stride_in];
-                }
-                extended_mean *= norm_factor;
+                const auto extended_sum_s =
+                    reduce_sum(extended_sum) * norm_factor;
+                auto extended_add = extended_sum_s + epsilon;
+                auto rsqrt =
+                    ntt::cast_elem<TElemScalar>(ntt::rsqrt(extended_add));
 
-                for (auto i = 0; i < inner_size; i++) {
-                    const auto val = ntt::square(
-                        ntt::cast_elem<float>(input_p[i * stride_in]) -
-                        extended_mean);
-                    extended_sum += val;
-                }
-                mean = ntt::cast_elem<TElemScalar>(extended_mean);
-            } else {
-                for (auto i = 0; i < inner_size; i++) {
-                    const auto val = ntt::square(
-                        ntt::cast_elem<float>(input_p[i * stride_in]));
-                    extended_sum += val;
-                }
-            }
-
-            extended_sum *= norm_factor;
-            auto extended_add = extended_sum + epsilon;
-            auto rsqrt = ntt::cast_elem<TElemScalar>(ntt::rsqrt(extended_add));
-
-            if constexpr (UseMean) {
-                for (auto i = 0; i < inner_size; i++) {
-                    auto val = (input_p[i * stride_in] - mean) * rsqrt;
-                    output_p[i * stride_out] =
-                        ntt::mul_add(val, scale_p[i], bias_p[i]);
+                if constexpr (UseMean) {
+                    for (auto i = 0; i < inner_size; i++) {
+                        auto val = (input_p[i * stride_in] - mean) * rsqrt;
+                        output_p[i * stride_out] =
+                            ntt::mul_add(val, scale_p[i], bias_p[i]);
+                    }
+                } else {
+                    for (auto i = 0; i < inner_size; i++) {
+                        auto val = input_p[i * stride_in] * rsqrt;
+                        output_p[i * stride_out] =
+                            val * scale_p[i]; // RMSNorm doesn't need bias
+                    }
                 }
             } else {
-                for (auto i = 0; i < inner_size; i++) {
-                    auto val = input_p[i * stride_in] * rsqrt;
-                    output_p[i * stride_out] = val * scale_p[i];
+                auto mean = (TElem)0;
+                auto extended_sum = (TAccElem)0;
+                if constexpr (UseMean) {
+                    auto extended_mean = (TAccElem)0;
+                    for (size_t i = 0; i < inner_size; i++) {
+                        extended_mean += input_p[i * stride_in];
+                    }
+                    extended_mean *= norm_factor;
+
+                    for (auto i = 0; i < inner_size; i++) {
+                        const auto val = ntt::square(
+                            ntt::cast_elem<float>(input_p[i * stride_in]) -
+                            extended_mean);
+                        extended_sum += val;
+                    }
+                    mean = ntt::cast_elem<TElemScalar>(extended_mean);
+                } else {
+                    for (auto i = 0; i < inner_size; i++) {
+                        const auto val = ntt::square(
+                            ntt::cast_elem<float>(input_p[i * stride_in]));
+                        extended_sum += val;
+                    }
+                }
+
+                extended_sum *= norm_factor;
+                auto extended_add = extended_sum + epsilon;
+                auto rsqrt =
+                    ntt::cast_elem<TElemScalar>(ntt::rsqrt(extended_add));
+
+                if constexpr (UseMean) {
+                    for (auto i = 0; i < inner_size; i++) {
+                        auto val = (input_p[i * stride_in] - mean) * rsqrt;
+                        output_p[i * stride_out] =
+                            ntt::mul_add(val, scale_p[i], bias_p[i]);
+                    }
+                } else {
+                    for (auto i = 0; i < inner_size; i++) {
+                        auto val = input_p[i * stride_in] * rsqrt;
+                        output_p[i * stride_out] = val * scale_p[i];
+                    }
                 }
             }
-        }
-    });
+        });
+    }
 }
 
 } // namespace vectorized_layer_norm_detail
