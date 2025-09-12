@@ -70,7 +70,7 @@ void within_axis_vectorize_impl(const TIn &input, const TScale &scale,
     auto addr_scale = scale.elements().data();
     auto addr_bias = bias.elements().data();
 
-    if (true) {
+    if (UseVectorReduce) {
         ntt::apply(apply_shape, [&](auto index) {
             auto addr_input = &input(index);
             auto addr_output = &output(index);
