@@ -33,7 +33,9 @@ template <class NOUSE, bool Arch> class copy_wait_impl {
 };
 } // namespace detail
 
-void tensor_copy_wait() noexcept { detail::copy_wait_impl<void, true>()(); }
+inline void tensor_copy_wait() noexcept {
+    detail::copy_wait_impl<void, true>()();
+}
 
 template <class TIn, class TOut>
 void tensor_copy_async(const TIn &input, TOut &&output) noexcept {
