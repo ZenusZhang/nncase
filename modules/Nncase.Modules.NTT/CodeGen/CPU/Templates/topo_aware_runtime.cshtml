@@ -271,7 +271,7 @@ class tensor_reduce_sync_impl {
             ntt::tensor_copy_async(viewed_src_tensor, viewed_dest_tensor);
         }
 
-        ntt::tensor_copy_wait();
+        ntt::tensor_copy_wait<void>();
         reduce_group_sync();
 
         if (Op == ntt::reduce_op::mean) {

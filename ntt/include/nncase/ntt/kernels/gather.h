@@ -210,7 +210,7 @@ class distributed_gather_impl {
             }
         });
 
-        ntt::tensor_copy_wait();
+        ntt::tensor_copy_wait<void>();
     }
 };
 

@@ -174,7 +174,7 @@ constexpr void update_paged_attention_kv_cache(const TSlots &slots_tensor,
         }
     }
 
-    ntt::tensor_copy_wait();
+    ntt::tensor_copy_wait<void>();
 }
 
 template <FixedDimensions QLayout, ShardedTensor TQ, Tensor TKVCache,
