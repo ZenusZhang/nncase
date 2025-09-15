@@ -372,7 +372,7 @@ internal sealed class AutoDistributedRewriter : ExprVisitor<Unit, Unit>
             foreach (var (newExpr, used) in newExprs)
             {
                 // input of CustomOp must split on threads.
-                if (expr.Target.GetType().FullName!.Contains("CustomNTT.MatMul", StringComparison.Ordinal) || expr.Target is UpdatePagedAttentionKVCache)
+                if (TargetOptions.HierarchyKind == HierarchyKind.SMT && (expr.Target.GetType().FullName!.Contains("CustomNTT.MatMul", StringComparison.Ordinal) || expr.Target is PagedAttention))
                 {
                     if (combBuckets.First().Vertices.First().Expr is not Boxing)
                     {
@@ -391,7 +391,7 @@ internal sealed class AutoDistributedRewriter : ExprVisitor<Unit, Unit>
                     }
                 }
 
-                if (expr.Users.Any(u => u is Call call && (call.Target.GetType().FullName!.Contains("CustomNTT.MatMul", StringComparison.Ordinal) || call.Target is UpdatePagedAttentionKVCache)))
+                if (TargetOptions.HierarchyKind == HierarchyKind.SMT && expr.Users.Any(u => u is Call call && (call.Target.GetType().FullName!.Contains("CustomNTT.MatMul", StringComparison.Ordinal) || call.Target is PagedAttention)))
                 {
                     if (newExpr.CheckedType is DistributedType dt1
                         && !dt1.AxisPolicies.Any(sbp => sbp is SBPSplit s && s.Axes.Contains(dt1.Placement.Rank - 1)))
@@ -456,10 +456,10 @@ internal sealed class AutoDistributedRewriter : ExprVisitor<Unit, Unit>
         foreach (var nType in GetLeafCandidateDistTypes(expr.CheckedTensorType, Placements, _moduleKind, TargetOptions))
         {
             if (!bucketMemo.TryGetValue(nType, out var bucket)
-                || expr.Users.Any(u => u is Call call && (call.Target.GetType().FullName!.Contains("CustomNTT.MatMul", StringComparison.Ordinal) || expr.Target is UpdatePagedAttentionKVCache))
+                || expr.Users.Any(u => u is Call call && (call.Target.GetType().FullName!.Contains("CustomNTT.MatMul", StringComparison.Ordinal) || (TargetOptions.HierarchyKind == HierarchyKind.SMT && expr.Target is PagedAttention)))
                 || expr.Target.GetType().FullName!.Contains("CustomNTT.MatMul", StringComparison.Ordinal)
                 || expr.Target.GetType().FullName!.Contains("VectorizedRoPE", StringComparison.Ordinal)
-                || expr.Target is UpdatePagedAttentionKVCache)
+                || (TargetOptions.HierarchyKind == HierarchyKind.SMT && expr.Target is PagedAttention))
             {
                 bucket = callCluster.CreateCluster<DistributedSearchGraph>(SearchGraphKind.Bucket);
                 var linked = false;
