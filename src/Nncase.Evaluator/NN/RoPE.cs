@@ -65,7 +65,7 @@ public class RoPEEvaluator : IEvaluator<RoPE>, ITypeInferencer<RoPE>, ICostEvalu
         var inputType = context.GetArgumentType<IRType>(target, RoPE.Input);
         var cosType = context.GetArgumentType<IRType>(target, RoPE.Cos);
         var sinType = context.GetArgumentType<IRType>(target, RoPE.Sin);
-        var macPerElement = 2; // 1 for mul, 1 for add
+        var macPerElement = 4; // 2 for mul, 1 for add, 1 for neg and concat
         var returnType = context.GetReturnType<IRType>();
         return new()
         {
@@ -81,12 +81,12 @@ public class RoPEEvaluator : IEvaluator<RoPE>, ITypeInferencer<RoPE>, ICostEvalu
         var cosType = context.GetArgumentType<TensorType>(target, RoPE.Cos);
         var sinType = context.GetArgumentType<TensorType>(target, RoPE.Sin);
         var returnType = context.GetReturnType<TensorType>();
-        var macPerElement = 2; // 1 for mul, 1 for add
+        var macPerElement = 4; // 2 for mul, 1 for add, 1 for neg and concat
 
         return new()
         {
             [MetricFactorNames.OffChipMemoryTraffic] = CostUtility.GetMemoryAccess(inputType) + CostUtility.GetMemoryAccess(cosType) + CostUtility.GetMemoryAccess(sinType) + CostUtility.GetMemoryAccess(returnType),
-            [MetricFactorNames.FLOPs] = MetricUtility.GetFLOPs(returnType, macPerElement),
+            [MetricFactorNames.FLOPs] = CostUtility.GetCPUCycles(returnType, macPerElement),
         };
     }
 

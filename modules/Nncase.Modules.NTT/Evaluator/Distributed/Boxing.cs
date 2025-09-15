@@ -91,7 +91,7 @@ public sealed class BoxingEvaluator : ITypeInferencer<Boxing>, ICostEvaluator<Bo
     {
         var inType = context.GetArgumentType<IRType>(target, Boxing.Input);
         var returnType = context.GetReturnType<IRType>();
-        UInt128 synchronizeCost = 25_000; // 25k cycles on 5GHz CPU is about 5us.
+        UInt128 synchronizeCost = inType is DistributedType dt && dt.Placement.HierarchyKind == HierarchyKind.SMT ? 1500U : 25_000; // 25k cycles on 5GHz CPU is about 5us.
         var cost = new Cost() { [CostFactorNames.CPUCycles] = 1, [CostFactorNames.MemoryLoad] = 0, [CostFactorNames.MemoryStore] = 0, [CostFactorNames.Synchronization] = synchronizeCost };
         switch (inType, returnType)
         {
@@ -244,6 +244,9 @@ public sealed class BoxingEvaluator : ITypeInferencer<Boxing>, ICostEvaluator<Bo
 
                     float gatherPart = 1;
                     float scatterPart = 1;
+                    var hierarchyPenalty = a.Placement.Hierarchy.ToArray();
+                    hierarchyPenalty[0] *= 4;
+                    hierarchyPenalty[4] = 1;
                     for (int i = 0; i < a.AxisPolicies.Count; i++)
                     {
                         switch (a.AxisPolicies[i], b.AxisPolicies[i])
@@ -269,7 +272,7 @@ public sealed class BoxingEvaluator : ITypeInferencer<Boxing>, ICostEvaluator<Bo
                                                 var diff = setB.Except(setA).ToArray();
                                                 if (diff.All(d => d > splitIn.Axes[^1]))
                                                 {
-                                                    diff.ForEach(s => scatterPart *= a.Placement.Hierarchy[s]);
+                                                    diff.ForEach(s => scatterPart *= hierarchyPenalty[s]);
                                                 }
                                                 else
                                                 {
@@ -278,7 +281,7 @@ public sealed class BoxingEvaluator : ITypeInferencer<Boxing>, ICostEvaluator<Bo
                                             }
                                             else if (aContainsB)
                                             {
-                                                setA.Except(setB).ToArray().ForEach(s => gatherPart *= a.Placement.Hierarchy[s]);
+                                                setA.Except(setB).ToArray().ForEach(s => gatherPart *= hierarchyPenalty[s]);
                                             }
                                             else
                                             {
@@ -290,7 +293,7 @@ public sealed class BoxingEvaluator : ITypeInferencer<Boxing>, ICostEvaluator<Bo
                                         break;
                                     case SBPBroadCast:
                                         // scatterPart *= a.Placement.Hierarchy[i];
-                                        splitIn.Axes.ToArray().ForEach(s => gatherPart *= a.Placement.Hierarchy[s]);
+                                        splitIn.Axes.ToArray().ForEach(s => gatherPart *= hierarchyPenalty[s]);
                                         break;
                                     default:
                                         throw new NotSupportedException("split to partial");
@@ -305,7 +308,7 @@ public sealed class BoxingEvaluator : ITypeInferencer<Boxing>, ICostEvaluator<Bo
                                 };
                                 break;
                             case (SBPBroadCast, SBPSplit splitOut):
-                                splitOut.Axes.ToArray().ForEach(s => scatterPart *= a.Placement.Hierarchy[s]);
+                                splitOut.Axes.ToArray().ForEach(s => scatterPart *= hierarchyPenalty[s]);
                                 break;
                             default:
                                 throw new NotSupportedException($"{a} to {b}");

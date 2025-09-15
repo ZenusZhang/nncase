@@ -67,7 +67,7 @@ public class VectorizedRoPEEvaluator : IEvaluator<VectorizedRoPE>, ITypeInferenc
         var inputType = context.GetArgumentType<IRType>(target, VectorizedRoPE.Input);
         var cosType = context.GetArgumentType<IRType>(target, VectorizedRoPE.Cos);
         var sinType = context.GetArgumentType<IRType>(target, VectorizedRoPE.Sin);
-        var macPerElement = 2; // 1 for mul, 1 for add
+        var macPerElement = 4; // 2 for mul, 1 for add, 1 for neg and concat
         var returnType = context.GetReturnType<IRType>();
         return new()
         {
