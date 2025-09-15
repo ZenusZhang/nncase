@@ -37,16 +37,30 @@ class binary_impl
         constexpr auto rank = TOut::rank();
         auto conti_dims = std::min(lhs_conti_dims, rhs_conti_dims);
         conti_dims = std::min(conti_dims, output_conti_dims);
+        auto ref_shape = lhs.shape();
+
+        auto lhs_u_strides = 1;
+        auto rhs_u_strides = 1;
+        constexpr auto zero_strides = make_zeros_strides<rank>();
+        if (rhs.strides() == zero_strides) {
+            conti_dims = lhs_conti_dims;
+            ref_shape = lhs.shape();
+            rhs_u_strides = 0;
+        } else if (lhs.strides() == zero_strides) {
+            conti_dims = rhs_conti_dims;
+            ref_shape = rhs.shape();
+            lhs_u_strides = 0;
+        }
 
         auto apply_shape = generate_shape<rank>([&](auto i) {
             if (i > rank - conti_dims - 1)
                 return (dim_t)1;
             else
-                return (dim_t)lhs.shape()[i];
+                return (dim_t)ref_shape[i];
         });
         auto inner_shape = generate_shape<rank>([&](auto i) {
             if (i > rank - conti_dims - 1)
-                return (dim_t)lhs.shape()[i];
+                return (dim_t)ref_shape[i];
             else
                 return (dim_t)1_dim;
         });
@@ -58,13 +72,16 @@ class binary_impl
         using TOutElem = typename TOut::element_type;
         TPostOp<TOutElem> post_op;
 
-        if (!is_broadcast) {
+        // Todo: only support broadcast if one of the input is scalar
+        // currently. Because this covers 90+% of the scenarios.
+        if (!is_broadcast || lhs_u_strides != 0 || rhs_u_strides != 0) {
             ntt::apply(apply_shape, [&](auto index) {
-                auto addr_lhs = &lhs(index);
-                auto addr_rhs = &rhs(index);
-                auto addr_output_element = &output(index);
+                const TLhsElem *NTT_RESTRICT addr_lhs = &lhs(index);
+                const TRhsElem *NTT_RESTRICT addr_rhs = &rhs(index);
+                TOutElem *NTT_RESTRICT addr_output_element = &output(index);
                 ntt::u_binary<TOp, TPostOp, TLhsElem, TRhsElem, TOutElem>(
-                    op, addr_lhs, 1, addr_rhs, 1, addr_output_element, 1, len);
+                    op, addr_lhs, lhs_u_strides, addr_rhs, rhs_u_strides,
+                    addr_output_element, 1, len);
             });
 
         } else {
