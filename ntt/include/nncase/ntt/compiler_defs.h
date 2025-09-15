@@ -26,12 +26,14 @@
 #define NTT_UNREACHABLE() __assume(0)
 #define NTT_NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
 #define NTT_RESTRICT __restrict
+#define NTT_ALWAYS_INLINE __forceinline
 #elif __clang__
 #define NTT_ASSUME(...) __builtin_assume(__VA_ARGS__)
 #define NTT_UNREACHABLE() __builtin_unreachable()
 #define NTT_NO_UNIQUE_ADDRESS [[no_unique_address]]
 #define NTT_RESTRICT __restrict
 #define NTT_NO_SCHEDULE_INSTS
+#define NTT_ALWAYS_INLINE __attribute__((always_inline)) inline
 #else
 #define NTT_ASSUME(...)                                                        \
     do {                                                                       \
@@ -42,6 +44,7 @@
 #define NTT_NO_UNIQUE_ADDRESS [[no_unique_address]]
 #define NTT_RESTRICT __restrict__
 #define NTT_NO_SCHEDULE_INSTS __attribute__((optimize("no-schedule-insns2")))
+#define NTT_ALWAYS_INLINE __attribute__((always_inline)) inline
 #endif
 
 #if defined(__AVX2__) || defined(__aarch64__) || defined(__riscv_zvfbfmin) ||  \

@@ -15,6 +15,7 @@
 #pragma once
 #include "dimension.h"
 #include "loop.h"
+#include "nncase/ntt/compiler_defs.h"
 #include "nncase/ntt/tensor_traits.h"
 #include "shape.h"
 #include <cstddef>
@@ -25,10 +26,10 @@ namespace nncase::ntt {
 namespace detail {
 template <size_t Axis, class Shape, FixedShape TTile, class Offsets,
           class Callable, class... Strides>
-constexpr void apply_impl(dynamic_shape_t<Shape::rank()> &index,
-                          Offsets offsets, const Shape &shape,
-                          const TTile &tile, Callable &&callable,
-                          const std::tuple<Strides...> &strides) {
+NTT_ALWAYS_INLINE constexpr void
+apply_impl(dynamic_shape_t<Shape::rank()> &index, Offsets offsets,
+           const Shape &shape, const TTile &tile, Callable &&callable,
+           const std::tuple<Strides...> &strides) {
     auto call = [&]<size_t... I>(std::index_sequence<I...>) {
         if constexpr (sizeof...(Strides)) {
             callable(index, offsets[fixed_dim_v<I>]...);
@@ -54,8 +55,8 @@ constexpr void apply_impl(dynamic_shape_t<Shape::rank()> &index,
 } // namespace detail
 
 template <Shape TShape, class Callable, Strides... TStrides>
-constexpr void apply(const TShape &shape, Callable &&callable,
-                     const TStrides &...strides) {
+NTT_ALWAYS_INLINE constexpr void apply(const TShape &shape, Callable &&callable,
+                                       const TStrides &...strides) {
     if constexpr (TShape::rank()) {
         dynamic_shape_t<TShape::rank()> index{};
         detail::apply_impl<0>(index, make_repeat_shape<sizeof...(TStrides)>(0),
@@ -72,8 +73,9 @@ constexpr void apply(const TShape &shape, Callable &&callable,
 }
 
 template <Shape TShape, FixedShape TTile, class Callable, Strides... TStrides>
-constexpr void apply_tiled(const TShape &shape, const TTile &tile,
-                           Callable &&callable, const TStrides &...strides) {
+NTT_ALWAYS_INLINE constexpr void
+apply_tiled(const TShape &shape, const TTile &tile, Callable &&callable,
+            const TStrides &...strides) {
     if constexpr (TShape::rank()) {
         dynamic_shape_t<TShape::rank()> index{};
         detail::apply_impl<0>(index, make_repeat_shape<sizeof...(TStrides)>(0),
