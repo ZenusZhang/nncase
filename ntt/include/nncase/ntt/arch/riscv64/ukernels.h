@@ -378,46 +378,47 @@ SPECIALIZE_U_BINARY(floor_mod, 8)
 
 #undef SPECIALIZE_U_BINARY
 
-#define DEFINE_U_BINARY_F32_24V(OP)                                            \
+#define DEFINE_U_BINARY_VV(OP, DTYPE, BITS, BUILDIN_DTYPE)                     \
     template <template <class> class TPostOp>                                  \
-    struct u_binary<ntt::ops::OP<vector<float, NTT_VLEN / 32>,                 \
-                                 vector<float, NTT_VLEN / 32>>,                \
-                    TPostOp, vector<float, NTT_VLEN / 32>,                     \
-                    vector<float, NTT_VLEN / 32>,                              \
-                    vector<float, NTT_VLEN / 32>, true> {                      \
+    struct u_binary<ntt::ops::OP<vector<DTYPE, NTT_VLEN / BITS>,               \
+                                 vector<DTYPE, NTT_VLEN / BITS>>,              \
+                    TPostOp, vector<DTYPE, NTT_VLEN / BITS>,                   \
+                    vector<DTYPE, NTT_VLEN / BITS>,                            \
+                    vector<DTYPE, NTT_VLEN / BITS>, true> {                    \
       public:                                                                  \
         constexpr void                                                         \
-        operator()(const ntt::ops::OP<vector<float, NTT_VLEN / 32>,            \
-                                      vector<float, NTT_VLEN / 32>> &op,       \
-                   const vector<float, NTT_VLEN / 32> *input1,                 \
-                   const vector<float, NTT_VLEN / 32> *input2,                 \
+        operator()(const ntt::ops::OP<vector<DTYPE, NTT_VLEN / BITS>,          \
+                                      vector<DTYPE, NTT_VLEN / BITS>> &op,     \
+                   const vector<DTYPE, NTT_VLEN / BITS> *input1,               \
+                   const vector<DTYPE, NTT_VLEN / BITS> *input2,               \
                    size_t input1_stride, size_t input2_stride,                 \
-                   vector<float, NTT_VLEN / 32> *output, size_t output_stride, \
-                   size_t count) noexcept {                                    \
+                   vector<DTYPE, NTT_VLEN / BITS> *output,                     \
+                   size_t output_stride, size_t count) noexcept {              \
             using policy_t =                                                   \
-                u_binary_policy<ntt::ops::OP<vector<float, NTT_VLEN / 32>,     \
-                                             vector<float, NTT_VLEN / 32>>,    \
-                                vector<float, NTT_VLEN / 32>,                  \
-                                vector<float, NTT_VLEN / 32>, true>;           \
+                u_binary_policy<ntt::ops::OP<vector<DTYPE, NTT_VLEN / BITS>,   \
+                                             vector<DTYPE, NTT_VLEN / BITS>>,  \
+                                vector<DTYPE, NTT_VLEN / BITS>,                \
+                                vector<DTYPE, NTT_VLEN / BITS>, true>;         \
             constexpr auto unroll = policy_t::unroll;                          \
             constexpr auto lmul = 8;                                           \
-            constexpr auto vl = NTT_VLEN / 32 * lmul;                          \
+            constexpr auto vl = NTT_VLEN / BITS * lmul;                        \
                                                                                \
-            TPostOp<vector<float, vl>> post_op_m8;                             \
-            TPostOp<vector<float, NTT_VLEN / 32>> post_op_m1;                  \
+            TPostOp<vector<DTYPE, vl>> post_op_m8;                             \
+            TPostOp<vector<DTYPE, NTT_VLEN / BITS>> post_op_m1;                \
                                                                                \
             while (count / unroll) {                                           \
-                ntt::vector<float, vl> v0 =                                    \
-                    __riscv_vle32_v_f32m8((const float *)input1, vl);          \
+                ntt::vector<DTYPE, vl> v0 = __riscv_vle##BITS##_v_f##BITS##m8( \
+                    (const BUILDIN_DTYPE *)input1, vl);                        \
                 input1 += input1_stride * lmul;                                \
-                ntt::vector<float, vl> v8 =                                    \
-                    __riscv_vle32_v_f32m8((const float *)input2, vl);          \
+                ntt::vector<DTYPE, vl> v8 = __riscv_vle##BITS##_v_f##BITS##m8( \
+                    (const BUILDIN_DTYPE *)input2, vl);                        \
                 input2 += input2_stride * lmul;                                \
                                                                                \
                 auto v16 = nncase::ntt::OP(v0, v8);                            \
                 v16 = post_op_m8(v16);                                         \
                                                                                \
-                __riscv_vse32_v_f32m8((float *)output, v16, vl);               \
+                __riscv_vse##BITS##_v_f##BITS##m8((BUILDIN_DTYPE *)output,     \
+                                                  v16, vl);                    \
                 output += output_stride * lmul;                                \
                 count -= unroll;                                               \
             }                                                                  \
@@ -432,46 +433,39 @@ SPECIALIZE_U_BINARY(floor_mod, 8)
         }                                                                      \
     };
 
-#define DEFINE_U_BINARY_HALF_24V(OP)                                           \
+#define DEFINE_U_BINARY_VF(OP, DTYPE, BITS, BUILDIN_DTYPE)                     \
     template <template <class> class TPostOp>                                  \
-    struct u_binary<ntt::ops::OP<vector<half, NTT_VLEN / 16>,                  \
-                                 vector<half, NTT_VLEN / 16>>,                 \
-                    TPostOp, vector<half, NTT_VLEN / 16>,                      \
-                    vector<half, NTT_VLEN / 16>, vector<half, NTT_VLEN / 16>,  \
-                    true> {                                                    \
+    struct u_binary<ntt::ops::OP<vector<DTYPE, NTT_VLEN / BITS>, DTYPE>,       \
+                    TPostOp, vector<DTYPE, NTT_VLEN / BITS>, DTYPE,            \
+                    vector<DTYPE, NTT_VLEN / BITS>, true> {                    \
       public:                                                                  \
-        constexpr void                                                         \
-        operator()(const ntt::ops::OP<vector<half, NTT_VLEN / 16>,             \
-                                      vector<half, NTT_VLEN / 16>> &op,        \
-                   const vector<half, NTT_VLEN / 16> *input1,                  \
-                   const vector<half, NTT_VLEN / 16> *input2,                  \
-                   size_t input1_stride, size_t input2_stride,                 \
-                   vector<half, NTT_VLEN / 16> *output, size_t output_stride,  \
-                   size_t count) noexcept {                                    \
-            using policy_t =                                                   \
-                u_binary_policy<ntt::ops::OP<vector<half, NTT_VLEN / 16>,      \
-                                             vector<half, NTT_VLEN / 16>>,     \
-                                vector<half, NTT_VLEN / 16>,                   \
-                                vector<half, NTT_VLEN / 16>, true>;            \
+        constexpr void operator()(                                             \
+            const ntt::ops::OP<vector<DTYPE, NTT_VLEN / BITS>, DTYPE> &op,     \
+            const vector<DTYPE, NTT_VLEN / BITS> *input1, const DTYPE *input2, \
+            size_t input1_stride, size_t input2_stride,                        \
+            vector<DTYPE, NTT_VLEN / BITS> *output, size_t output_stride,      \
+            size_t count) noexcept {                                           \
+            using policy_t = u_binary_policy<                                  \
+                ntt::ops::OP<vector<DTYPE, NTT_VLEN / BITS>, DTYPE>,           \
+                vector<DTYPE, NTT_VLEN / BITS>, DTYPE, true>;                  \
             constexpr auto unroll = policy_t::unroll;                          \
             constexpr auto lmul = 8;                                           \
-            constexpr auto vl = NTT_VLEN / 16 * lmul;                          \
+            constexpr auto vl = NTT_VLEN / BITS * lmul;                        \
                                                                                \
-            TPostOp<vector<half, vl>> post_op_m8;                              \
-            TPostOp<vector<half, NTT_VLEN / 16>> post_op_m1;                   \
+            TPostOp<vector<DTYPE, vl>> post_op_m8;                             \
+            TPostOp<vector<DTYPE, NTT_VLEN / BITS>> post_op_m1;                \
                                                                                \
             while (count / unroll) {                                           \
-                ntt::vector<half, vl> v0 =                                     \
-                    __riscv_vle16_v_f16m8((const _Float16 *)input1, vl);       \
+                ntt::vector<DTYPE, vl> v0 = __riscv_vle##BITS##_v_f##BITS##m8( \
+                    (const BUILDIN_DTYPE *)input1, vl);                        \
                 input1 += input1_stride * lmul;                                \
-                ntt::vector<half, vl> v8 =                                     \
-                    __riscv_vle16_v_f16m8((const _Float16 *)input2, vl);       \
-                input2 += input2_stride * lmul;                                \
+                DTYPE v8 = *input2;                                            \
                                                                                \
                 auto v16 = nncase::ntt::OP(v0, v8);                            \
                 v16 = post_op_m8(v16);                                         \
                                                                                \
-                __riscv_vse16_v_f16m8((_Float16 *)output, v16, vl);            \
+                __riscv_vse##BITS##_v_f##BITS##m8((BUILDIN_DTYPE *)output,     \
+                                                  v16, vl);                    \
                 output += output_stride * lmul;                                \
                 count -= unroll;                                               \
             }                                                                  \
@@ -486,24 +480,105 @@ SPECIALIZE_U_BINARY(floor_mod, 8)
         }                                                                      \
     };
 
-DEFINE_U_BINARY_F32_24V(add)
-DEFINE_U_BINARY_F32_24V(sub)
-DEFINE_U_BINARY_F32_24V(mul)
-DEFINE_U_BINARY_F32_24V(div)
-DEFINE_U_BINARY_F32_24V(max)
-DEFINE_U_BINARY_F32_24V(min)
-DEFINE_U_BINARY_F32_24V(mod)
+#define DEFINE_U_BINARY_FV(OP, DTYPE, BITS, BUILDIN_DTYPE)                     \
+    template <template <class> class TPostOp>                                  \
+    struct u_binary<ntt::ops::OP<DTYPE, vector<DTYPE, NTT_VLEN / BITS>>,       \
+                    TPostOp, DTYPE, vector<DTYPE, NTT_VLEN / BITS>,            \
+                    vector<DTYPE, NTT_VLEN / BITS>, true> {                    \
+      public:                                                                  \
+        constexpr void operator()(                                             \
+            const ntt::ops::OP<DTYPE, vector<DTYPE, NTT_VLEN / BITS>> &op,     \
+            const DTYPE *input1, const vector<DTYPE, NTT_VLEN / BITS> *input2, \
+            size_t input1_stride, size_t input2_stride,                        \
+            vector<DTYPE, NTT_VLEN / BITS> *output, size_t output_stride,      \
+            size_t count) noexcept {                                           \
+            using policy_t = u_binary_policy<                                  \
+                ntt::ops::OP<DTYPE, vector<DTYPE, NTT_VLEN / BITS>>, DTYPE,    \
+                vector<DTYPE, NTT_VLEN / BITS>, true>;                         \
+            constexpr auto unroll = policy_t::unroll;                          \
+            constexpr auto lmul = 8;                                           \
+            constexpr auto vl = NTT_VLEN / BITS * lmul;                        \
+                                                                               \
+            TPostOp<vector<DTYPE, vl>> post_op_m8;                             \
+            TPostOp<vector<DTYPE, NTT_VLEN / BITS>> post_op_m1;                \
+                                                                               \
+            while (count / unroll) {                                           \
+                DTYPE v0 = *input1;                                            \
+                ntt::vector<DTYPE, vl> v8 = __riscv_vle##BITS##_v_f##BITS##m8( \
+                    (const BUILDIN_DTYPE *)input2, vl);                        \
+                input2 += input2_stride * lmul;                                \
+                                                                               \
+                auto v16 = nncase::ntt::OP(v0, v8);                            \
+                v16 = post_op_m8(v16);                                         \
+                                                                               \
+                __riscv_vse##BITS##_v_f##BITS##m8((BUILDIN_DTYPE *)output,     \
+                                                  v16, vl);                    \
+                output += output_stride * lmul;                                \
+                count -= unroll;                                               \
+            }                                                                  \
+                                                                               \
+            for (size_t i = 0; i < count; i++) {                               \
+                *output = op(*input1, *input2);                                \
+                *output = post_op_m1(*output);                                 \
+                input1 += input1_stride;                                       \
+                input2 += input2_stride;                                       \
+                output += output_stride;                                       \
+            }                                                                  \
+        }                                                                      \
+    };
 
-DEFINE_U_BINARY_HALF_24V(add)
-DEFINE_U_BINARY_HALF_24V(sub)
-DEFINE_U_BINARY_HALF_24V(mul)
-DEFINE_U_BINARY_HALF_24V(div)
-DEFINE_U_BINARY_HALF_24V(max)
-DEFINE_U_BINARY_HALF_24V(min)
-DEFINE_U_BINARY_HALF_24V(mod)
+DEFINE_U_BINARY_VV(add, float, 32, float)
+DEFINE_U_BINARY_VV(sub, float, 32, float)
+DEFINE_U_BINARY_VV(mul, float, 32, float)
+DEFINE_U_BINARY_VV(div, float, 32, float)
+DEFINE_U_BINARY_VV(max, float, 32, float)
+DEFINE_U_BINARY_VV(min, float, 32, float)
+DEFINE_U_BINARY_VV(mod, float, 32, float)
+
+DEFINE_U_BINARY_VF(add, float, 32, float)
+DEFINE_U_BINARY_VF(sub, float, 32, float)
+DEFINE_U_BINARY_VF(mul, float, 32, float)
+DEFINE_U_BINARY_VF(div, float, 32, float)
+DEFINE_U_BINARY_VF(max, float, 32, float)
+DEFINE_U_BINARY_VF(min, float, 32, float)
+DEFINE_U_BINARY_VF(mod, float, 32, float)
+
+DEFINE_U_BINARY_FV(add, float, 32, float)
+DEFINE_U_BINARY_FV(sub, float, 32, float)
+DEFINE_U_BINARY_FV(mul, float, 32, float)
+DEFINE_U_BINARY_FV(div, float, 32, float)
+DEFINE_U_BINARY_FV(max, float, 32, float)
+DEFINE_U_BINARY_FV(min, float, 32, float)
+DEFINE_U_BINARY_FV(mod, float, 32, float)
+
+DEFINE_U_BINARY_VV(add, half, 16, _Float16)
+DEFINE_U_BINARY_VV(sub, half, 16, _Float16)
+DEFINE_U_BINARY_VV(mul, half, 16, _Float16)
+DEFINE_U_BINARY_VV(div, half, 16, _Float16)
+DEFINE_U_BINARY_VV(max, half, 16, _Float16)
+DEFINE_U_BINARY_VV(min, half, 16, _Float16)
+DEFINE_U_BINARY_VV(mod, half, 16, _Float16)
+
+DEFINE_U_BINARY_VF(add, half, 16, _Float16)
+DEFINE_U_BINARY_VF(sub, half, 16, _Float16)
+DEFINE_U_BINARY_VF(mul, half, 16, _Float16)
+DEFINE_U_BINARY_VF(div, half, 16, _Float16)
+DEFINE_U_BINARY_VF(max, half, 16, _Float16)
+DEFINE_U_BINARY_VF(min, half, 16, _Float16)
+DEFINE_U_BINARY_VF(mod, half, 16, _Float16)
+
+DEFINE_U_BINARY_FV(add, half, 16, _Float16)
+DEFINE_U_BINARY_FV(sub, half, 16, _Float16)
+DEFINE_U_BINARY_FV(mul, half, 16, _Float16)
+DEFINE_U_BINARY_FV(div, half, 16, _Float16)
+DEFINE_U_BINARY_FV(max, half, 16, _Float16)
+DEFINE_U_BINARY_FV(min, half, 16, _Float16)
+DEFINE_U_BINARY_FV(mod, half, 16, _Float16)
 
 // clamp
-template <> struct u_clamp_policy<true> { static constexpr size_t unroll = 8; };
+template <> struct u_clamp_policy<true> {
+    static constexpr size_t unroll = 8;
+};
 
 // reduce
 template <reduce_op Op, class T> struct u_reduce_policy<Op, T, true> {
@@ -511,7 +586,9 @@ template <reduce_op Op, class T> struct u_reduce_policy<Op, T, true> {
 };
 
 // cast
-template <> struct u_cast_policy<true> { static constexpr size_t unroll = 4; };
+template <> struct u_cast_policy<true> {
+    static constexpr size_t unroll = 4;
+};
 
 #define DEFINE_U_CAST_2_1(IN_ELEM, IN_BW, OUT_ELEM, OUT_BW, IN_BUILTIN_ELEM,               \
                           OUT_BUILTIN_ELEM, IN_INTRINSIC_ELEM,                             \
@@ -811,10 +888,10 @@ struct u_matmul_policy<matmul_vectorize_kind::vectorize_mkn,
 };
 
 template <bool AccumulateC, class TScale>
-requires std::is_same_v<TScale, std::nullptr_t> struct u_matmul<
-    ukernels::matmul_vectorize_kind::vectorize_m, AccumulateC, false, false, 2,
-    8, vector<float, NTT_VLEN / 32>, float, vector<float, NTT_VLEN / 32>,
-    TScale, true> {
+    requires std::is_same_v<TScale, std::nullptr_t>
+struct u_matmul<ukernels::matmul_vectorize_kind::vectorize_m, AccumulateC,
+                false, false, 2, 8, vector<float, NTT_VLEN / 32>, float,
+                vector<float, NTT_VLEN / 32>, TScale, true> {
     template <class TA, class TB, class TC>
     constexpr void operator()(const TA &a, const TB &b, TC &c0,
                               const TScale &scale, size_t K) noexcept {
@@ -1599,13 +1676,13 @@ template <class T1, class T2> struct u_unpack_policy<T1, T2, true> {
 };
 
 template <Tensor TIn, Tensor TOut, size_t AxesRank>
-requires((std::same_as<typename TIn::element_type,
-                       ntt::vector<float, NTT_VLEN / 32, NTT_VLEN / 32>> ||
-          std::same_as<typename TIn::element_type,
-                       ntt::vector<float, NTT_VLEN / 32>>)&&std::
-             same_as<typename std::decay_t<TOut>::element_type, float> &&
-         (AxesRank == 1 ||
-          AxesRank == 2)) class u_unpack_impl<TIn, TOut, AxesRank, true> {
+    requires((std::same_as<typename TIn::element_type,
+                           ntt::vector<float, NTT_VLEN / 32, NTT_VLEN / 32>> ||
+              std::same_as<typename TIn::element_type,
+                           ntt::vector<float, NTT_VLEN / 32>>) &&
+             std::same_as<typename std::decay_t<TOut>::element_type, float> &&
+             (AxesRank == 1 || AxesRank == 2))
+class u_unpack_impl<TIn, TOut, AxesRank, true> {
   public:
     using TVec = typename TIn::element_type;
     using TElem = typename std::decay_t<TOut>::element_type;
