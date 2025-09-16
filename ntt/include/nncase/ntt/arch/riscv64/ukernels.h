@@ -192,50 +192,6 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
         }                                                                      \
     };
 
-#define DEFINE_U_UNARY_SWISH(LMUL, DTYPE, BITS, BUILDIN_DTYPE)                 \
-    template <>                                                                \
-    struct u_unary<ntt::ops::swish<vector<DTYPE, NTT_VLEN / BITS>>,            \
-                   vector<DTYPE, NTT_VLEN / BITS>, true> {                     \
-      public:                                                                  \
-        void                                                                   \
-        operator()(const ntt::ops::swish<vector<DTYPE, NTT_VLEN / BITS>> &op,  \
-                   const vector<DTYPE, NTT_VLEN / BITS> *input,                \
-                   size_t in_stride, vector<DTYPE, NTT_VLEN / BITS> *output,   \
-                   size_t out_stride, size_t count) noexcept {                 \
-            using policy_t = u_unary_policy<                                   \
-                ntt::ops::swish<vector<DTYPE, NTT_VLEN / BITS>>,               \
-                vector<DTYPE, NTT_VLEN / BITS>, true>;                         \
-            constexpr auto unroll = policy_t::unroll;                          \
-            constexpr auto lmul = LMUL;                                        \
-            constexpr auto vl = NTT_VLEN / BITS * lmul;                        \
-            auto ones = ntt::vector<DTYPE, vl>((DTYPE)1.0f);                   \
-                                                                               \
-            while (count / unroll) {                                           \
-                ntt::vector<DTYPE, vl> v0 =                                    \
-                    __riscv_vle##BITS##_v_f##BITS##m##LMUL(                    \
-                        (const BUILDIN_DTYPE *)input, vl);                     \
-                input += in_stride * lmul;                                     \
-                __asm__ __volatile__("" : : : "memory");                       \
-                auto v1 = nncase::ntt::neg(v0);                                \
-                auto v2 = nncase::ntt::exp(v1);                                \
-                auto v3 = nncase::ntt::add(v2, ones);                          \
-                auto v4 = nncase::ntt::div(v0, v3);                            \
-                __asm__ __volatile__("" : : : "memory");                       \
-                                                                               \
-                __riscv_vse##BITS##_v_f##BITS##m##LMUL(                        \
-                    (BUILDIN_DTYPE *)output, v4, vl);                          \
-                output += out_stride * lmul;                                   \
-                count -= unroll;                                               \
-            }                                                                  \
-                                                                               \
-            for (size_t i = 0; i < count; i++) {                               \
-                *output = op(*input);                                          \
-                input += in_stride;                                            \
-                output += out_stride;                                          \
-            }                                                                  \
-        }                                                                      \
-    };
-
 DEFINE_U_UNARY_16V(abs, 8, float, 32, float)
 DEFINE_U_UNARY_16V(acos, 8, float, 32, float)
 DEFINE_U_UNARY_16V(acosh, 8, float, 32, float)
@@ -256,7 +212,7 @@ DEFINE_U_UNARY_16V(sqrt, 8, float, 32, float)
 DEFINE_U_UNARY_16V(rsqrt, 8, float, 32, float)
 DEFINE_U_UNARY_8V(sin, 8, float, 32, float)
 DEFINE_U_UNARY_16V(sinh, 8, float, 32, float)
-DEFINE_U_UNARY_SWISH(8, float, 32, float)
+DEFINE_U_UNARY_8V(swish, 8, float, 32, float)
 DEFINE_U_UNARY_16V(tanh, 8, float, 32, float)
 
 DEFINE_U_UNARY_16V(abs, 8, half, 16, _Float16)
@@ -279,7 +235,7 @@ DEFINE_U_UNARY_16V(sqrt, 8, half, 16, _Float16)
 DEFINE_U_UNARY_16V(rsqrt, 8, half, 16, _Float16)
 DEFINE_U_UNARY_8V(sin, 8, half, 16, _Float16)
 DEFINE_U_UNARY_16V(sinh, 8, half, 16, _Float16)
-DEFINE_U_UNARY_SWISH(8, half, 16, _Float16)
+DEFINE_U_UNARY_8V(swish, 8, half, 16, _Float16)
 DEFINE_U_UNARY_16V(tanh, 8, half, 16, _Float16)
 
 // binary
