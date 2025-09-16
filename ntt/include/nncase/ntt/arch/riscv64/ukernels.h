@@ -39,10 +39,10 @@ SPECIALIZE_U_UNARY(asin, 16)
 SPECIALIZE_U_UNARY(asinh, 16)
 SPECIALIZE_U_UNARY(ceil, 16)
 SPECIALIZE_U_UNARY(copy, 16)
-SPECIALIZE_U_UNARY(cos, 4)
+SPECIALIZE_U_UNARY(cos, 8)
 SPECIALIZE_U_UNARY(cosh, 16)
 SPECIALIZE_U_UNARY(erf, 16)
-SPECIALIZE_U_UNARY(exp, 4)
+SPECIALIZE_U_UNARY(exp, 8)
 SPECIALIZE_U_UNARY(floor, 16)
 SPECIALIZE_U_UNARY(log, 16)
 SPECIALIZE_U_UNARY(neg, 16)
@@ -51,9 +51,9 @@ SPECIALIZE_U_UNARY(sign, 16)
 SPECIALIZE_U_UNARY(square, 16)
 SPECIALIZE_U_UNARY(sqrt, 16)
 SPECIALIZE_U_UNARY(rsqrt, 16)
-SPECIALIZE_U_UNARY(sin, 4)
+SPECIALIZE_U_UNARY(sin, 8)
 SPECIALIZE_U_UNARY(sinh, 16)
-SPECIALIZE_U_UNARY(swish, 4)
+SPECIALIZE_U_UNARY(swish, 8)
 SPECIALIZE_U_UNARY(tanh, 16)
 
 #undef SPECIALIZE_U_UNARY
@@ -151,7 +151,7 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
         }                                                                      \
     };
 
-#define DEFINE_U_UNARY_F32_4V(OP, LMUL)                                        \
+#define DEFINE_U_UNARY_F32_LMULV(OP, LMUL)                                     \
     template <>                                                                \
     struct u_unary<ntt::ops::OP<vector<float, NTT_VLEN / 32>>,                 \
                    vector<float, NTT_VLEN / 32>, true> {                       \
@@ -262,7 +262,7 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
         }                                                                      \
     };
 
-#define DEFINE_U_UNARY_HALF_4V(OP, LMUL)                                       \
+#define DEFINE_U_UNARY_HALF_LMULV(OP, LMUL)                                    \
     template <>                                                                \
     struct u_unary<ntt::ops::OP<vector<half, NTT_VLEN / 16>>,                  \
                    vector<half, NTT_VLEN / 16>, true> {                        \
@@ -275,15 +275,15 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
                 u_unary_policy<ntt::ops::OP<vector<half, NTT_VLEN / 16>>,      \
                                vector<half, NTT_VLEN / 16>, true>;             \
             constexpr auto unroll = policy_t::unroll;                          \
-            constexpr auto lmul = 4;                                           \
+            constexpr auto lmul = LMUL;                                        \
             constexpr auto vl = NTT_VLEN / 16 * lmul;                          \
                                                                                \
             while (count / unroll) {                                           \
                 ntt::vector<half, vl> v0 =                                     \
-                    __riscv_vle16_v_f16m4((const _Float16 *)input, vl);        \
+                    __riscv_vle16_v_f16m##LMUL((const _Float16 *)input, vl);   \
                 input += in_stride * lmul;                                     \
                 v0 = nncase::ntt::OP(v0);                                      \
-                __riscv_vse16_v_f16m4((_Float16 *)output, v0, vl);             \
+                __riscv_vse16_v_f16m##LMUL((_Float16 *)output, v0, vl);        \
                 output += out_stride * lmul;                                   \
                 count -= unroll;                                               \
             }                                                                  \
@@ -302,10 +302,10 @@ DEFINE_U_UNARY_F32_16V(acosh)
 DEFINE_U_UNARY_F32_16V(asin)
 DEFINE_U_UNARY_F32_16V(asinh)
 DEFINE_U_UNARY_F32_16V(ceil)
-DEFINE_U_UNARY_F32_4V(cos, 4)
+DEFINE_U_UNARY_F32_LMULV(cos, 8)
 DEFINE_U_UNARY_F32_16V(cosh)
 DEFINE_U_UNARY_F32_16V(erf)
-DEFINE_U_UNARY_F32_4V(exp, 4)
+DEFINE_U_UNARY_F32_LMULV(exp, 8)
 DEFINE_U_UNARY_F32_16V(floor)
 DEFINE_U_UNARY_F32_16V(log)
 DEFINE_U_UNARY_F32_16V(neg)
@@ -314,9 +314,9 @@ DEFINE_U_UNARY_F32_16V(sign)
 DEFINE_U_UNARY_F32_16V(square)
 DEFINE_U_UNARY_F32_16V(sqrt)
 DEFINE_U_UNARY_F32_16V(rsqrt)
-DEFINE_U_UNARY_F32_4V(sin, 4)
+DEFINE_U_UNARY_F32_LMULV(sin, 8)
 DEFINE_U_UNARY_F32_16V(sinh)
-DEFINE_U_UNARY_F32_4V(swish, 4)
+DEFINE_U_UNARY_F32_LMULV(swish, 8)
 DEFINE_U_UNARY_F32_16V(tanh)
 
 DEFINE_U_UNARY_HALF_16V(abs)
@@ -325,10 +325,10 @@ DEFINE_U_UNARY_HALF_16V(acosh)
 DEFINE_U_UNARY_HALF_16V(asin)
 DEFINE_U_UNARY_HALF_16V(asinh)
 DEFINE_U_UNARY_HALF_16V(ceil)
-DEFINE_U_UNARY_HALF_4V(cos, 4)
+DEFINE_U_UNARY_HALF_LMULV(cos, 8)
 DEFINE_U_UNARY_HALF_16V(cosh)
 DEFINE_U_UNARY_HALF_16V(erf)
-DEFINE_U_UNARY_HALF_4V(exp, 4)
+DEFINE_U_UNARY_HALF_LMULV(exp, 8)
 DEFINE_U_UNARY_HALF_16V(floor)
 DEFINE_U_UNARY_HALF_16V(log)
 DEFINE_U_UNARY_HALF_16V(neg)
@@ -337,9 +337,9 @@ DEFINE_U_UNARY_HALF_16V(sign)
 DEFINE_U_UNARY_HALF_16V(square)
 DEFINE_U_UNARY_HALF_16V(sqrt)
 DEFINE_U_UNARY_HALF_16V(rsqrt)
-DEFINE_U_UNARY_HALF_4V(sin, 4)
+DEFINE_U_UNARY_HALF_LMULV(sin, 8)
 DEFINE_U_UNARY_HALF_16V(sinh)
-DEFINE_U_UNARY_HALF_4V(swish, 4)
+DEFINE_U_UNARY_HALF_LMULV(swish, 8)
 DEFINE_U_UNARY_HALF_16V(tanh)
 
 // binary
