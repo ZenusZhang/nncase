@@ -244,9 +244,7 @@ public sealed class BoxingEvaluator : ITypeInferencer<Boxing>, ICostEvaluator<Bo
 
                     float gatherPart = 1;
                     float scatterPart = 1;
-                    var hierarchyPenalty = a.Placement.Hierarchy.ToArray();
-                    hierarchyPenalty[0] *= 4;
-                    hierarchyPenalty[4] = 1;
+                    var hierarchyPenalty = Enumerable.Range(1, a.Placement.Hierarchy.Count).Reverse().ToArray();
                     for (int i = 0; i < a.AxisPolicies.Count; i++)
                     {
                         switch (a.AxisPolicies[i], b.AxisPolicies[i])

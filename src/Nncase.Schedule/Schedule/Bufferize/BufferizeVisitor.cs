@@ -56,6 +56,7 @@ public sealed class BufferizeVisitor : ExprRewriter
 
             AssignOutputResult(func, scheduleResult);
             AssignDataResult(func, scheduleResult);
+            AssignBlockLocalDataResult(func, scheduleResult);
             AssignRdataResult(func, scheduleResult);
             AssignThreadLocalRdataResult(func, scheduleResult);
             AssignBlockLocalRdataResult(func, scheduleResult);
@@ -103,6 +104,15 @@ public sealed class BufferizeVisitor : ExprRewriter
         {
             func.SchedResult.DataAlign = Math.Max(8, (ulong)dataResult.Alignment);
             func.SchedResult.DataUsage = MathUtility.AlignUp((ulong)dataResult.MemoryPoolEnd, func.SchedResult.DataAlign);
+        }
+    }
+
+    private void AssignBlockLocalDataResult(PrimFunction func, IReadOnlyDictionary<MemoryLocation, BufferScheduleResult> scheduleResult)
+    {
+        if (scheduleResult.TryGetValue(MemoryLocation.BlockLocalData, out var blockLocalDataResult))
+        {
+            func.SchedResult.DataAlign = Math.Max(8, (ulong)blockLocalDataResult.Alignment);
+            func.SchedResult.BlockLocalDataPoolSize = MathUtility.AlignUp((ulong)blockLocalDataResult.MemoryPoolEnd, func.SchedResult.DataAlign);
         }
     }
 
