@@ -38,7 +38,10 @@ template <class TTraits, class TIndex> class vector_storage_element_proxy {
 
     constexpr vector_storage_element_proxy &
     operator=(element_type value) noexcept {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuninitialized"
         TTraits::set_element(buffer_, index_, value);
+#pragma GCC diagnostic pop
         return *this;
     }
 

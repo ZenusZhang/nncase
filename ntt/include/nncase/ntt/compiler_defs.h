@@ -26,6 +26,7 @@
 #define NTT_UNREACHABLE() __assume(0)
 #define NTT_NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
 #define NTT_RESTRICT __restrict
+#define NTT_NO_SCHEDULE_INSTS
 #define NTT_ALWAYS_INLINE __forceinline
 #elif __clang__
 #define NTT_ASSUME(...) __builtin_assume(__VA_ARGS__)
