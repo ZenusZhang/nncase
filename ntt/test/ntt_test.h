@@ -482,9 +482,15 @@ void print_tensor(TTensor &tensor, std::string name) {
     using element_type = typename TTensor::element_type;
     if constexpr (ntt::Vector<element_type>) {
         nncase::ntt::apply(tensor.shape(), [&](auto index) {
-            print_tensor(tensor(index), name + "[" +
-                                       std::to_string(index[0]) + "]");
-
+            std::string child_name = name;
+            child_name.push_back('[');
+            for (size_t i = 0; i < index.rank(); ++i) {
+                child_name += std::to_string(index[i]);
+                if (i + 1 < index.rank())
+                    child_name += "][";
+            }
+            child_name.push_back(']');
+            print_tensor(tensor(index), child_name);
         });
     } else {
         nncase::ntt::apply(tensor.shape(), [&](auto index) {
