@@ -470,7 +470,7 @@ public static class TensorUtilities
         {
             var dividedType = DistributedUtility.GetDividedTensorType(distributedType);
             dims = CompilerServices.GetMaxShape(dividedType.Shape);
-            strides = GetDefaultStrides(dividedType.Shape, dims);
+            strides = GetDefaultStrides(distributedType.TensorType.Shape, dims);
         }
 
         var maxSize = GetProduct(dims) * tensorType.DType.SizeInBytes;

@@ -308,6 +308,10 @@ public sealed class NTTTIRSelectionPass : TIRSelectionPass
             {
                 return newCall;
             }
+            else if (TryGenerateSplitThreadsReshard(inBuffer, ref output, inType, outType, out newCall))
+            {
+                return newCall;
+            }
         }
 
         return TIR.F.NTT.GatherReduceScatter(input, output, inType, outType);
@@ -377,6 +381,61 @@ public sealed class NTTTIRSelectionPass : TIRSelectionPass
             // 2. Create new output buffer.
             output = oldOutputBuffer.With(
                 memSpan: oldOutputBuffer.MemSpan.With(buffer: newPhysicalBuffer));
+            newCall = TIR.F.NTT.SynchronizeThreads();
+            return true;
+        }
+
+        newCall = null;
+        return false;
+    }
+
+    private bool TryGenerateSplitThreadsReshard(TIR.Buffer inBuffer, ref Expr output, DistributedType inType, DistributedType outType, [MaybeNullWhen(false)] out Expr newCall)
+    {
+        var threadAxis = inType.Placement.Rank - 1;
+        PhysicalBuffer? oldPhysicalBuffer = null;
+        int splitAxis = -1;
+        for (int i = 0; i < inType.AxisPolicies.Count; i++)
+        {
+            // B -> S
+            if (outType.AxisPolicies[i] is SBPSplit split && split.Axes.Contains(threadAxis)
+                && inType.AxisPolicies.All(x => x is SBPBroadCast || (x is SBPSplit s && !s.Axes.Contains(threadAxis))))
+            {
+                oldPhysicalBuffer = inBuffer.MemSpan.Buffer;
+                splitAxis = i;
+                break;
+            }
+        }
+
+        var oldOutputBuffer = (TIR.Buffer)output;
+        if (oldPhysicalBuffer is not null)
+        {
+            var threads = inType.Placement.Hierarchy[threadAxis];
+            var newPhysicalBuffer = oldPhysicalBuffer.With(
+                location: MemoryLocation.BlockLocalData);
+
+            // 1. Replace all uses of old mem span to new mem span.
+            var userMemSpans = oldPhysicalBuffer.Users.OfType<TIR.MemSpan>().ToArray();
+
+            foreach (var userMemSpan in userMemSpans)
+            {
+                var newMemSpan = userMemSpan.With(buffer: newPhysicalBuffer);
+                ReplaceUtility.ReplaceAllUsesWith(userMemSpan, newMemSpan);
+            }
+
+            // 2. Create new output buffer.
+            var newStart = oldOutputBuffer.MemSpan.Start;
+            if (newStart != Dimension.Zero)
+            {
+                // We don't support sliced buffer.
+                newCall = null;
+                return false;
+            }
+
+            var dividedType = DistributedUtility.GetDividedTensorType(outType);
+            newStart = dividedType.Shape[splitAxis] * oldOutputBuffer.Strides[splitAxis] * oldOutputBuffer.CheckedDataType.SizeInBytes * IR.F.Distributed.ThreadId();
+
+            output = oldOutputBuffer.With(
+                memSpan: oldOutputBuffer.MemSpan.With(buffer: newPhysicalBuffer, start: newStart));
             newCall = TIR.F.NTT.SynchronizeThreads();
             return true;
         }
