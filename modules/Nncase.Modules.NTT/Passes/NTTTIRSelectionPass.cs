@@ -321,6 +321,8 @@ public sealed class NTTTIRSelectionPass : TIRSelectionPass
     {
         var threadAxis = inType.Placement.Rank - 1;
         PhysicalBuffer? oldPhysicalBuffer = null;
+
+        // S -> B
         var reducedInPolices = inType.AxisPolicies.Select(sbp => sbp is SBPSplit split && split.Axes.Contains(threadAxis) ? (split.Axes.Count == 1 ? (SBP)SBP.B : SBP.S(split.Axes.Except([threadAxis]).ToArray())) : sbp);
         if (reducedInPolices.ToArray().SequenceEqual(outType.AxisPolicies.ToArray()))
         {
@@ -393,17 +395,14 @@ public sealed class NTTTIRSelectionPass : TIRSelectionPass
     {
         var threadAxis = inType.Placement.Rank - 1;
         PhysicalBuffer? oldPhysicalBuffer = null;
+        var reducedOutPolices = outType.AxisPolicies.Select(sbp => sbp is SBPSplit split && split.Axes.Contains(threadAxis) ? (split.Axes.Count == 1 ? (SBP)SBP.B : SBP.S(split.Axes.Except([threadAxis]).ToArray())) : sbp);
         int splitAxis = -1;
-        for (int i = 0; i < inType.AxisPolicies.Count; i++)
+
+        // B -> S
+        if (reducedOutPolices.ToArray().SequenceEqual(inType.AxisPolicies.ToArray()))
         {
-            // B -> S
-            if (outType.AxisPolicies[i] is SBPSplit split && split.Axes.Contains(threadAxis)
-                && inType.AxisPolicies.All(x => x is SBPBroadCast || (x is SBPSplit s && !s.Axes.Contains(threadAxis))))
-            {
-                oldPhysicalBuffer = inBuffer.MemSpan.Buffer;
-                splitAxis = i;
-                break;
-            }
+            oldPhysicalBuffer = inBuffer.MemSpan.Buffer;
+            splitAxis = outType.AxisPolicies.ToArray().IndexOf(x => x is SBPSplit split && split.Axes.Contains(threadAxis));
         }
 
         var oldOutputBuffer = (TIR.Buffer)output;
@@ -435,7 +434,7 @@ public sealed class NTTTIRSelectionPass : TIRSelectionPass
             newStart = dividedType.Shape[splitAxis] * oldOutputBuffer.Strides[splitAxis] * oldOutputBuffer.CheckedDataType.SizeInBytes * IR.F.Distributed.ThreadId();
 
             output = oldOutputBuffer.With(
-                memSpan: oldOutputBuffer.MemSpan.With(buffer: newPhysicalBuffer, start: newStart));
+                memSpan: oldOutputBuffer.MemSpan.With(buffer: newPhysicalBuffer, start: newStart), strides: inBuffer.Strides.ToArray());
             newCall = TIR.F.NTT.SynchronizeThreads();
             return true;
         }
