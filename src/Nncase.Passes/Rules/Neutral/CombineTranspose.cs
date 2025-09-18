@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Nncase.Evaluator;
 using Nncase.IR;
@@ -407,8 +408,14 @@ public sealed partial class CombineTransposeReshape : IRewriteRule
 
     private Expr? GetReplace(Call trans, Expr input, RankedShape newShape, int[] perm)
     {
-        var inShape = input.CheckedShape;
-        var outShape = trans.CheckedShape;
+        var inShape = (RankedShape)input.CheckedShape;
+        var outShape = (RankedShape)trans.CheckedShape;
+
+        if (TryProcessSqueezeUnsqueeze(input, inShape, newShape, perm, out var result))
+        {
+            return result;
+        }
+
         var maxInputShape = CompilerServices.GetMaxShape(inShape);
         var maxNewShape = CompilerServices.GetMaxShape(newShape);
         if (!IRUtility.TryGetShapeMapMatrix(maxInputShape, maxNewShape, out var mat))
@@ -425,6 +432,33 @@ public sealed partial class CombineTransposeReshape : IRewriteRule
         var newPerm = perm.Select(p => backwardDict[p]).SelectMany(a => a).ToArray();
 
         return Reshape(Transpose(input, newPerm), outShape);
+    }
+
+    private bool TryProcessSqueezeUnsqueeze(Expr input, RankedShape inShape, RankedShape newShape, int[] perm, [MaybeNullWhen(false)] out Expr result)
+    {
+        if (!(newShape.Rank == inShape.Rank + 1))
+        {
+            result = null;
+            return false;
+        }
+
+        // check reshape is sequeeze
+        var axis = RulesUtility.FindSqueezeAxis(newShape, inShape);
+        if (axis == -1)
+        {
+            result = null;
+            return false;
+        }
+
+        var newPerm = perm.ToList();
+        newPerm.Remove(axis);
+        newPerm = newPerm.Select(i => i > axis ? i - 1 : i).ToList();
+
+        var inv = perm.Select((p, i) => (p, i)).OrderBy(tp => tp.p).ToArray();
+        var invNewShape = newPerm.Select(i => inShape[i]).ToList();
+        invNewShape.Insert(perm.ToList().IndexOf(axis), 1);
+        result = Reshape(Transpose(input, newPerm.ToArray()), invNewShape.ToArray());
+        return true;
     }
 }
 

@@ -211,7 +211,7 @@ public class DeviceCSourceConvertVisitor : CSourceConvertVisitor
         var start = Visit(expr.Start);
         var size = Visit(expr.Size);
 
-        var str = $"{buffer.Name}.subspan<{start.Name}, {size.Name}>()";
+        var str = $"make_subspan({buffer.Name}, {start.Name}, {size.Name})";
         symbol = new(start.Type, str);
         _exprMemo.Add(expr, symbol);
         return symbol;

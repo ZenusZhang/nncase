@@ -229,17 +229,8 @@ internal sealed class KernelCSourceConvertVisitor : CSourceConvertVisitor, IDisp
         var buffer = Visit(expr.Buffer);
         var start = Visit(expr.Start);
 
-        string name;
-        if (expr.Start is DimConst && expr.Size is DimConst)
-        {
-            var spanSize = (ulong)expr.Size.FixedValue;
-            name = $"{buffer.Name}.subspan<{start.Name}, {spanSize}>()";
-        }
-        else
-        {
-            var spanSize = Visit(expr.Size).Name;
-            name = $"{buffer.Name}.subspan({start.Name}, {spanSize})";
-        }
+        var spanSize = Visit(expr.Size).Name;
+        var name = $"make_subspan({buffer.Name}, {start.Name}, {spanSize})";
 
         symbol = new(start.Type, name);
         _exprMemo.Add(expr, symbol);
