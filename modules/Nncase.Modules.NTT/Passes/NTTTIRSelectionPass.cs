@@ -8,11 +8,13 @@ using System.Linq;
 using System.Reactive;
 using System.Text;
 using System.Threading.Tasks;
+using DryIoc.ImTools;
 using Microsoft.Extensions.DependencyInjection;
 using NetFabric.Hyperlinq;
 using Nncase.Diagnostics;
 using Nncase.IR;
 using Nncase.IR.Shapes;
+using Nncase.IR.Tensors;
 using Nncase.Passes.Analysis;
 using Nncase.Passes.Mutators;
 using Nncase.Passes.Transforms;
@@ -315,14 +317,10 @@ public sealed class NTTTIRSelectionPass : TIRSelectionPass
     {
         var threadAxis = inType.Placement.Rank - 1;
         PhysicalBuffer? oldPhysicalBuffer = null;
-        for (int i = 0; i < inType.AxisPolicies.Count; i++)
+        var reducedInPolices = inType.AxisPolicies.Select(sbp => sbp is SBPSplit split && split.Axes.Contains(threadAxis) ? (split.Axes.Count == 1 ? (SBP)SBP.B : SBP.S(split.Axes.Except([threadAxis]).ToArray())) : sbp);
+        if (reducedInPolices.ToArray().SequenceEqual(outType.AxisPolicies.ToArray()))
         {
-            if (inType.AxisPolicies[i] is SBPSplit split && split.Axes.Contains(threadAxis)
-                && outType.AxisPolicies.All(x => x is SBPBroadCast || (x is SBPSplit s && !s.Axes.Contains(threadAxis))))
-            {
-                oldPhysicalBuffer = inBuffer.MemSpan.Buffer;
-                break;
-            }
+            oldPhysicalBuffer = inBuffer.MemSpan.Buffer;
         }
 
         var oldOutputBuffer = (TIR.Buffer)output;
@@ -341,33 +339,37 @@ public sealed class NTTTIRSelectionPass : TIRSelectionPass
             foreach (var userBuffer in userBuffers)
             {
                 var userType = userBuffer.DistributedType!;
-                for (int i = 0; i < userType.AxisPolicies.Count; i++)
+                var threadAxisDim = userType.AxisPolicies.ToArray().IndexOf(x => x is SBPSplit split && split.Axes.Contains(threadAxis));
+                if (threadAxisDim >= 0)
                 {
-                    if (userType.AxisPolicies[i] is SBPSplit split && split.Axes.Contains(threadAxis))
+                    var newStrides = userBuffer.Strides.ToArray();
+                    for (int i = 0; i < userType.AxisPolicies.Count; i++)
                     {
-                        var newStrides = userBuffer.Strides.ToArray();
-                        if (i > 0)
+                        if (i < threadAxisDim)
                         {
-                            newStrides[i - 1] *= threads;
+                            newStrides[i] *= threads;
                         }
 
-                        var newStart = userBuffer.MemSpan.Start;
-                        if (newStart != Dimension.Zero)
+                        if (i == threadAxisDim)
                         {
-                            // We don't support sliced buffer.
-                            newCall = null;
-                            return false;
-                        }
+                            var newStart = userBuffer.MemSpan.Start;
+                            if (newStart != Dimension.Zero)
+                            {
+                                // We don't support sliced buffer.
+                                newCall = null;
+                                return false;
+                            }
 
-                        var dividedType = DistributedUtility.GetDividedTensorType(userType);
-                        newStart = dividedType.Shape[i] * newStrides[i] * userBuffer.CheckedDataType.SizeInBytes * IR.F.Distributed.ThreadId();
-                        var newBuffer = userBuffer.With(
-                            memSpan: userBuffer.MemSpan.With(
-                                buffer: newPhysicalBuffer,
-                                start: newStart),
-                            strides: newStrides);
-                        ReplaceUtility.ReplaceAllUsesWith(userBuffer, newBuffer);
-                        break;
+                            var dividedType = DistributedUtility.GetDividedTensorType(userType);
+                            newStart = dividedType.Shape[i] * newStrides[i] * userBuffer.CheckedDataType.SizeInBytes * IR.F.Distributed.ThreadId();
+                            var newBuffer = userBuffer.With(
+                                memSpan: userBuffer.MemSpan.With(
+                                    buffer: newPhysicalBuffer,
+                                    start: newStart),
+                                strides: newStrides);
+                            ReplaceUtility.ReplaceAllUsesWith(userBuffer, newBuffer);
+                            break;
+                        }
                     }
                 }
             }
