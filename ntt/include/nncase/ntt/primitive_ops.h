@@ -201,9 +201,16 @@ template <class T1, class T2> struct floor_mod {
 #ifdef __clang__
 #pragma float_control(precise, on)
 #endif
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC push_options
+#pragma GCC optimize("ffast-math")
+#endif
         return (T1)(double(v1) - std::floor(static_cast<double>(v1) /
                                             static_cast<double>(v2)) *
                                      static_cast<double>(v2));
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC pop_options
+#endif
     }
 };
 

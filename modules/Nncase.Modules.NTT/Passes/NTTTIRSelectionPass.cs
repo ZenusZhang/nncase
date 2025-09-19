@@ -221,7 +221,8 @@ public sealed class NTTTIRSelectionPass : TIRSelectionPass
             }
         }
 
-        if (bitcast || sequeeze)
+        // If the size is not same, we cannot bitcast.
+        if ((inBuffer.MemSpan.Size == outBuffer.MemSpan.Size) && (bitcast || sequeeze))
         {
             output = inBuffer.With(name: outBuffer.Name, elemType: outBuffer.ElemType, dimensions: outBuffer.Dimensions.ToArray(), strides: outBuffer.Strides.ToArray(), distributedType: outBuffer.DistributedType);
             return T.Nop();
