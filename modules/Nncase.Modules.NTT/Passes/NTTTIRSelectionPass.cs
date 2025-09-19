@@ -369,10 +369,12 @@ public sealed class NTTTIRSelectionPass : TIRSelectionPass
 
                             var dividedType = DistributedUtility.GetDividedTensorType(userType);
                             newStart = dividedType.Shape[i] * newStrides[i] * userBuffer.CheckedDataType.SizeInBytes * IR.F.Distributed.ThreadId();
+                            var newSize = TensorUtilities.GetMaxSize(dividedType.Shape, newStrides.Select(x => x.FixedValue).ToArray(), userBuffer.CheckedDataType.SizeInBytes);
                             var newBuffer = userBuffer.With(
                                 memSpan: userBuffer.MemSpan.With(
                                     buffer: newPhysicalBuffer,
-                                    start: newStart),
+                                    start: newStart,
+                                    size: newSize),
                                 strides: newStrides);
                             ReplaceUtility.ReplaceAllUsesWith(userBuffer, newBuffer);
                             break;

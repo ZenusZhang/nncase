@@ -446,7 +446,7 @@ public static class TensorUtilities
         long max_stride = 1, max_shape = 1;
         for (int i = 0; i < shapes.Length; i++)
         {
-            if ((shapes[i] == 1 ? 0 : strides[i]) >= max_stride)
+            if (strides[i] >= max_stride)
             {
                 max_stride = strides[i];
                 max_shape = shapes[i];
@@ -454,6 +454,23 @@ public static class TensorUtilities
         }
 
         long size = max_stride * max_shape;
+        return size * elementSize;
+    }
+
+    public static Dimension GetMaxSize(Shape shape, ReadOnlySpan<long> strides, int elementSize)
+    {
+        long max_stride = 1;
+        Dimension max_shape = Dimension.One;
+        for (int i = 0; i < strides.Length; i++)
+        {
+            if (strides[i] >= max_stride)
+            {
+                max_stride = strides[i];
+                max_shape = shape[i];
+            }
+        }
+
+        Dimension size = max_stride * max_shape;
         return size * elementSize;
     }
 
