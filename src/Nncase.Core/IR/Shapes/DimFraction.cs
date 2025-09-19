@@ -72,8 +72,8 @@ public sealed class DimFraction : Dimension, IEquatable<DimFraction?>
 
     public override string ToString() => DivMode switch
     {
-        DimDivideMode.FloorDiv => $"({Numerator} / {Denominator})",
-        DimDivideMode.CeilDiv => $"({Numerator} ceildiv {Denominator})",
+        DimDivideMode.FloorDiv => $"floor({Numerator} / {Denominator})",
+        DimDivideMode.CeilDiv => $"ceil({Numerator} / {Denominator})",
         _ => throw new NotSupportedException($"Unsupported division mode {DivMode}"),
     };
 
