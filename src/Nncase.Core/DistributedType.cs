@@ -24,6 +24,8 @@ public enum HierarchyKind : byte
 [JsonConverter(typeof(SBPConverter))]
 public abstract record SBP
 {
+    public bool Partial { get; set; }
+
     public static SBPBroadCast B => SBPBroadCast.Instance;
 
     public static SBPPartial P(ReduceOp op = ReduceOp.Sum) => new SBPPartial(op);
@@ -31,6 +33,12 @@ public abstract record SBP
     public static SBPSplit S(IRArray<int> axes) => new SBPSplit(axes);
 
     public static SBPSplit S(params int[] axes) => new SBPSplit(axes);
+
+    public SBP SetPartial()
+    {
+        Partial = true;
+        return this;
+    }
 }
 
 public sealed record SBPSplit(IRArray<int> Axes) : SBP

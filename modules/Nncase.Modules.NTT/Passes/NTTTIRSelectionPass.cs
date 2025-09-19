@@ -394,6 +394,13 @@ public sealed class NTTTIRSelectionPass : TIRSelectionPass
 
     private bool TryGenerateSplitThreadsReshard(TIR.Buffer inBuffer, ref Expr output, DistributedType inType, DistributedType outType, [MaybeNullWhen(false)] out Expr newCall)
     {
+        // Avoid P -> B -> S
+        if (inType.AxisPolicies.Any(x => x.Partial))
+        {
+            newCall = null;
+            return false;
+        }
+
         var threadAxis = inType.Placement.Rank - 1;
         PhysicalBuffer? oldPhysicalBuffer = null;
         var reducedOutPolices = outType.AxisPolicies.Select(sbp => sbp is SBPSplit split && split.Axes.Contains(threadAxis) ? (split.Axes.Count == 1 ? (SBP)SBP.B : SBP.S(split.Axes.Except([threadAxis]).ToArray())) : sbp);

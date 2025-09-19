@@ -105,6 +105,12 @@ public class MatMulEvaluator : IEvaluator<MatMul>, ITypeInferencer<MatMul>, ICos
             ndsbp[oRank - 2] = a.AxisPolicies[lm];
             ndsbp[oRank - 1] = b.AxisPolicies[rn];
 
+            if (a.AxisPolicies[lk] is SBPSplit || b.AxisPolicies[rk] is SBPSplit)
+            {
+                ndsbp[oRank - 2] = ndsbp[oRank - 2].SetPartial();
+                ndsbp[oRank - 1] = ndsbp[oRank - 1].SetPartial();
+            }
+
             if (!DistributedUtility.IsDistributable(outType, ndsbp, a.Placement))
             {
                 return new InvalidType("no valid sbp.");
@@ -139,8 +145,8 @@ public class MatMulEvaluator : IEvaluator<MatMul>, ITypeInferencer<MatMul>, ICos
                     && slm.Axes[0] == srk.Axes[0] && slk.Axes[0] == srn.Axes[0]
                     && slm.Axes[0] == lmMeshAxis && slk.Axes[0] == lkMeshAxis)
                     {
-                        ndsbp[oRank - 2] = a.AxisPolicies[lm];
-                        ndsbp[oRank - 1] = b.AxisPolicies[rn];
+                        ndsbp[oRank - 2] = a.AxisPolicies[lm].SetPartial();
+                        ndsbp[oRank - 1] = b.AxisPolicies[rn].SetPartial();
                     }
                     else
                     {
