@@ -34,7 +34,7 @@ endif()
 if (MSVC)
     add_compile_options(/fp:contract)
 else()
-    add_compile_options(-ffp-contract=on -ffast-math)
+    add_compile_options(-ffp-contract=on -ffp-model=fast -fno-finite-math-only)
 endif()
 
 if (NOT MSVC)
