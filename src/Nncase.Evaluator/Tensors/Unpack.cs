@@ -106,7 +106,7 @@ public sealed class UnpackEvaluator : ITypeInferencer<Unpack>, ICostEvaluator<Un
         // [m]<8>@8@4 -> [m*8]@8@4, when max(m)=256 and runtime m=12, input and output have different local shape.
         foreach (var (s, r) in input.AxisPolicies.Select((s, r) => (s, r)))
         {
-            if (s is SBPSplit split)
+            if (s is SBPSplit split && target.Axes.Contains(r))
             {
                 var divisor = split.Axes.Select(a => input.Placement.Hierarchy[a]).Aggregate(1, (a, b) => a * b);
                 var dim = input.TensorType.Shape[r];
