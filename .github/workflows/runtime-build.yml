@@ -23,6 +23,7 @@ jobs:
     name: build-runtime-${{matrix.config.name}}
     runs-on: ${{matrix.config.os}}
     strategy:
+      fail-fast: false
       matrix:
         config:
           - { name: aarch64-macos, os: macos-14, buildType: Release }
@@ -150,6 +151,7 @@ jobs:
     name: build-runtime-${{matrix.config.name}}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         config:
           - { name: riscv64-k230-linux, profile: riscv64-linux, toolchainPrefix: riscv64-unknown-linux-gnu-, toolchainFile: riscv64-unknown-linux_gnu_14.2.0, qemu: qemu-riscv64, loaderArgs: '-cpu;rv64,v=true,Zfh=true,zvfh=true,vlen=128,elen=64,vext_spec=v1.0;-L', conanInstallArgs: '-o "&:k230_runtime=True"', buildType: Release }
@@ -167,11 +169,14 @@ jobs:
         shell: bash
         run: |
           wget https://dav.sunnycase.moe/d/ci/nncase/${{matrix.config.toolchainFile}}.tar.zst -O toolchain.tar.zst
-          sudo apt install zstd
+          sudo apt-get update
+          sudo apt-get install -y zstd
           sudo tar -I zstd -xf toolchain.tar.zst -C $GITHUB_WORKSPACE
+          rm -f toolchain.tar.zst
 
           wget https://dav.sunnycase.moe/d/ci/nncase/${{matrix.config.qemu}}.tgz -O qemu.tgz
           sudo tar xf qemu.tgz -C /usr/local/bin
+          rm -f qemu.tgz
           sudo chmod a+x /usr/local/bin/${{matrix.config.qemu}}
           echo "TESTS_EXECUTABLE_LOADER=${{matrix.config.qemu}}" >> $GITHUB_ENV
           echo "TESTS_EXECUTABLE_LOADER_ARGUMENTS=${{matrix.config.loaderArgs}};$GITHUB_WORKSPACE/${{matrix.config.toolchainFile}}/sysroot" >> $GITHUB_ENV

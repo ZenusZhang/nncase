@@ -197,11 +197,7 @@ template <class T1, class T2> struct ceil_div {
  * Python.
  */
 template <class T1, class T2> struct floor_mod {
-    __attribute__((optimize("no-fast-math")))
     constexpr auto operator()(const T1 &v1, const T2 &v2) const noexcept {
-#ifdef __clang__
-#pragma float_control(precise, on)
-#endif
         return (T1)(double(v1) - std::floor(static_cast<double>(v1) /
                                             static_cast<double>(v2)) *
                                      static_cast<double>(v2));
