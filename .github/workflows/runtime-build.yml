@@ -21,6 +21,10 @@ on:
         description: 'Run riscv64 cross build'
         required: false
         default: 'true'
+      build_tests:
+        description: 'Build and run tests'
+        required: false
+        default: 'true'
 
 concurrency:
   group: runtime-build-${{ github.ref }}
@@ -38,6 +42,8 @@ jobs:
           - { name: aarch64-macos, os: macos-14, buildType: Release }
           - { name: x86_64-linux, os: ubuntu-24.04, buildType: Release }
           # - { name: x86_64-windows, os: windows-latest, arch: x64, buildType: Release }
+    env:
+      ENABLE_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_tests == 'false' && 'False' || 'True' }}
     steps:
       - uses: actions/checkout@v3
       - uses: seanmiddleditch/gha-setup-ninja@master
@@ -89,7 +95,7 @@ jobs:
       - name: Configure
         shell: bash
         run: |
-          conan install . --build=missing -s build_type=${{matrix.config.buildType}} -pr:a=toolchains/${{matrix.config.name}}.profile.jinja -o "&:runtime=True" -o "&:python=True" -o "&:tests=True"
+          conan install . --build=missing -s build_type=${{matrix.config.buildType}} -pr:a=toolchains/${{matrix.config.name}}.profile.jinja -o "&:runtime=True" -o "&:python=True" -o "&:tests=${ENABLE_TESTS}"
           cmake --preset conan-runtime-release
 
       - name: Build & Install
@@ -135,7 +141,7 @@ jobs:
         run: |
           cd build/${{matrix.config.buildType}}
           ctest -C ${{matrix.config.buildType}} --test-dir ntt/test/ctest --output-on-failure -j4
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && env.ENABLE_TESTS == 'True'
 
       #- name: Benchmark
       #  run: |
@@ -165,6 +171,8 @@ jobs:
       matrix:
         config:
           - { name: riscv64-k230-linux, profile: riscv64-linux, toolchainPrefix: riscv64-unknown-linux-gnu-, toolchainFile: riscv64-unknown-linux_gnu_14.2.0, qemu: qemu-riscv64, loaderArgs: '-cpu;rv64,v=true,Zfh=true,zvfh=true,vlen=128,elen=64,vext_spec=v1.0;-L', conanInstallArgs: '-o "&:k230_runtime=True"', buildType: Release }
+    env:
+      ENABLE_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.build_tests == 'false' && 'False' || 'True' }}
 
     steps:
       - uses: actions/checkout@v3
@@ -222,7 +230,7 @@ jobs:
       - name: Configure
         shell: bash
         run: |
-          conan install . --build=missing -s build_type=${{matrix.config.buildType}} -pr:h=toolchains/${{matrix.config.profile}}.profile.jinja -pr:b=toolchains/x86_64-linux.profile.jinja -o "&:runtime=True" -o "&:python=True" -o "&:tests=True" ${{matrix.config.conanInstallArgs}}
+          conan install . --build=missing -s build_type=${{matrix.config.buildType}} -pr:h=toolchains/${{matrix.config.profile}}.profile.jinja -pr:b=toolchains/x86_64-linux.profile.jinja -o "&:runtime=True" -o "&:python=True" -o "&:tests=${ENABLE_TESTS}" ${{matrix.config.conanInstallArgs}}
           cmake --preset conan-runtime-release
 
       - name: Build & Install
@@ -269,6 +277,7 @@ jobs:
         run: |
           cd build/${{matrix.config.buildType}}
           ctest -C ${{matrix.config.buildType}} --test-dir ntt/test/ctest --output-on-failure -j4
+        if: env.ENABLE_TESTS == 'True'
 
       - name: Upload nncaseruntime Build Artifact
         uses: actions/upload-artifact@v4
