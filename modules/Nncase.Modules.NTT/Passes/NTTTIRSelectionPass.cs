@@ -397,7 +397,7 @@ public sealed class NTTTIRSelectionPass : TIRSelectionPass
     private bool TryGenerateSplitThreadsReshard(TIR.Buffer inBuffer, ref Expr output, DistributedType inType, DistributedType outType, [MaybeNullWhen(false)] out Expr newCall)
     {
         // Avoid P -> B -> S
-        if (inType.AxisPolicies.Any(x => x.Partial))
+        if (inType.Partial)
         {
             newCall = null;
             return false;

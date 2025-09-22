@@ -339,6 +339,14 @@ public sealed class BoxingEvaluator : ITypeInferencer<Boxing>, ICostEvaluator<Bo
                     [CostFactorNames.Synchronization] = synchronizeCost,
                 };
                 break;
+            case (DistributedType a, DistributedType b) when a.Partial != b.Partial:
+                cost = new Cost()
+                {
+                    [CostFactorNames.MemoryStore] = CostUtility.GetMemoryAccess(a),
+                    [CostFactorNames.MemoryLoad] = CostUtility.GetMemoryAccess(b),
+                    [CostFactorNames.Synchronization] = synchronizeCost,
+                };
+                break;
             case (DistributedType a, DistributedType b) when a == b:
                 throw new InvalidOperationException($"the boxing inType == outType");
             default:

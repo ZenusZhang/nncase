@@ -24,8 +24,6 @@ public enum HierarchyKind : byte
 [JsonConverter(typeof(SBPConverter))]
 public abstract record SBP
 {
-    public bool Partial { get; set; }
-
     public static SBPBroadCast B => SBPBroadCast.Instance;
 
     public static SBPPartial P(ReduceOp op = ReduceOp.Sum) => new SBPPartial(op);
@@ -33,12 +31,6 @@ public abstract record SBP
     public static SBPSplit S(IRArray<int> axes) => new SBPSplit(axes);
 
     public static SBPSplit S(params int[] axes) => new SBPSplit(axes);
-
-    public SBP SetPartial()
-    {
-        Partial = true;
-        return this;
-    }
 }
 
 public sealed record SBPSplit(IRArray<int> Axes) : SBP
@@ -165,7 +157,7 @@ public sealed record Placement(IRArray<int> Hierarchy, string Name, HierarchyKin
     public override string ToString() => $"[{string.Join(',', Hierarchy.Zip(Name).Select(t => t.Second.ToString() + ':' + t.First.ToString()))}]";
 }
 
-public sealed record DistributedType(TensorType TensorType, IRArray<SBP> AxisPolicies, Placement Placement) : IRType
+public sealed record DistributedType(TensorType TensorType, IRArray<SBP> AxisPolicies, Placement Placement, bool Partial = false) : IRType
 {
-    public override string ToString() => $"{TensorType}, ({string.Join(',', AxisPolicies)}), {Placement}";
+    public override string ToString() => $"{TensorType}, ({string.Join(',', AxisPolicies)}), {Placement}, Partial: {Partial}";
 }
