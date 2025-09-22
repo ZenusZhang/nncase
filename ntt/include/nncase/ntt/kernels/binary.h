@@ -74,7 +74,9 @@ class binary_impl
 
         // Todo: only support broadcast if one of the input is scalar
         // currently. Because this covers 90+% of the scenarios.
-        if (!is_broadcast || lhs_u_strides != 0 || rhs_u_strides != 0) {
+        if ((Vector<TLhsElem> && Vector<TRhsElem> && !is_broadcast) ||
+            (Scalar<TLhsElem> && lhs_u_strides == 0) ||
+            (Scalar<TRhsElem> && rhs_u_strides == 0)) {
             ntt::apply(apply_shape, [&](auto index) {
                 const TLhsElem *NTT_RESTRICT addr_lhs = &lhs(index);
                 const TRhsElem *NTT_RESTRICT addr_rhs = &rhs(index);
