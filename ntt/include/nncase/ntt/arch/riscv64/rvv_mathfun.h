@@ -208,7 +208,6 @@ _RVV_FLOAT32_LOG_OP(8, 4)
 // 1/2!
 #define c_cephes_exp_p5 5.0000001201E-1
 
-#if 0
 // e^x = 1 + x + 1/2!x^2 + 1/3!x^3 + 1/4!x^4 + 1/5!x^5 + 1/6!x^6 + 1/7!x^7
 #define _RVV_FLOAT_EXP_OP(LMUL, MLEN, TLEN, E, M)                              \
     static inline NTT_NO_SCHEDULE_INSTS vfloat##TLEN##m##LMUL##_t exp_ps_fp32( \
@@ -278,8 +277,9 @@ _RVV_FLOAT32_LOG_OP(8, 4)
     }
 #endif
 
-#ifdef MOST_LESS_REG
-#define _RVV_FLOAT_EXP_OP(LMUL, MLEN, TLEN, E, M)                              \
+// Use less registers, but more data dependence
+
+#define _RVV_FLOAT_EXP_OP_LMUL8(LMUL, MLEN, TLEN, E, M)                              \
     static inline NTT_NO_SCHEDULE_INSTS vfloat##TLEN##m##LMUL##_t exp_ps_fp32( \
         vfloat##TLEN##m##LMUL##_t x, size_t vl) {                              \
         auto a1 = __riscv_vfmv_v_f_f##TLEN##m##LMUL(c_cephes_LOG2EF, vl);      \
@@ -349,10 +349,12 @@ _RVV_FLOAT32_LOG_OP(8, 4)
         return __riscv_vreinterpret_v_i##TLEN##m##LMUL##_f##TLEN##m##LMUL(     \
             ret);                                                              \
     }
-#endif
 
-// #ifdef FOUR_REG_v1
-#define _RVV_FLOAT_EXP_OP(LMUL, MLEN, TLEN, E, M)                              \
+#ifdef FOUR_REG_v1
+// Use four peek registers, but less data dependency
+// However, it slower than the more data dependency version,
+// because of the pipeline of the c908
+#define _RVV_FLOAT_EXP_OP_LMUL8(LMUL, MLEN, TLEN, E, M)                              \
     static inline NTT_NO_SCHEDULE_INSTS vfloat##TLEN##m##LMUL##_t exp_ps_fp32( \
         vfloat##TLEN##m##LMUL##_t x, size_t vl) {                              \
         auto a1 = __riscv_vfmv_v_f_f##TLEN##m##LMUL(c_cephes_LOG2EF, vl);      \
@@ -427,13 +429,14 @@ _RVV_FLOAT32_LOG_OP(8, 4)
             ret);                                                              \
     }
 
-// #endif
+#endif
 
 
 _RVV_FLOAT_EXP_OP(1, 32, 32, 0x7f, 23)
 _RVV_FLOAT_EXP_OP(2, 16, 32, 0x7f, 23)
 _RVV_FLOAT_EXP_OP(4, 8, 32, 0x7f, 23)
-_RVV_FLOAT_EXP_OP(8, 4, 32, 0x7f, 23)
+_RVV_FLOAT_EXP_OP_LMUL8(8, 4, 32, 0x7f, 23)
+// _RVV_FLOAT_EXP_OP(8, 4, 32, 0x7f, 23)
 
 #if 0
 // from glibc 2.40: max_ulp_error = 3
