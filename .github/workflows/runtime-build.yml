@@ -13,6 +13,14 @@ on:
         description: 'Set to true to gather extended diagnostics (optional)'
         required: false
         default: 'true'
+      run_native:
+        description: 'Run native (mac/linux) builds'
+        required: false
+        default: 'true'
+      run_riscv:
+        description: 'Run riscv64 cross build'
+        required: false
+        default: 'true'
 
 concurrency:
   group: runtime-build-${{ github.ref }}
@@ -20,6 +28,7 @@ concurrency:
 
 jobs:
   build-native-runtime:
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.run_native != 'false' }}
     name: build-runtime-${{matrix.config.name}}
     runs-on: ${{matrix.config.os}}
     strategy:
@@ -148,6 +157,7 @@ jobs:
     #    if-no-files-found: error
 
   build-cross-linux-runtime:
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.run_riscv != 'false' }}
     name: build-runtime-${{matrix.config.name}}
     runs-on: ubuntu-latest
     strategy:
