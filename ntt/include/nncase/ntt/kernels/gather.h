@@ -191,9 +191,10 @@ class distributed_gather_impl {
                 local_in_shape.template slice<axis + 1>());
 
         ntt::apply(indices.shape(), [&](auto indices_index) {
-            const auto out_offset = make_zeros_shape<axis>()
-                                        .concat(indices_index)
-                                        .concat(make_zeros_shape<rank - 1>());
+            const auto out_offset =
+                make_zeros_shape<axis>()
+                    .concat(indices_index)
+                    .concat(make_zeros_shape<rank - axis - 1>());
             auto out_slice =
                 output.view(out_offset, out_slice_shape)
                     .squeeze(make_index_shape<indices_rank, axis>());

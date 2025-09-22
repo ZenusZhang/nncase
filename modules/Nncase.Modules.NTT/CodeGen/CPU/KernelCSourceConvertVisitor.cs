@@ -27,7 +27,7 @@ namespace Nncase.CodeGen.NTT;
 /// </summary>
 internal sealed class KernelCSourceConvertVisitor : CSourceConvertVisitor, IDisposable
 {
-    private readonly HashSet<string> _excludedVars = new() { "data" };
+    private readonly HashSet<string> _excludedVars = new() { "data", "block_local_data" };
     private readonly StringBuilder _kernelBuilder;
     private readonly HashSet<TIR.PrimFunction> _refFuncs;
     private readonly HashSet<TIR.Buffer> _declaredBuffers = new(ReferenceEqualityComparer.Instance);
@@ -609,7 +609,11 @@ internal sealed class KernelCSourceConvertVisitor : CSourceConvertVisitor, IDisp
                     var buffer = VisitBuffer(b, local: true);
                     if (b.Name.StartsWith("data_"))
                     {
-                        dataName = $"rdata, thread_local_rdata, block_local_rdata, (std::byte *){buffer.Name}.buffer().data(), output, output_descs";
+                        dataName = $"rdata, thread_local_rdata, block_local_rdata, (std::byte *){buffer.Name}.buffer().data(), <block_local_data>, output, output_descs";
+                    }
+                    else if (b.Name.StartsWith("block_local_data_"))
+                    {
+                        dataName = dataName!.Replace("<block_local_data>", $"(std::byte *){buffer.Name}.buffer().data()", StringComparison.Ordinal);
                     }
                     else
                     {

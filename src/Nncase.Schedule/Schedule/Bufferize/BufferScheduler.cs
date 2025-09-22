@@ -50,7 +50,7 @@ public abstract class BufferScheduler
             }
         }
 
-        throw new NotSupportedException("Unable to schedule buffers");
+        throw new NotSupportedException($"Unable to schedule buffers of {memoryLocation}.");
     }
 
     public static IReadOnlyDictionary<MemoryLocation, BufferScheduleResult> Schedule(IReadOnlyDictionary<TIR.PhysicalBuffer, BufferLifetime> lifetimes, Func<MemoryLocation, BufferScheduleOptions> options)

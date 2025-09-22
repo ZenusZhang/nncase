@@ -80,8 +80,11 @@ public sealed class BufferizeVisitor : ExprRewriter
 
             T.CreateBuffer(new TensorType(DataTypes.UInt8, [(long)func.SchedResult.DataUsage]), MemoryLocation.Data, out var dataBuffer, $"data_{_dataBufferId++}");
             var dataVar = new Var("data", TensorType.Scalar(new PointerType(DataTypes.UInt8)));
-            var funcParams = func.Parameters.ToArray().Append(dataVar).ToArray();
-            var funcArgs = expr.Arguments.ToArray().Append(dataBuffer).ToArray();
+
+            T.CreateBuffer(new TensorType(DataTypes.UInt8, [(long)func.SchedResult.BlockLocalDataPoolSize]), MemoryLocation.BlockLocalData, out var blockLocalDataBuffer, $"block_local_data_{_dataBufferId++}");
+            var blockLocalDataVar = new Var("block_local_data", TensorType.Scalar(new PointerType(DataTypes.UInt8)));
+            var funcParams = func.Parameters.ToArray().Append(dataVar).Append(blockLocalDataVar).ToArray();
+            var funcArgs = expr.Arguments.ToArray().Append(dataBuffer).Append(blockLocalDataBuffer).ToArray();
             var newFunc = func.With(parameters: funcParams);
             return expr.With(target: newFunc, arguments: funcArgs);
         }

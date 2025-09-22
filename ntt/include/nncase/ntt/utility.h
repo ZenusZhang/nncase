@@ -66,6 +66,7 @@ constexpr auto make_subspan(std::span<T, SrcExtent> src, const TOffset &offset,
     using return_type = std::span<
         T, ntt::where(std::integral_constant<bool, FixedDimension<TExtent>>{},
                       TExtent{}, std::dynamic_extent)>;
-    return return_type{src.data() + dim_value(offset), dim_value(extent)};
+    return return_type{src.data() + dim_value(offset),
+                       static_cast<size_t>(dim_value(extent))};
 }
 } // namespace nncase::ntt
