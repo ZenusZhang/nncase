@@ -108,7 +108,7 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
     }
 };
 
-#define DEFINE_U_UNARY_KERNEL(OP, DTYPE, BITS, BUILDIN_DTYPE)                  \
+#define DEFINE_U_UNARY_UNROLL16(OP, LMUL, DTYPE, BITS, BUILDIN_DTYPE)          \
     template <>                                                                \
     struct u_unary<ntt::ops::OP<vector<DTYPE, NTT_VLEN / BITS>>,               \
                    vector<DTYPE, NTT_VLEN / BITS>, true> {                     \
@@ -122,75 +122,29 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
                 u_unary_policy<ntt::ops::OP<vector<DTYPE, NTT_VLEN / BITS>>,   \
                                vector<DTYPE, NTT_VLEN / BITS>, true>;          \
             constexpr auto unroll = policy_t::unroll;                          \
-            constexpr auto lmul = 8;                                           \
+            constexpr auto lmul = LMUL;                                        \
             constexpr auto vl = NTT_VLEN / BITS * lmul;                        \
                                                                                \
             while (count / unroll) {                                           \
-                ntt::vector<DTYPE, vl> v0 = __riscv_vle##BITS##_v_f##BITS##m8( \
-                    (const BUILDIN_DTYPE *)input, vl);                         \
+                ntt::vector<DTYPE, vl> v0 =                                    \
+                    __riscv_vle##BITS##_v_f##BITS##m##LMUL(                    \
+                        (const BUILDIN_DTYPE *)input, vl);                     \
                 input += in_stride * lmul;                                     \
-                ntt::vector<DTYPE, vl> v8 = __riscv_vle##BITS##_v_f##BITS##m8( \
-                    (const BUILDIN_DTYPE *)input, vl);                         \
+                ntt::vector<DTYPE, vl> v8 =                                    \
+                    __riscv_vle##BITS##_v_f##BITS##m##LMUL(                    \
+                        (const BUILDIN_DTYPE *)input, vl);                     \
                 input += in_stride * lmul;                                     \
                 __asm__ __volatile__("" : : : "memory");                       \
                 v0 = nncase::ntt::OP(v0);                                      \
                 v8 = nncase::ntt::OP(v8);                                      \
                 __asm__ __volatile__("" : : : "memory");                       \
-                __riscv_vse##BITS##_v_f##BITS##m8((BUILDIN_DTYPE *)output, v0, \
-                                                  vl);                         \
+                __riscv_vse##BITS##_v_f##BITS##m##LMUL(                        \
+                    (BUILDIN_DTYPE *)output, v0, vl);                          \
                 output += out_stride * lmul;                                   \
-                __riscv_vse##BITS##_v_f##BITS##m8((BUILDIN_DTYPE *)output, v8, \
-                                                  vl);                         \
+                __riscv_vse##BITS##_v_f##BITS##m##LMUL(                        \
+                    (BUILDIN_DTYPE *)output, v8, vl);                          \
                 output += out_stride * lmul;                                   \
                 count -= unroll;                                               \
-            }                                                                  \
-                                                                               \
-            constexpr auto unroll8 = 8;                                        \
-            while (count / unroll8) {                                          \
-                ntt::vector<DTYPE, vl> v0 = __riscv_vle##BITS##_v_f##BITS##m8( \
-                    (const BUILDIN_DTYPE *)input, vl);                         \
-                input += in_stride * lmul;                                     \
-                __asm__ __volatile__("" : : : "memory");                       \
-                v0 = nncase::ntt::OP(v0);                                      \
-                __asm__ __volatile__("" : : : "memory");                       \
-                __riscv_vse##BITS##_v_f##BITS##m8((BUILDIN_DTYPE *)output, v0, \
-                                                  vl);                         \
-                output += out_stride * lmul;                                   \
-                count -= unroll8;                                              \
-            }                                                                  \
-                                                                               \
-            constexpr auto unroll4 = 4;                                        \
-            constexpr auto lmul4 = 4;                                          \
-            constexpr auto vl4 = NTT_VLEN / BITS * lmul4;                      \
-            while (count / unroll4) {                                          \
-                ntt::vector<DTYPE, vl4> v0 =                                   \
-                    __riscv_vle##BITS##_v_f##BITS##m4(                         \
-                        (const BUILDIN_DTYPE *)input, vl4);                    \
-                input += in_stride * lmul4;                                    \
-                __asm__ __volatile__("" : : : "memory");                       \
-                v0 = nncase::ntt::OP(v0);                                      \
-                __asm__ __volatile__("" : : : "memory");                       \
-                __riscv_vse##BITS##_v_f##BITS##m4((BUILDIN_DTYPE *)output, v0, \
-                                                  vl4);                        \
-                output += out_stride * lmul4;                                  \
-                count -= unroll4;                                              \
-            }                                                                  \
-                                                                               \
-            constexpr auto unroll2 = 2;                                        \
-            constexpr auto lmul2 = 2;                                          \
-            constexpr auto vl2 = NTT_VLEN / BITS * lmul2;                      \
-            while (count / unroll2) {                                          \
-                ntt::vector<DTYPE, vl2> v0 =                                   \
-                    __riscv_vle##BITS##_v_f##BITS##m2(                         \
-                        (const BUILDIN_DTYPE *)input, vl2);                    \
-                input += in_stride * lmul2;                                    \
-                __asm__ __volatile__("" : : : "memory");                       \
-                v0 = nncase::ntt::OP(v0);                                      \
-                __asm__ __volatile__("" : : : "memory");                       \
-                __riscv_vse##BITS##_v_f##BITS##m2((BUILDIN_DTYPE *)output, v0, \
-                                                  vl2);                        \
-                output += out_stride * lmul2;                                  \
-                count -= unroll2;                                              \
             }                                                                  \
                                                                                \
             for (size_t i = 0; i < count; i++) {                               \
@@ -201,51 +155,88 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
         }                                                                      \
     };
 
-DEFINE_U_UNARY_KERNEL(abs, float, 32, float)
-DEFINE_U_UNARY_KERNEL(acos, float, 32, float)
-DEFINE_U_UNARY_KERNEL(acosh, float, 32, float)
-DEFINE_U_UNARY_KERNEL(asin, float, 32, float)
-DEFINE_U_UNARY_KERNEL(asinh, float, 32, float)
-DEFINE_U_UNARY_KERNEL(ceil, float, 32, float)
-DEFINE_U_UNARY_KERNEL(cos, float, 32, float)
-DEFINE_U_UNARY_KERNEL(cosh, float, 32, float)
-DEFINE_U_UNARY_KERNEL(erf, float, 32, float)
-DEFINE_U_UNARY_KERNEL(exp, float, 32, float)
-DEFINE_U_UNARY_KERNEL(floor, float, 32, float)
-DEFINE_U_UNARY_KERNEL(log, float, 32, float)
-DEFINE_U_UNARY_KERNEL(neg, float, 32, float)
-DEFINE_U_UNARY_KERNEL(round, float, 32, float)
-DEFINE_U_UNARY_KERNEL(sign, float, 32, float)
-DEFINE_U_UNARY_KERNEL(square, float, 32, float)
-DEFINE_U_UNARY_KERNEL(sqrt, float, 32, float)
-DEFINE_U_UNARY_KERNEL(rsqrt, float, 32, float)
-DEFINE_U_UNARY_KERNEL(sin, float, 32, float)
-DEFINE_U_UNARY_KERNEL(sinh, float, 32, float)
-DEFINE_U_UNARY_KERNEL(swish, float, 32, float)
-DEFINE_U_UNARY_KERNEL(tanh, float, 32, float)
+#define DEFINE_U_UNARY_UNROLL8(OP, LMUL, DTYPE, BITS, BUILDIN_DTYPE)           \
+    template <>                                                                \
+    struct u_unary<ntt::ops::OP<vector<DTYPE, NTT_VLEN / BITS>>,               \
+                   vector<DTYPE, NTT_VLEN / BITS>, true> {                     \
+      public:                                                                  \
+        void                                                                   \
+        operator()(const ntt::ops::OP<vector<DTYPE, NTT_VLEN / BITS>> &op,     \
+                   const vector<DTYPE, NTT_VLEN / BITS> *input,                \
+                   size_t in_stride, vector<DTYPE, NTT_VLEN / BITS> *output,   \
+                   size_t out_stride, size_t count) noexcept {                 \
+            using policy_t =                                                   \
+                u_unary_policy<ntt::ops::OP<vector<DTYPE, NTT_VLEN / BITS>>,   \
+                               vector<DTYPE, NTT_VLEN / BITS>, true>;          \
+            constexpr auto unroll = policy_t::unroll;                          \
+            constexpr auto lmul = LMUL;                                        \
+            constexpr auto vl = NTT_VLEN / BITS * lmul;                        \
+                                                                               \
+            while (count / unroll) {                                           \
+                ntt::vector<DTYPE, vl> v0 =                                    \
+                    __riscv_vle##BITS##_v_f##BITS##m##LMUL(                    \
+                        (const BUILDIN_DTYPE *)input, vl);                     \
+                input += in_stride * lmul;                                     \
+                v0 = nncase::ntt::OP(v0);                                      \
+                __riscv_vse##BITS##_v_f##BITS##m##LMUL(                        \
+                    (BUILDIN_DTYPE *)output, v0, vl);                          \
+                output += out_stride * lmul;                                   \
+                count -= unroll;                                               \
+            }                                                                  \
+                                                                               \
+            for (size_t i = 0; i < count; i++) {                               \
+                *output = op(*input);                                          \
+                input += in_stride;                                            \
+                output += out_stride;                                          \
+            }                                                                  \
+        }                                                                      \
+    };
 
-DEFINE_U_UNARY_KERNEL(abs, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(acos, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(acosh, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(asin, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(asinh, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(ceil, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(cos, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(cosh, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(erf, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(exp, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(floor, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(log, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(neg, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(round, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(sign, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(square, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(sqrt, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(rsqrt, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(sin, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(sinh, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(swish, half, 16, _Float16)
-DEFINE_U_UNARY_KERNEL(tanh, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(abs, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL16(acos, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL16(acosh, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL16(asin, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL16(asinh, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL16(ceil, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL8(cos, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL16(cosh, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL16(erf, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL8(exp, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL16(floor, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL16(log, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL16(neg, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL16(round, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL16(sign, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL16(square, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL16(sqrt, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL16(rsqrt, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL8(sin, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL16(sinh, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL8(swish, 8, float, 32, float)
+DEFINE_U_UNARY_UNROLL16(tanh, 8, float, 32, float)
+
+DEFINE_U_UNARY_UNROLL16(abs, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(acos, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(acosh, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(asin, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(asinh, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(ceil, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL8(cos, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(cosh, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(erf, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL8(exp, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(floor, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(log, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(neg, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(round, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(sign, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(square, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(sqrt, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(rsqrt, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL8(sin, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(sinh, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL8(swish, 8, half, 16, _Float16)
+DEFINE_U_UNARY_UNROLL16(tanh, 8, half, 16, _Float16)
 
 // binary
 #define SPECIALIZE_U_BINARY(op, unroll_num)                                    \
@@ -326,54 +317,6 @@ SPECIALIZE_U_BINARY(floor_mod, 8)
                                                   v16, vl);                    \
                 output += output_stride * lmul;                                \
                 count -= unroll;                                               \
-            }                                                                  \
-                                                                               \
-            constexpr auto unroll4 = 4;                                        \
-            constexpr auto lmul4 = 4;                                          \
-            constexpr auto vl4 = NTT_VLEN / BITS * lmul4;                      \
-            TPostOp<vector<DTYPE, vl4>> post_op_m4;                            \
-                                                                               \
-            while (count / unroll4) {                                          \
-                ntt::vector<DTYPE, vl4> v0 =                                   \
-                    __riscv_vle##BITS##_v_f##BITS##m4(                         \
-                        (const BUILDIN_DTYPE *)input1, vl4);                   \
-                input1 += input1_stride * lmul4;                               \
-                ntt::vector<DTYPE, vl4> v8 =                                   \
-                    __riscv_vle##BITS##_v_f##BITS##m4(                         \
-                        (const BUILDIN_DTYPE *)input2, vl4);                   \
-                input2 += input2_stride * lmul4;                               \
-                                                                               \
-                auto v16 = nncase::ntt::OP(v0, v8);                            \
-                v16 = post_op_m4(v16);                                         \
-                                                                               \
-                __riscv_vse##BITS##_v_f##BITS##m4((BUILDIN_DTYPE *)output,     \
-                                                  v16, vl4);                   \
-                output += output_stride * lmul4;                               \
-                count -= unroll4;                                              \
-            }                                                                  \
-                                                                               \
-            constexpr auto unroll2 = 2;                                        \
-            constexpr auto lmul2 = 2;                                          \
-            constexpr auto vl2 = NTT_VLEN / BITS * lmul2;                      \
-            TPostOp<vector<DTYPE, vl2>> post_op_m2;                            \
-                                                                               \
-            while (count / unroll2) {                                          \
-                ntt::vector<DTYPE, vl2> v0 =                                   \
-                    __riscv_vle##BITS##_v_f##BITS##m2(                         \
-                        (const BUILDIN_DTYPE *)input1, vl2);                   \
-                input1 += input1_stride * lmul2;                               \
-                ntt::vector<DTYPE, vl2> v8 =                                   \
-                    __riscv_vle##BITS##_v_f##BITS##m2(                         \
-                        (const BUILDIN_DTYPE *)input2, vl2);                   \
-                input2 += input2_stride * lmul2;                               \
-                                                                               \
-                auto v16 = nncase::ntt::OP(v0, v8);                            \
-                v16 = post_op_m2(v16);                                         \
-                                                                               \
-                __riscv_vse##BITS##_v_f##BITS##m2((BUILDIN_DTYPE *)output,     \
-                                                  v16, vl2);                   \
-                output += output_stride * lmul2;                               \
-                count -= unroll2;                                              \
             }                                                                  \
                                                                                \
             for (size_t i = 0; i < count; i++) {                               \
