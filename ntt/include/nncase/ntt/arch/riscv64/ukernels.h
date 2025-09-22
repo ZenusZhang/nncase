@@ -108,6 +108,8 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
     }
 };
 
+// For simple Ops, it is recommended to unroll 16 times; for complex
+// instructions, it is recommended to unroll 8 times.
 #define DEFINE_U_UNARY_UNROLL16(OP, LMUL, DTYPE, BITS, BUILDIN_DTYPE)          \
     template <>                                                                \
     struct u_unary<ntt::ops::OP<vector<DTYPE, NTT_VLEN / BITS>>,               \
@@ -122,29 +124,75 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
                 u_unary_policy<ntt::ops::OP<vector<DTYPE, NTT_VLEN / BITS>>,   \
                                vector<DTYPE, NTT_VLEN / BITS>, true>;          \
             constexpr auto unroll = policy_t::unroll;                          \
-            constexpr auto lmul = LMUL;                                        \
+            constexpr auto lmul = 8;                                           \
             constexpr auto vl = NTT_VLEN / BITS * lmul;                        \
                                                                                \
             while (count / unroll) {                                           \
-                ntt::vector<DTYPE, vl> v0 =                                    \
-                    __riscv_vle##BITS##_v_f##BITS##m##LMUL(                    \
-                        (const BUILDIN_DTYPE *)input, vl);                     \
+                ntt::vector<DTYPE, vl> v0 = __riscv_vle##BITS##_v_f##BITS##m8( \
+                    (const BUILDIN_DTYPE *)input, vl);                         \
                 input += in_stride * lmul;                                     \
-                ntt::vector<DTYPE, vl> v8 =                                    \
-                    __riscv_vle##BITS##_v_f##BITS##m##LMUL(                    \
-                        (const BUILDIN_DTYPE *)input, vl);                     \
+                ntt::vector<DTYPE, vl> v8 = __riscv_vle##BITS##_v_f##BITS##m8( \
+                    (const BUILDIN_DTYPE *)input, vl);                         \
                 input += in_stride * lmul;                                     \
                 __asm__ __volatile__("" : : : "memory");                       \
                 v0 = nncase::ntt::OP(v0);                                      \
                 v8 = nncase::ntt::OP(v8);                                      \
                 __asm__ __volatile__("" : : : "memory");                       \
-                __riscv_vse##BITS##_v_f##BITS##m##LMUL(                        \
-                    (BUILDIN_DTYPE *)output, v0, vl);                          \
+                __riscv_vse##BITS##_v_f##BITS##m8((BUILDIN_DTYPE *)output, v0, \
+                                                  vl);                         \
                 output += out_stride * lmul;                                   \
-                __riscv_vse##BITS##_v_f##BITS##m##LMUL(                        \
-                    (BUILDIN_DTYPE *)output, v8, vl);                          \
+                __riscv_vse##BITS##_v_f##BITS##m8((BUILDIN_DTYPE *)output, v8, \
+                                                  vl);                         \
                 output += out_stride * lmul;                                   \
                 count -= unroll;                                               \
+            }                                                                  \
+                                                                               \
+            constexpr auto unroll8 = 8;                                        \
+            while (count / unroll8) {                                          \
+                ntt::vector<DTYPE, vl> v0 = __riscv_vle##BITS##_v_f##BITS##m8( \
+                    (const BUILDIN_DTYPE *)input, vl);                         \
+                input += in_stride * lmul;                                     \
+                __asm__ __volatile__("" : : : "memory");                       \
+                v0 = nncase::ntt::OP(v0);                                      \
+                __asm__ __volatile__("" : : : "memory");                       \
+                __riscv_vse##BITS##_v_f##BITS##m8((BUILDIN_DTYPE *)output, v0, \
+                                                  vl);                         \
+                output += out_stride * lmul;                                   \
+                count -= unroll8;                                              \
+            }                                                                  \
+                                                                               \
+            constexpr auto unroll4 = 4;                                        \
+            constexpr auto lmul4 = 4;                                          \
+            constexpr auto vl4 = NTT_VLEN / BITS * lmul4;                      \
+            while (count / unroll4) {                                          \
+                ntt::vector<DTYPE, vl4> v0 =                                   \
+                    __riscv_vle##BITS##_v_f##BITS##m4(                         \
+                        (const BUILDIN_DTYPE *)input, vl4);                    \
+                input += in_stride * lmul4;                                    \
+                __asm__ __volatile__("" : : : "memory");                       \
+                v0 = nncase::ntt::OP(v0);                                      \
+                __asm__ __volatile__("" : : : "memory");                       \
+                __riscv_vse##BITS##_v_f##BITS##m4((BUILDIN_DTYPE *)output, v0, \
+                                                  vl4);                        \
+                output += out_stride * lmul4;                                  \
+                count -= unroll4;                                              \
+            }                                                                  \
+                                                                               \
+            constexpr auto unroll2 = 2;                                        \
+            constexpr auto lmul2 = 2;                                          \
+            constexpr auto vl2 = NTT_VLEN / BITS * lmul2;                      \
+            while (count / unroll2) {                                          \
+                ntt::vector<DTYPE, vl2> v0 =                                   \
+                    __riscv_vle##BITS##_v_f##BITS##m2(                         \
+                        (const BUILDIN_DTYPE *)input, vl2);                    \
+                input += in_stride * lmul2;                                    \
+                __asm__ __volatile__("" : : : "memory");                       \
+                v0 = nncase::ntt::OP(v0);                                      \
+                __asm__ __volatile__("" : : : "memory");                       \
+                __riscv_vse##BITS##_v_f##BITS##m2((BUILDIN_DTYPE *)output, v0, \
+                                                  vl2);                        \
+                output += out_stride * lmul2;                                  \
+                count -= unroll2;                                              \
             }                                                                  \
                                                                                \
             for (size_t i = 0; i < count; i++) {                               \
@@ -155,6 +203,8 @@ struct u_unary<ntt::ops::copy<vector<float, NTT_VLEN / 32>>,
         }                                                                      \
     };
 
+// For simple Ops, it is recommended to unroll 16 times; for complex
+// instructions, it is recommended to unroll 8 times.
 #define DEFINE_U_UNARY_UNROLL8(OP, LMUL, DTYPE, BITS, BUILDIN_DTYPE)           \
     template <>                                                                \
     struct u_unary<ntt::ops::OP<vector<DTYPE, NTT_VLEN / BITS>>,               \
