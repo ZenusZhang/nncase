@@ -7,6 +7,12 @@ on:
   pull_request:
     paths:
       - 'ntt/**'
+  workflow_dispatch:
+    inputs:
+      enable_diagnostics:
+        description: 'Set to true to gather extended diagnostics (optional)'
+        required: false
+        default: 'true'
 
 concurrency:
   group: runtime-build-${{ github.ref }}
@@ -22,7 +28,6 @@ jobs:
           - { name: aarch64-macos, os: macos-14, buildType: Release }
           - { name: x86_64-linux, os: ubuntu-24.04, buildType: Release }
           # - { name: x86_64-windows, os: windows-latest, arch: x64, buildType: Release }
-
     steps:
       - uses: actions/checkout@v3
       - uses: seanmiddleditch/gha-setup-ninja@master
@@ -44,6 +49,26 @@ jobs:
         with:
           python-version: '3.10'
 
+      - name: Print runner diagnostics
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "Diagnostics timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "Workflow attempt: ${GITHUB_RUN_ATTEMPT:-unknown}"
+          echo "Runner name: ${RUNNER_NAME:-unknown} (${RUNNER_OS:-unknown})"
+          echo "Job: ${GITHUB_JOB:-unknown}"
+          echo "Ref: ${GITHUB_REF:-unknown}"
+          echo "Commit: ${GITHUB_SHA:-unknown}"
+          echo '--- cpu/memory ---'
+          nproc || true
+          lscpu || true
+          free -h || true
+          echo '--- disk ---'
+          df -h
+          echo '--- top processes ---'
+          ps -eo pid,ppid,stat,pcpu,pmem,etime,cmd | head -n 40
+        if: runner.os == 'Linux'
+
       - name: Install Conan
         run: |
           pip install conan==2.6.0
@@ -58,9 +83,43 @@ jobs:
           cmake --preset conan-runtime-release
 
       - name: Build & Install
+        shell: bash
         run: |
+          set -Eeuo pipefail
+
+          diag_on_signal() {
+            local code=$?
+            echo "::error::Build interrupted (signal) at $(date -u +%Y-%m-%dT%H:%M:%SZ) with exit ${code}"
+            echo "::group::Recent processes"
+            ps -eo pid,ppid,stat,pcpu,pmem,etime,cmd | head -n 40 || true
+            echo "::endgroup::"
+            echo "::group::Disk usage"
+            df -h || true
+            echo "::endgroup::"
+            exit 143
+          }
+
+          diag_on_error() {
+            local code=$?
+            echo "::error::Build step failed at $(date -u +%Y-%m-%dT%H:%M:%SZ) with exit ${code}"
+            echo "::group::CMake/Ninja logs tail"
+            tail -n 200 build/${{matrix.config.buildType}}/CMakeFiles/CMakeOutput.log 2>/dev/null || true
+            tail -n 200 build/${{matrix.config.buildType}}/CMakeFiles/CMakeError.log 2>/dev/null || true
+            echo "::endgroup::"
+            echo "::group::Recent processes"
+            ps -eo pid,ppid,stat,pcpu,pmem,etime,cmd | head -n 40 || true
+            echo "::endgroup::"
+          }
+
+          trap 'diag_on_signal' TERM INT
+          trap 'diag_on_error' ERR
+
+          echo "Starting cmake build at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           cmake --build build/${{matrix.config.buildType}} --config ${{matrix.config.buildType}}
+          echo "Build finished at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
           cmake --install build/${{matrix.config.buildType}} --prefix install
+          echo "Install finished at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
       - name: Test
         run: |
@@ -119,6 +178,25 @@ jobs:
           echo "CC=$GITHUB_WORKSPACE/${{matrix.config.toolchainFile}}/bin/${{matrix.config.toolchainPrefix}}gcc" >> $GITHUB_ENV
           echo "CXX=$GITHUB_WORKSPACE/${{matrix.config.toolchainFile}}/bin/${{matrix.config.toolchainPrefix}}g++" >> $GITHUB_ENV
 
+      - name: Print runner diagnostics
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "Diagnostics timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "Workflow attempt: ${GITHUB_RUN_ATTEMPT:-unknown}"
+          echo "Runner name: ${RUNNER_NAME:-unknown} (${RUNNER_OS:-unknown})"
+          echo "Job: ${GITHUB_JOB:-unknown}"
+          echo "Ref: ${GITHUB_REF:-unknown}"
+          echo "Commit: ${GITHUB_SHA:-unknown}"
+          echo '--- cpu/memory ---'
+          nproc || true
+          lscpu || true
+          free -h || true
+          echo '--- disk ---'
+          df -h
+          echo '--- top processes ---'
+          ps -eo pid,ppid,stat,pcpu,pmem,etime,cmd | head -n 40
+
       - name: Install Conan
         run: |
           pip install conan==2.6.0
@@ -133,9 +211,43 @@ jobs:
           cmake --preset conan-runtime-release
 
       - name: Build & Install
+        shell: bash
         run: |
+          set -Eeuo pipefail
+
+          diag_on_signal() {
+            local code=$?
+            echo "::error::Build interrupted (signal) at $(date -u +%Y-%m-%dT%H:%M:%SZ) with exit ${code}"
+            echo "::group::Recent processes"
+            ps -eo pid,ppid,stat,pcpu,pmem,etime,cmd | head -n 40 || true
+            echo "::endgroup::"
+            echo "::group::Disk usage"
+            df -h || true
+            echo "::endgroup::"
+            exit 143
+          }
+
+          diag_on_error() {
+            local code=$?
+            echo "::error::Build step failed at $(date -u +%Y-%m-%dT%H:%M:%SZ) with exit ${code}"
+            echo "::group::CMake/Ninja logs tail"
+            tail -n 200 build/${{matrix.config.buildType}}/CMakeFiles/CMakeOutput.log 2>/dev/null || true
+            tail -n 200 build/${{matrix.config.buildType}}/CMakeFiles/CMakeError.log 2>/dev/null || true
+            echo "::endgroup::"
+            echo "::group::Recent processes"
+            ps -eo pid,ppid,stat,pcpu,pmem,etime,cmd | head -n 40 || true
+            echo "::endgroup::"
+          }
+
+          trap 'diag_on_signal' TERM INT
+          trap 'diag_on_error' ERR
+
+          echo "Starting cmake build at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           cmake --build build/${{matrix.config.buildType}} --config ${{matrix.config.buildType}}
+          echo "Build finished at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
           cmake --install build/${{matrix.config.buildType}} --prefix install
+          echo "Install finished at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
       - name: Test
         shell: bash
