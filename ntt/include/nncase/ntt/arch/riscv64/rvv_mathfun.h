@@ -275,7 +275,6 @@ _RVV_FLOAT32_LOG_OP(8, 4)
         return __riscv_vreinterpret_v_i##TLEN##m##LMUL##_f##TLEN##m##LMUL(     \
             ret);                                                              \
     }
-#endif
 
 // Use less registers, but more data dependence
 
