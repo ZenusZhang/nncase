@@ -502,9 +502,11 @@ struct reshard_impl<SrcTensor, DestTensor> {
                     remote_tensor.view(src_slice.local_offset, src_slice.shape);
                 auto dest_block =
                     dest.local().view(dest_slice.local_offset, src_slice.shape);
-                tensor_copy(src_block, dest_block);
+                tensor_copy_async(src_block, dest_block);
             }
         }
+
+        tensor_copy_wait<void>();
     }
 };
 } // namespace detail
