@@ -14,6 +14,11 @@ concurrency:
 
 jobs:
   build-native-runtime:
+    name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 8
+
     name: build-runtime-${{matrix.config.name}}
     runs-on: ${{matrix.config.os}}
     strategy:
