@@ -1,12 +1,12 @@
 name: runtime-build
 
-on:
-  push:
-    paths:
-      - 'ntt/**'
-  pull_request:
-    paths:
-      - 'ntt/**'
+on: [push, pull_request]
+  # push:
+  #   paths:
+  #     - 'ntt/**'
+  # pull_request:
+  #   paths:
+  #     - 'ntt/**'
 
 concurrency:
   group: runtime-build-${{ github.ref }}
@@ -98,6 +98,12 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 8
+        if: runner.os == 'Linux'
 
       - name: Setup Python
         uses: actions/setup-python@v4
