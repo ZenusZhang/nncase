@@ -43,11 +43,11 @@ class binary_impl
         auto rhs_u_strides = 1;
         constexpr auto zero_strides = make_zeros_strides<rank>();
         if (rhs.strides() == zero_strides) {
-            conti_dims = std::min(lhs_conti_dims, rhs_conti_dims);
+            conti_dims = std::min(lhs_conti_dims, output_conti_dims);
             ref_shape = lhs.shape();
             rhs_u_strides = 0;
         } else if (lhs.strides() == zero_strides) {
-            conti_dims = std::min(rhs_conti_dims, rhs_conti_dims);
+            conti_dims = std::min(rhs_conti_dims, output_conti_dims);
             ref_shape = rhs.shape();
             lhs_u_strides = 0;
         }
