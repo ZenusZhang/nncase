@@ -30,14 +30,14 @@ else()
     endif()
 endif()
 
-# fp contra
+# fp contract
 if (MSVC)
     add_compile_options(/fp:contract)
 else()
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         add_compile_options(-ffp-contract=fast -ffp-model=fast -fno-finite-math-only)
     else()
-        add_compile_options(-ffp-contract=fast -ffast-math -fno-finite-math-only)
+        add_compile_options(-ffp-contract=fast -fno-math-errno -fno-trapping-math -fno-rounding-math -fno-signaling-nans)
     endif()
 endif()
 
