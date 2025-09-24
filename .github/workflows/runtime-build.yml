@@ -19,9 +19,9 @@ jobs:
     strategy:
       matrix:
         config:
-          - { name: aarch64-macos, os: macos-14, buildType: Release, coverage: false }
-          - { name: x86_64-linux, os: ubuntu-24.04, buildType: Release, coverage: false }
-          - { name: x86_64-linux-coverage, os: ubuntu-24.04, buildType: Release, coverage: true }
+          - { name: aarch64-macos, os: macos-14, buildType: Release, coverage: false, profile: aarch64-macos }
+          - { name: x86_64-linux, os: ubuntu-24.04, buildType: Release, coverage: false, profile: x86_64-linux }
+          - { name: x86_64-linux-coverage, os: ubuntu-24.04, buildType: Release, coverage: true, profile: x86_64-linux }
           # - { name: x86_64-windows, os: windows-latest, arch: x64, buildType: Release }
 
     steps:
@@ -69,7 +69,7 @@ jobs:
         env:
           COVERAGE: ${{ matrix.config.coverage }}
         run: |
-          conan install . --build=missing -s build_type=${{matrix.config.buildType}} -pr:a=toolchains/${{matrix.config.name}}.profile.jinja -o "&:runtime=True" -o "&:python=True" -o "&:tests=True"
+          conan install . --build=missing -s build_type=${{matrix.config.buildType}} -pr:a=toolchains/${{matrix.config.profile}}.profile.jinja -o "&:runtime=True" -o "&:python=True" -o "&:tests=True"
           CMAKE_ARGS=""
           if [ "$COVERAGE" = "true" ]; then
             CMAKE_ARGS="-DCMAKE_C_FLAGS=--coverage -DCMAKE_CXX_FLAGS=--coverage -DCMAKE_EXE_LINKER_FLAGS=--coverage"
