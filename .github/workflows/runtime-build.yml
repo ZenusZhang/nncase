@@ -91,7 +91,7 @@ jobs:
         if: runner.os == 'Linux' && matrix.config.coverage == true
         run: |
           BUILD_DIR="build/${{ matrix.config.buildType }}"
-          lcov --gcov-tool gcov-14 --capture --directory "$BUILD_DIR" --output-file runtime.coverage.raw.info
+          lcov --gcov-tool gcov-14 --ignore-errors mismatch,inconsistent --capture --directory "$BUILD_DIR" --output-file runtime.coverage.raw.info
           lcov --remove runtime.coverage.raw.info '/usr/*' '/opt/hostedtoolcache/*' --output-file runtime.coverage.info
           lcov --list runtime.coverage.info
 
