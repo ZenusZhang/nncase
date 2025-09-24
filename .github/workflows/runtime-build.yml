@@ -137,11 +137,7 @@ jobs:
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
-<<<<<<< HEAD
-          swap-size-gb: 8
-=======
           swap-size-gb: 12
->>>>>>> 060e5921050e08e92fd4e1f89b2cce7cbe186646
         if: runner.os == 'Linux'
 
       - name: Setup Python
