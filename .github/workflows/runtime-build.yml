@@ -91,15 +91,18 @@ jobs:
         if: runner.os == 'Linux' && matrix.config.coverage == true
         run: |
           BUILD_DIR="build/${{ matrix.config.buildType }}"
-          lcov --gcov-tool gcov-14 --ignore-errors mismatch,inconsistent --capture --directory "$BUILD_DIR" --output-file runtime.coverage.raw.info
-          lcov --remove runtime.coverage.raw.info '/usr/*' '/opt/hostedtoolcache/*' --output-file runtime.coverage.info
-          lcov --list runtime.coverage.info
+          COVERAGE_RAW="$BUILD_DIR/runtime.coverage.raw.info"
+          COVERAGE_INFO="$BUILD_DIR/runtime.coverage.info"
+          lcov --gcov-tool gcov-14 --ignore-errors mismatch,inconsistent --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
+          lcov --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --ignore-errors unused --output-file "$COVERAGE_INFO"
+          # Emit a short summary without requiring the original source tree on the runner
+          lcov --summary "$COVERAGE_INFO"
 
       - name: Upload runtime coverage to Codecov
         if: runner.os == 'Linux' && matrix.config.coverage == true
         uses: codecov/codecov-action@v3
         with:
-          files: runtime.coverage.info
+          files: build/${{ matrix.config.buildType }}/runtime.coverage.info
           flags: runtime
           fail_ci_if_error: false
 
