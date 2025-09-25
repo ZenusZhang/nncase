@@ -116,7 +116,7 @@ jobs:
             GCOV_ARG="--gcov-tool $GCOV_TOOL"
           fi
           lcov ${GCOV_ARG:-} --ignore-errors mismatch,inconsistent,format --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
-          lcov --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --ignore-errors unused --output-file "$COVERAGE_INFO"
+          lcov --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --ignore-errors unused,mismatch,inconsistent,format --output-file "$COVERAGE_INFO"
           # Emit a short summary without requiring the original source tree on the runner
           lcov --summary "$COVERAGE_INFO"
 
@@ -231,7 +231,7 @@ jobs:
           COVERAGE_INFO="$BUILD_DIR/runtime.coverage.info"
           GCOV_TOOL="$GITHUB_WORKSPACE/${{ matrix.config.toolchainFile }}/bin/${{ matrix.config.toolchainPrefix }}gcov"
           lcov --gcov-tool "$GCOV_TOOL" --ignore-errors mismatch,inconsistent,format --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
-          lcov --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --ignore-errors unused --output-file "$COVERAGE_INFO"
+          lcov --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --ignore-errors unused,mismatch,inconsistent,format --output-file "$COVERAGE_INFO"
           lcov --summary "$COVERAGE_INFO"
 
       - name: Upload nncaseruntime Build Artifact
