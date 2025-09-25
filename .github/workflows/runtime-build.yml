@@ -115,10 +115,11 @@ jobs:
             fi
             GCOV_ARG="--gcov-tool $GCOV_TOOL"
           fi
-          lcov ${GCOV_ARG:-} --ignore-errors mismatch,inconsistent,format --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
-          lcov --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --ignore-errors unused,mismatch,inconsistent,format --output-file "$COVERAGE_INFO"
+          LCOV_IGNORE="--ignore-errors mismatch,inconsistent,format,unsupported,unused,corrupt"
+          lcov ${GCOV_ARG:-} $LCOV_IGNORE --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
+          lcov $LCOV_IGNORE --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --output-file "$COVERAGE_INFO"
           # Emit a short summary without requiring the original source tree on the runner
-          lcov --summary "$COVERAGE_INFO"
+          lcov $LCOV_IGNORE --summary "$COVERAGE_INFO"
 
       - name: Upload runtime coverage to Codecov
         if: matrix.config.coverage == true
@@ -230,9 +231,10 @@ jobs:
           COVERAGE_RAW="$BUILD_DIR/runtime.coverage.raw.info"
           COVERAGE_INFO="$BUILD_DIR/runtime.coverage.info"
           GCOV_TOOL="$GITHUB_WORKSPACE/${{ matrix.config.toolchainFile }}/bin/${{ matrix.config.toolchainPrefix }}gcov"
-          lcov --gcov-tool "$GCOV_TOOL" --ignore-errors mismatch,inconsistent,format --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
-          lcov --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --ignore-errors unused,mismatch,inconsistent,format --output-file "$COVERAGE_INFO"
-          lcov --summary "$COVERAGE_INFO"
+          LCOV_IGNORE="--ignore-errors mismatch,inconsistent,format,unsupported,unused,corrupt"
+          lcov --gcov-tool "$GCOV_TOOL" $LCOV_IGNORE --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
+          lcov $LCOV_IGNORE --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --output-file "$COVERAGE_INFO"
+          lcov $LCOV_IGNORE --summary "$COVERAGE_INFO"
 
       - name: Upload nncaseruntime Build Artifact
         uses: actions/upload-artifact@v4
