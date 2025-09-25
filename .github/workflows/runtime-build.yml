@@ -1,12 +1,12 @@
 name: runtime-build
 
 on: [push, pull_request]
-  # push:
-  #   paths:
-  #     - 'ntt/**'
-  # pull_request:
-  #   paths:
-  #     - 'ntt/**'
+#   push:
+#     paths:
+#       - 'ntt/**'
+#   pull_request:
+#     paths:
+#       - 'ntt/**'
 
 concurrency:
   group: runtime-build-${{ github.ref }}
@@ -17,10 +17,13 @@ jobs:
     name: build-runtime-${{matrix.config.name}}
     runs-on: ${{matrix.config.os}}
     strategy:
+      fail-fast: false
       matrix:
         config:
-          - { name: aarch64-macos, os: macos-14, buildType: Release }
-          - { name: x86_64-linux, os: ubuntu-24.04, buildType: Release }
+          - { name: aarch64-macos, os: macos-14, buildType: Release, coverage: false, profile: aarch64-macos, arch: arm64, toolchainPrefix: '', toolchainFile: '' }
+          - { name: aarch64-macos-coverage, os: macos-14, buildType: Release, coverage: true, profile: aarch64-macos, arch: arm64, toolchainPrefix: '', toolchainFile: '', gcovTool: llvm-gcov.sh }
+          - { name: x86_64-linux, os: ubuntu-24.04, buildType: Release, coverage: false, profile: x86_64-linux, arch: x64, toolchainPrefix: '', toolchainFile: '' }
+          - { name: x86_64-linux-coverage, os: ubuntu-24.04, buildType: Release, coverage: true, profile: x86_64-linux, arch: x64, toolchainPrefix: '', toolchainFile: '', gcovTool: gcov-14 }
           # - { name: x86_64-windows, os: windows-latest, arch: x64, buildType: Release }
 
     steps:
@@ -45,6 +48,17 @@ jobs:
           echo "CXX=g++-14" >> $GITHUB_ENV
         if: runner.os == 'Linux'
 
+      - name: Install coverage tools (Linux)
+        if: runner.os == 'Linux' && matrix.config.coverage == true
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lcov
+
+      - name: Install coverage tools (macOS)
+        if: runner.os == 'macOS' && matrix.config.coverage == true
+        run: |
+          brew install lcov
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
@@ -59,9 +73,15 @@ jobs:
 
       - name: Configure
         shell: bash
+        env:
+          COVERAGE: ${{ matrix.config.coverage }}
         run: |
-          conan install . --build=missing -s build_type=${{matrix.config.buildType}} -pr:a=toolchains/${{matrix.config.name}}.profile.jinja -o "&:runtime=True" -o "&:python=True" -o "&:tests=True"
-          cmake --preset conan-runtime-release
+          conan install . --build=missing -s build_type=${{matrix.config.buildType}} -pr:a=toolchains/${{matrix.config.profile}}.profile.jinja -o "&:runtime=True" -o "&:python=True" -o "&:tests=True"
+          CMAKE_ARGS=""
+          if [ "$COVERAGE" = "true" ]; then
+            CMAKE_ARGS="-DCMAKE_C_FLAGS=--coverage -DCMAKE_CXX_FLAGS=--coverage -DCMAKE_EXE_LINKER_FLAGS=--coverage"
+          fi
+          cmake --preset conan-runtime-release $CMAKE_ARGS
 
       - name: Build & Install
         run: |
@@ -73,6 +93,42 @@ jobs:
           cd build/${{matrix.config.buildType}}
           ctest -C ${{matrix.config.buildType}} --test-dir ntt/test/ctest --output-on-failure -j4
         if: runner.os != 'Windows'
+
+      - name: Capture runtime coverage
+        if: matrix.config.coverage == true
+        run: |
+          BUILD_DIR="build/${{ matrix.config.buildType }}"
+          COVERAGE_RAW="$BUILD_DIR/runtime.coverage.raw.info"
+          COVERAGE_INFO="$BUILD_DIR/runtime.coverage.info"
+          GCOV_TOOL="${{ matrix.config.gcovTool }}"
+          if [ -z "$GCOV_TOOL" ] && [ -n "${{ matrix.config.toolchainPrefix }}" ]; then
+            GCOV_TOOL="$GITHUB_WORKSPACE/${{ matrix.config.toolchainFile }}/bin/${{ matrix.config.toolchainPrefix }}gcov"
+          fi
+          if [ -n "$GCOV_TOOL" ]; then
+            if [ "$RUNNER_OS" = "macOS" ] && [ "$GCOV_TOOL" = "llvm-gcov.sh" ]; then
+              printf '#!/bin/bash\nxcrun llvm-cov gcov "$@"\n' > "$GITHUB_WORKSPACE/$GCOV_TOOL"
+              chmod +x "$GITHUB_WORKSPACE/$GCOV_TOOL"
+              GCOV_TOOL="$GITHUB_WORKSPACE/$GCOV_TOOL"
+            fi
+            if [[ "$GCOV_TOOL" != /* ]] && [ -f "$GITHUB_WORKSPACE/$GCOV_TOOL" ]; then
+              GCOV_TOOL="$GITHUB_WORKSPACE/$GCOV_TOOL"
+            fi
+            GCOV_ARG="--gcov-tool $GCOV_TOOL"
+          fi
+          LCOV_IGNORE="--ignore-errors mismatch,inconsistent,format,unsupported,unused,corrupt"
+          lcov ${GCOV_ARG:-} $LCOV_IGNORE --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
+          lcov $LCOV_IGNORE --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --output-file "$COVERAGE_INFO"
+          # Emit a short summary without requiring the original source tree on the runner
+          lcov $LCOV_IGNORE --summary "$COVERAGE_INFO"
+
+      - name: Upload runtime coverage to Codecov
+        if: matrix.config.coverage == true
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: build/${{ matrix.config.buildType }}/runtime.coverage.info
+          flags: runtime-${{ matrix.config.name }}
+          fail_ci_if_error: false
 
       #- name: Benchmark
       #  run: |
@@ -97,9 +153,11 @@ jobs:
     name: build-runtime-${{matrix.config.name}}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         config:
-          - { name: riscv64-k230-linux, profile: riscv64-linux, toolchainPrefix: riscv64-unknown-linux-gnu-, toolchainFile: riscv64-unknown-linux_gnu_14.2.0, qemu: qemu-riscv64, loaderArgs: '-cpu;rv64,v=true,Zfh=true,zvfh=true,vlen=128,elen=64,vext_spec=v1.0;-L', conanInstallArgs: '-o "&:k230_runtime=True"', buildType: Release }
+          - { name: riscv64-k230-linux, profile: riscv64-linux, toolchainPrefix: riscv64-unknown-linux-gnu-, toolchainFile: riscv64-unknown-linux_gnu_14.2.0, qemu: qemu-riscv64, loaderArgs: '-cpu;rv64,v=true,Zfh=true,zvfh=true,vlen=128,elen=64,vext_spec=v1.0;-L', conanInstallArgs: '-o "&:k230_runtime=True"', buildType: Release, coverage: false }
+          - { name: riscv64-k230-linux-coverage, profile: riscv64-linux, toolchainPrefix: riscv64-unknown-linux-gnu-, toolchainFile: riscv64-unknown-linux_gnu_14.2.0, qemu: qemu-riscv64, loaderArgs: '-cpu;rv64,v=true,Zfh=true,zvfh=true,vlen=128,elen=64,vext_spec=v1.0;-L', conanInstallArgs: '-o "&:k230_runtime=True"', buildType: Release, coverage: true }
 
     steps:
       - uses: actions/checkout@v3
@@ -108,8 +166,14 @@ jobs:
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
-          swap-size-gb: 12
+          swap-size-gb: 4
         if: runner.os == 'Linux'
+
+      - name: Install coverage tools
+        if: matrix.config.coverage == true
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lcov
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -140,9 +204,15 @@ jobs:
 
       - name: Configure
         shell: bash
+        env:
+          COVERAGE: ${{ matrix.config.coverage }}
         run: |
           conan install . --build=missing -s build_type=${{matrix.config.buildType}} -pr:h=toolchains/${{matrix.config.profile}}.profile.jinja -pr:b=toolchains/x86_64-linux.profile.jinja -o "&:runtime=True" -o "&:python=True" -o "&:tests=True" ${{matrix.config.conanInstallArgs}}
-          cmake --preset conan-runtime-release
+          CMAKE_ARGS=""
+          if [ "$COVERAGE" = "true" ]; then
+            CMAKE_ARGS="-DCMAKE_C_FLAGS=--coverage -DCMAKE_CXX_FLAGS=--coverage -DCMAKE_EXE_LINKER_FLAGS=--coverage"
+          fi
+          cmake --preset conan-runtime-release $CMAKE_ARGS
 
       - name: Build & Install
         run: |
@@ -155,9 +225,30 @@ jobs:
           cd build/${{matrix.config.buildType}}
           ctest -C ${{matrix.config.buildType}} --test-dir ntt/test/ctest --output-on-failure -j4
 
+      - name: Capture runtime coverage
+        if: matrix.config.coverage == true
+        run: |
+          BUILD_DIR="build/${{ matrix.config.buildType }}"
+          COVERAGE_RAW="$BUILD_DIR/runtime.coverage.raw.info"
+          COVERAGE_INFO="$BUILD_DIR/runtime.coverage.info"
+          GCOV_TOOL="$GITHUB_WORKSPACE/${{ matrix.config.toolchainFile }}/bin/${{ matrix.config.toolchainPrefix }}gcov"
+          LCOV_IGNORE="--ignore-errors mismatch,inconsistent,format,unsupported,unused,corrupt"
+          lcov --gcov-tool "$GCOV_TOOL" $LCOV_IGNORE --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
+          lcov $LCOV_IGNORE --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --output-file "$COVERAGE_INFO"
+          lcov $LCOV_IGNORE --summary "$COVERAGE_INFO"
+
       - name: Upload nncaseruntime Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: nncaseruntime-${{matrix.config.name}}
           path: ${{github.workspace}}/install
           if-no-files-found: error
+
+      - name: Upload runtime coverage to Codecov
+        if: matrix.config.coverage == true
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: build/${{ matrix.config.buildType }}/runtime.coverage.info
+          flags: runtime-${{ matrix.config.name }}
+          fail_ci_if_error: false
