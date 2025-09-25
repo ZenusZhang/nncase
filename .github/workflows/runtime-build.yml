@@ -125,6 +125,7 @@ jobs:
         if: matrix.config.coverage == true
         uses: codecov/codecov-action@v3
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: build/${{ matrix.config.buildType }}/runtime.coverage.info
           flags: runtime-${{ matrix.config.name }}
           fail_ci_if_error: false
@@ -247,6 +248,7 @@ jobs:
         if: matrix.config.coverage == true
         uses: codecov/codecov-action@v3
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: build/${{ matrix.config.buildType }}/runtime.coverage.info
           flags: runtime-${{ matrix.config.name }}
           fail_ci_if_error: false
