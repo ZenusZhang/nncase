@@ -17,6 +17,7 @@ jobs:
     name: build-runtime-${{matrix.config.name}}
     runs-on: ${{matrix.config.os}}
     strategy:
+      fail-fast: false
       matrix:
         config:
           - { name: aarch64-macos, os: macos-14, buildType: Release, coverage: false, profile: aarch64-macos, arch: arm64, toolchainPrefix: '', toolchainFile: '' }
@@ -114,7 +115,7 @@ jobs:
             fi
             GCOV_ARG="--gcov-tool $GCOV_TOOL"
           fi
-          lcov ${GCOV_ARG:-} --ignore-errors mismatch,inconsistent --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
+          lcov ${GCOV_ARG:-} --ignore-errors mismatch,inconsistent,format --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
           lcov --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --ignore-errors unused --output-file "$COVERAGE_INFO"
           # Emit a short summary without requiring the original source tree on the runner
           lcov --summary "$COVERAGE_INFO"
@@ -150,6 +151,7 @@ jobs:
     name: build-runtime-${{matrix.config.name}}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         config:
           - { name: riscv64-k230-linux, profile: riscv64-linux, toolchainPrefix: riscv64-unknown-linux-gnu-, toolchainFile: riscv64-unknown-linux_gnu_14.2.0, qemu: qemu-riscv64, loaderArgs: '-cpu;rv64,v=true,Zfh=true,zvfh=true,vlen=128,elen=64,vext_spec=v1.0;-L', conanInstallArgs: '-o "&:k230_runtime=True"', buildType: Release, coverage: false }
