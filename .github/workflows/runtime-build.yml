@@ -12,6 +12,8 @@ concurrency:
   group: runtime-build-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/heads/release/') }}
 
+
+
 jobs:
   build-native-runtime:
     name: build-runtime-${{matrix.config.name}}
@@ -30,10 +32,14 @@ jobs:
       - uses: actions/checkout@v3
       - uses: seanmiddleditch/gha-setup-ninja@master
 
+      - name: Cleanup runner
+        uses: ./.github/actions/cleanup-runner
+        if: runner.os == 'Linux'
+
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
-          swap-size-gb: 8
+          swap-size-gb: 16
         if: runner.os == 'Linux'
 
       - name: Set up build environment (Windows, Visual Studio)
@@ -79,7 +85,7 @@ jobs:
           conan install . --build=missing -s build_type=${{matrix.config.buildType}} -pr:a=toolchains/${{matrix.config.profile}}.profile.jinja -o "&:runtime=True" -o "&:python=True" -o "&:tests=True"
           CMAKE_ARGS=""
           if [ "$COVERAGE" = "true" ]; then
-            CMAKE_ARGS="-DCMAKE_C_FLAGS=--coverage -DCMAKE_CXX_FLAGS=--coverage -DCMAKE_EXE_LINKER_FLAGS=--coverage"
+            CMAKE_ARGS="-DCMAKE_C_FLAGS='--coverage -fprofile-update=atomic' -DCMAKE_CXX_FLAGS='--coverage -fprofile-update=atomic' -DCMAKE_EXE_LINKER_FLAGS=--coverage"
           fi
           cmake --preset conan-runtime-release $CMAKE_ARGS
 
@@ -115,7 +121,7 @@ jobs:
             fi
             GCOV_ARG="--gcov-tool $GCOV_TOOL"
           fi
-          LCOV_IGNORE="--ignore-errors mismatch,inconsistent,format,unsupported,unused,corrupt,range"
+          LCOV_IGNORE="--ignore-errors mismatch,inconsistent,format,unsupported,unused,corrupt,range,negative"
           lcov ${GCOV_ARG:-} $LCOV_IGNORE --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
           lcov $LCOV_IGNORE --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --output-file "$COVERAGE_INFO"
           # Emit a short summary without requiring the original source tree on the runner
@@ -163,10 +169,14 @@ jobs:
       - uses: actions/checkout@v3
       - uses: seanmiddleditch/gha-setup-ninja@master
 
+      - name: Cleanup runner
+        uses: ./.github/actions/cleanup-runner
+        if: runner.os == 'Linux'
+
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
-          swap-size-gb: 10
+          swap-size-gb: 16
         if: runner.os == 'Linux'
 
       - name: Install coverage tools
@@ -210,7 +220,7 @@ jobs:
           conan install . --build=missing -s build_type=${{matrix.config.buildType}} -pr:h=toolchains/${{matrix.config.profile}}.profile.jinja -pr:b=toolchains/x86_64-linux.profile.jinja -o "&:runtime=True" -o "&:python=True" -o "&:tests=True" ${{matrix.config.conanInstallArgs}}
           CMAKE_ARGS=""
           if [ "$COVERAGE" = "true" ]; then
-            CMAKE_ARGS="-DCMAKE_C_FLAGS=--coverage -DCMAKE_CXX_FLAGS=--coverage -DCMAKE_EXE_LINKER_FLAGS=--coverage"
+            CMAKE_ARGS="-DCMAKE_C_FLAGS='--coverage -fprofile-update=atomic' -DCMAKE_CXX_FLAGS='--coverage -fprofile-update=atomic' -DCMAKE_EXE_LINKER_FLAGS=--coverage"
           fi
           cmake --preset conan-runtime-release $CMAKE_ARGS
 
@@ -232,7 +242,7 @@ jobs:
           COVERAGE_RAW="$BUILD_DIR/runtime.coverage.raw.info"
           COVERAGE_INFO="$BUILD_DIR/runtime.coverage.info"
           GCOV_TOOL="$GITHUB_WORKSPACE/${{ matrix.config.toolchainFile }}/bin/${{ matrix.config.toolchainPrefix }}gcov"
-          LCOV_IGNORE="--ignore-errors mismatch,inconsistent,format,unsupported,unused,corrupt,range "
+          LCOV_IGNORE="--ignore-errors mismatch,inconsistent,format,unsupported,unused,corrupt,range,negative"
           lcov --gcov-tool "$GCOV_TOOL" $LCOV_IGNORE --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
           lcov $LCOV_IGNORE --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --output-file "$COVERAGE_INFO"
           lcov $LCOV_IGNORE --summary "$COVERAGE_INFO"
