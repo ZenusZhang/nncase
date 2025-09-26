@@ -85,7 +85,7 @@ jobs:
           conan install . --build=missing -s build_type=${{matrix.config.buildType}} -pr:a=toolchains/${{matrix.config.profile}}.profile.jinja -o "&:runtime=True" -o "&:python=True" -o "&:tests=True"
           CMAKE_ARGS=""
           if [ "$COVERAGE" = "true" ]; then
-            CMAKE_ARGS="-DCMAKE_C_FLAGS='--coverage -fprofile-update=atomic' -DCMAKE_CXX_FLAGS='--coverage -fprofile-update=atomic' -DCMAKE_EXE_LINKER_FLAGS=--coverage"
+            CMAKE_ARGS="-DCMAKE_C_FLAGS='--coverage ' -DCMAKE_CXX_FLAGS='--coverage ' -DCMAKE_EXE_LINKER_FLAGS=--coverage"
           fi
           cmake --preset conan-runtime-release $CMAKE_ARGS
 
@@ -220,7 +220,7 @@ jobs:
           conan install . --build=missing -s build_type=${{matrix.config.buildType}} -pr:h=toolchains/${{matrix.config.profile}}.profile.jinja -pr:b=toolchains/x86_64-linux.profile.jinja -o "&:runtime=True" -o "&:python=True" -o "&:tests=True" ${{matrix.config.conanInstallArgs}}
           CMAKE_ARGS=""
           if [ "$COVERAGE" = "true" ]; then
-            CMAKE_ARGS="-DCMAKE_C_FLAGS='--coverage -fprofile-update=atomic' -DCMAKE_CXX_FLAGS='--coverage -fprofile-update=atomic' -DCMAKE_EXE_LINKER_FLAGS=--coverage"
+            CMAKE_ARGS="-DCMAKE_C_FLAGS='--coverage ' -DCMAKE_CXX_FLAGS='--coverage ' -DCMAKE_EXE_LINKER_FLAGS=--coverage"
           fi
           cmake --preset conan-runtime-release $CMAKE_ARGS
 
