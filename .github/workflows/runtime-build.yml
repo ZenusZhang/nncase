@@ -124,7 +124,11 @@ jobs:
             fi
             GCOV_ARG="--gcov-tool $GCOV_TOOL"
           fi
-          LCOV_IGNORE="--ignore-errors mismatch,inconsistent,format,unsupported,unused,corrupt,range,negative"
+          LCOV_IGNORE_LIST="mismatch,inconsistent,format,unsupported,unused,corrupt,negative"
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            LCOV_IGNORE_LIST="$LCOV_IGNORE_LIST,range"
+          fi
+          LCOV_IGNORE="--ignore-errors $LCOV_IGNORE_LIST"
           lcov ${GCOV_ARG:-} $LCOV_IGNORE --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
           lcov $LCOV_IGNORE --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --output-file "$COVERAGE_INFO"
           # Emit a short summary without requiring the original source tree on the runner
@@ -248,7 +252,11 @@ jobs:
           COVERAGE_RAW="$BUILD_DIR/runtime.coverage.raw.info"
           COVERAGE_INFO="$BUILD_DIR/runtime.coverage.info"
           GCOV_TOOL="$GITHUB_WORKSPACE/${{ matrix.config.toolchainFile }}/bin/${{ matrix.config.toolchainPrefix }}gcov"
-          LCOV_IGNORE="--ignore-errors mismatch,inconsistent,format,unsupported,unused,corrupt,range,negative"
+          LCOV_IGNORE_LIST="mismatch,inconsistent,format,unsupported,unused,corrupt,negative"
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            LCOV_IGNORE_LIST="$LCOV_IGNORE_LIST,range"
+          fi
+          LCOV_IGNORE="--ignore-errors $LCOV_IGNORE_LIST"
           lcov --gcov-tool "$GCOV_TOOL" $LCOV_IGNORE --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
           lcov $LCOV_IGNORE --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --output-file "$COVERAGE_INFO"
           lcov $LCOV_IGNORE --summary "$COVERAGE_INFO"
