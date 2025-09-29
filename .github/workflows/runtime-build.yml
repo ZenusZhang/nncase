@@ -1,12 +1,18 @@
 name: runtime-build
 
-on: [push, pull_request]
-#   push:
-#     paths:
-#       - 'ntt/**'
-#   pull_request:
-#     paths:
-#       - 'ntt/**'
+on:
+  # push:
+  # pull_request:
+  push:
+    paths:
+      - 'ntt/**'
+      - '.github/workflows/runtime-build.yml'
+  pull_request:
+    paths:
+      - 'ntt/**'
+      - '.github/workflows/runtime-build.yml'
+  schedule:
+    - cron: '0 16 * * *'
 
 concurrency:
   group: runtime-build-${{ github.ref }}
@@ -16,6 +22,7 @@ concurrency:
 
 jobs:
   build-native-runtime:
+    if: ${{ (matrix.config.coverage && (github.event_name == 'schedule' || github.event_name == 'push')) || (!matrix.config.coverage && github.event_name != 'schedule') }}
     name: build-runtime-${{matrix.config.name}}
     runs-on: ${{matrix.config.os}}
     strategy:
@@ -169,7 +176,7 @@ jobs:
             LCOV_IGNORE_LIST="mismatch,inconsistent,format,unsupported,unused,corrupt,negative"
             LCOV_IGNORE="--ignore-errors $LCOV_IGNORE_LIST"
             lcov ${GCOV_ARG:-} $LCOV_IGNORE --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
-            lcov $LCOV_IGNORE --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --output-file "$COVERAGE_INFO"
+            lcov $LCOV_IGNORE --remove "$COVERAGE_RAW" '/usr/*' '*/ntt/test/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --output-file "$COVERAGE_INFO"
             # Emit a short summary without requiring the original source tree on the runner
             lcov $LCOV_IGNORE --summary "$COVERAGE_INFO"
           fi
@@ -203,6 +210,7 @@ jobs:
     #    if-no-files-found: error
 
   build-cross-linux-runtime:
+    if: ${{ (matrix.config.coverage && (github.event_name == 'schedule' || github.event_name == 'push')) || (!matrix.config.coverage && github.event_name != 'schedule') }}
     name: build-runtime-${{matrix.config.name}}
     runs-on: ubuntu-latest
     strategy:
@@ -298,7 +306,7 @@ jobs:
           fi
           LCOV_IGNORE="--ignore-errors $LCOV_IGNORE_LIST"
           lcov --gcov-tool "$GCOV_TOOL" $LCOV_IGNORE --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
-          lcov $LCOV_IGNORE --remove "$COVERAGE_RAW" '/usr/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --output-file "$COVERAGE_INFO"
+          lcov $LCOV_IGNORE --remove "$COVERAGE_RAW" '/usr/*' '*/ntt/test/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --output-file "$COVERAGE_INFO"
           lcov $LCOV_IGNORE --summary "$COVERAGE_INFO"
 
       - name: Upload nncaseruntime Build Artifact
