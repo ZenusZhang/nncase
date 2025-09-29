@@ -11,6 +11,7 @@ on:
       - '.github/workflows/runtime-build.yml'
   schedule:
     - cron: '0 16 * * *'
+  workflow_dispatch:
 
 concurrency:
   group: runtime-build-${{ github.ref }}
@@ -206,7 +207,7 @@ jobs:
     #    if-no-files-found: error
 
   build-native-runtime-coverage:
-    if: ${{ github.event_name == 'schedule' }}
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     name: build-runtime-${{matrix.config.name}}
     runs-on: ${{matrix.config.os}}
     strategy:
@@ -342,7 +343,7 @@ jobs:
           fail_ci_if_error: false
 
   build-cross-linux-runtime-coverage:
-    if: ${{ github.event_name == 'schedule' }}
+    if: ${{ github.event_name == 'schedule'  || github.event_name == 'workflow_dispatch' }}
     name: build-runtime-${{matrix.config.name}}
     runs-on: ubuntu-latest
     strategy:
