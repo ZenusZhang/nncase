@@ -1,8 +1,6 @@
 name: runtime-build
 
 on:
-  # push:
-  # pull_request:
   push:
     paths:
       - 'ntt/**'
@@ -22,7 +20,7 @@ concurrency:
 
 jobs:
   build-native-runtime:
-    if: ${{ (matrix.config.coverage && (github.event_name == 'schedule' || github.event_name == 'push')) || (!matrix.config.coverage && github.event_name != 'schedule') }}
+    if: ${{ github.event_name != 'schedule' }}
     name: build-runtime-${{matrix.config.name}}
     runs-on: ${{matrix.config.os}}
     strategy:
@@ -30,12 +28,10 @@ jobs:
       matrix:
         config:
           - { name: aarch64-macos, os: macos-14, buildType: Release, coverage: false, profile: aarch64-macos, arch: arm64, toolchainPrefix: '', toolchainFile: '' }
-          - { name: aarch64-macos-coverage, os: macos-14, buildType: Release, coverage: true, profile: aarch64-macos, arch: arm64, toolchainPrefix: '', toolchainFile: '', gcovTool: llvm-gcov.sh }
           - { name: x86_64-linux, os: ubuntu-24.04, buildType: Release, coverage: false, profile: x86_64-linux, arch: x64, toolchainPrefix: '', toolchainFile: '' }
-          - { name: x86_64-linux-coverage, os: ubuntu-24.04, buildType: Release, coverage: true, profile: x86_64-linux, arch: x64, toolchainPrefix: '', toolchainFile: '', gcovTool: gcov-14 }
           # - { name: x86_64-windows, os: windows-latest, arch: x64, buildType: Release }
 
-    steps:
+    steps: &native_runtime_steps
       - uses: actions/checkout@v3
       - uses: seanmiddleditch/gha-setup-ninja@master
 
@@ -209,8 +205,20 @@ jobs:
     #    path: ${{github.workspace}}/benchnncase.log
     #    if-no-files-found: error
 
+  build-native-runtime-coverage:
+    if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
+    name: build-runtime-${{matrix.config.name}}
+    runs-on: ${{matrix.config.os}}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - { name: aarch64-macos-coverage, os: macos-14, buildType: Release, coverage: true, profile: aarch64-macos, arch: arm64, toolchainPrefix: '', toolchainFile: '', gcovTool: llvm-gcov.sh }
+          - { name: x86_64-linux-coverage, os: ubuntu-24.04, buildType: Release, coverage: true, profile: x86_64-linux, arch: x64, toolchainPrefix: '', toolchainFile: '', gcovTool: gcov-14 }
+    steps: *native_runtime_steps
+
   build-cross-linux-runtime:
-    if: ${{ (matrix.config.coverage && (github.event_name == 'schedule' || github.event_name == 'push')) || (!matrix.config.coverage && github.event_name != 'schedule') }}
+    if: ${{ github.event_name != 'schedule' }}
     name: build-runtime-${{matrix.config.name}}
     runs-on: ubuntu-latest
     strategy:
@@ -218,9 +226,8 @@ jobs:
       matrix:
         config:
           - { name: riscv64-k230-linux, profile: riscv64-linux, toolchainPrefix: riscv64-unknown-linux-gnu-, toolchainFile: riscv64-unknown-linux_gnu_14.2.0, qemu: qemu-riscv64, loaderArgs: '-cpu;rv64,v=true,Zfh=true,zvfh=true,vlen=128,elen=64,vext_spec=v1.0;-L', conanInstallArgs: '-o "&:k230_runtime=True"', buildType: Release, coverage: false }
-          - { name: riscv64-k230-linux-coverage, profile: riscv64-linux, toolchainPrefix: riscv64-unknown-linux-gnu-, toolchainFile: riscv64-unknown-linux_gnu_14.2.0, qemu: qemu-riscv64, loaderArgs: '-cpu;rv64,v=true,Zfh=true,zvfh=true,vlen=128,elen=64,vext_spec=v1.0;-L', conanInstallArgs: '-o "&:k230_runtime=True"', buildType: Release, coverage: true }
 
-    steps:
+    steps: &cross_runtime_steps
       - uses: actions/checkout@v3
       - uses: seanmiddleditch/gha-setup-ninja@master
 
@@ -324,3 +331,14 @@ jobs:
           files: build/${{ matrix.config.buildType }}/runtime.coverage.info
           flags: runtime-${{ matrix.config.name }}
           fail_ci_if_error: false
+
+  build-cross-linux-runtime-coverage:
+    if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
+    name: build-runtime-${{matrix.config.name}}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - { name: riscv64-k230-linux-coverage, profile: riscv64-linux, toolchainPrefix: riscv64-unknown-linux-gnu-, toolchainFile: riscv64-unknown-linux_gnu_14.2.0, qemu: qemu-riscv64, loaderArgs: '-cpu;rv64,v=true,Zfh=true,zvfh=true,vlen=128,elen=64,vext_spec=v1.0;-L', conanInstallArgs: '-o "&:k230_runtime=True"', buildType: Release, coverage: true }
+    steps: *cross_runtime_steps
