@@ -172,7 +172,7 @@ jobs:
             LCOV_IGNORE_LIST="mismatch,inconsistent,format,unsupported,unused,corrupt,negative"
             LCOV_IGNORE="--ignore-errors $LCOV_IGNORE_LIST"
             lcov ${GCOV_ARG:-} $LCOV_IGNORE --capture --directory "$BUILD_DIR" --output-file "$COVERAGE_RAW"
-            lcov $LCOV_IGNORE --remove "$COVERAGE_RAW" '/usr/*' '*/ntt/test/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --output-file "$COVERAGE_INFO"
+            lcov $LCOV_IGNORE --remove "$COVERAGE_RAW" '/usr/*' 'ntt/test/*' '/opt/hostedtoolcache/*' '*/.conan2/*' --output-file "$COVERAGE_INFO"
             # Emit a short summary without requiring the original source tree on the runner
             lcov $LCOV_IGNORE --summary "$COVERAGE_INFO"
           fi
@@ -206,7 +206,7 @@ jobs:
     #    if-no-files-found: error
 
   build-native-runtime-coverage:
-    if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
+    if: ${github.event_name == 'schedule' }
     name: build-runtime-${{matrix.config.name}}
     runs-on: ${{matrix.config.os}}
     strategy:
@@ -333,7 +333,7 @@ jobs:
           fail_ci_if_error: false
 
   build-cross-linux-runtime-coverage:
-    if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
+    if: ${github.event_name == 'schedule' }
     name: build-runtime-${{matrix.config.name}}
     runs-on: ubuntu-latest
     strategy:
